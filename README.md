@@ -37,9 +37,8 @@ Localmente o login fica desligado (só o localhost acessa). Com `npm run lan` ou
    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
    ```
 5. **Redeploy** (para as variáveis valerem) e abra o endereço no celular. As tabelas são criadas na primeira chamada.
-6. **Dados e primeiro acesso** — no seu computador, com a `DATABASE_URL` do Neon definida **só no terminal** (pegue em *Vercel → Storage → Neon → .env.local* ou no painel do Neon; não coloque em arquivo versionado):
+6. **Dados e primeiro acesso** — no painel da Vercel (*Settings → Environment Variables*), copie a linha `DATABASE_URL=...` e salve num arquivo chamado `.env.local` dentro da pasta `validade-app`. O Git ignora esse arquivo e os scripts o leem sozinhos, então a string nunca vai para o chat nem para o repositório. Depois:
    ```bash
-   # PowerShell:  $env:DATABASE_URL = "postgres://..."
    npm run import -- "../Controle_Validade_v12.xlsx"   # sobe produtos e estoque
    npm run usuario -- MICHEL 123456 admin               # troque pelo PIN que quiser (6 a 8 números)
    npm run usuario -- JOAO 654321 operador              # um por pessoa da loja

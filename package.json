@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "lan": "node server.js --lan",
-    "import": "node scripts/import.js",
-    "usuario": "node scripts/usuario.js",
+    "import": "node --env-file-if-exists=.env.local scripts/import.js",
+    "usuario": "node --env-file-if-exists=.env.local scripts/usuario.js",
     "test": "node --test test/*.test.js"
   },
   "type": "commonjs",
