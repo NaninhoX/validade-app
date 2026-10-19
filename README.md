@@ -9,7 +9,7 @@ Node 20 ou mais novo.
 ```bash
 npm install
 npm run import -- "../Controle_Validade_v12.xlsx"   # carga inicial (já feita neste PC)
-npm start                                           # http://localhost:3000  ·  coletor em /coletor
+npm start                                           # http://localhost:3000  (o coletor é a aba "Coletor")
 npm test                                            # 20 testes contra Postgres
 ```
 
@@ -78,7 +78,7 @@ Endereços antigos fora disso (`19`, `4-E-1`) continuam no estoque, aparecem em 
 - **Visão geral** — valor em risco, validade do estoque (donut), muro de validade por mês, “fazer hoje”, gôndolas que pedem atenção, marcas, qualidade dos dados.
 - **Mapa da loja** — planta com calor por gôndola; clique para ver lados A/B, pontas e cada prateleira, e os lotes dela. Métricas: Risco, Validade, Ocupação, Ronda. **Editar planta** (administrador): arraste e redimensione as gôndolas, gire, envie a imagem do layout da loja como fundo, escolha se a prateleira 1 é a de cima ou a de baixo. Enquanto não for salva, a planta é uma grade provisória.
 - **Estoque**, **Etiquetas** (imprimir), **Movimentações** (com desfazer), **Configurações** (regras, equipe, importar/exportar).
-- **Coletor** (`/coletor`) — Entrada (receber soma / contar define), Ronda por endereço, Baixa, Buscar. Atalhos de lado e prateleira por toque, câmera para o EAN e para a etiqueta do endereço, fila offline com reenvio sem duplicar, desfazer do último lançamento, aviso de FEFO.
+- **Coletor** (aba do app, mesmo login; `/coletor` só redireciona para ela; operadores já abrem nela) — Entrada (receber soma / contar define), Ronda por endereço, Baixa, Buscar. Atalhos de lado e prateleira por toque, câmera para o EAN e para a etiqueta do endereço, fila offline com reenvio sem duplicar, desfazer do último lançamento, aviso de FEFO.
 
 ## Câmera
 

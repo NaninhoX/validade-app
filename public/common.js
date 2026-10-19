@@ -15,10 +15,21 @@ async function api(path, opts = {}) {
   const bin = opts.body instanceof ArrayBuffer;
   const headers = { 'X-Requested-With': 'validade' };
   if (opts.body !== undefined) headers['Content-Type'] = bin ? 'application/octet-stream' : 'application/json';
-  const r = await fetch(path, {
-    method: opts.method || 'GET', headers, credentials: 'same-origin',
-    body: opts.body === undefined ? undefined : (bin ? opts.body : JSON.stringify(opts.body)),
-  });
+  // Consulta (GET) tenta de novo se a rede do celular falhar por um instante; gravação não repete sozinha (a fila do coletor cuida disso).
+  const tentativas = opts.tentativas ?? ((opts.method || 'GET') === 'GET' ? 2 : 0);
+  let r;
+  for (let i = 0; ; i++) {
+    try {
+      r = await fetch(path, {
+        method: opts.method || 'GET', headers, credentials: 'same-origin',
+        body: opts.body === undefined ? undefined : (bin ? opts.body : JSON.stringify(opts.body)),
+      });
+      break;
+    } catch {
+      if (i >= tentativas) { const er = new Error('Não consegui falar com o servidor. Confira o Wi-Fi ou o sinal e tente de novo.'); er.rede = true; throw er; }
+      await new Promise(ok => setTimeout(ok, 600 * (i + 1)));
+    }
+  }
   let data = null;
   try { data = await r.json(); } catch { /* sem corpo */ }
   if (r.status === 401 && !opts.semRedirect && !location.pathname.startsWith('/login')) {
@@ -63,6 +74,7 @@ const ICONS = {
   rotate: 'M4 12a8 8 0 0 1 14-5 M20 4v5h-5 M20 12a8 8 0 0 1-14 5 M4 20v-5h5',
   lock: 'M6 11h12v9H6z M8 11V8a4 4 0 0 1 8 0v3',
   trend: 'M3 17l6-6 4 4 8-8 M15 7h6v6',
+  more: 'M5 12h.01 M12 12h.01 M19 12h.01',
 };
 const ico = (nome, tam) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"${tam ? ` style="width:${tam}px;height:${tam}px"` : ''}>${ICONS[nome].split(' M').map((d, i) => `<path d="${i ? 'M' : ''}${d}"/>`).join('')}</svg>`;
 

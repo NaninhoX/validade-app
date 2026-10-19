@@ -1,7 +1,7 @@
 'use strict';
 // Mapa de calor da loja: planta (gôndolas) + detalhe por lado e prateleira. A planta é editável (arrastar/redimensionar) por administradores.
 const Mapa = (() => {
-  const M = { data: null, metric: 'risco', sel: null, shelf: null, edit: false, draft: null, view: null, ctx: null, ro: null };
+  const M = { vista: 'planta', data: null, metric: 'risco', sel: null, shelf: null, edit: false, draft: null, view: null, ctx: null, ro: null };
 
   // ---------- cores ----------
   const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
@@ -50,15 +50,35 @@ const Mapa = (() => {
   const enderecoDe = (g, chave) => (chave === 'geral' ? String(g) : `${g}-${chave}`);
 
   // ---------- planta ----------
+  // No celular a planta não encolhe até ficar ilegível: tem escala mínima e rola para os lados.
+  const escala = (largPalco, L) => Math.max(largPalco / L.largura, largPalco < 760 ? 0.62 : 0);
+  const rolaParaLateral = () => { if (innerWidth < 1180) { const l = $('#lateral'); if (l) setTimeout(() => l.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); } };
+
+  function desenhaGrade(stage) {
+    const ids = [...new Set([...M.data.layout.gondolas.map(g => g.id), ...M.data.gondolas.map(g => g.id)])].sort((a, b) => a - b);
+    const porId = new Map(M.data.gondolas.map(g => [g.id, g]));
+    stage.innerHTML = '<div class="gridview">' + ids.map((id, i) => {
+      const d = porId.get(id), h = calor(d, false);
+      return '<button class="gt' + (h.vazio ? ' vazia' : '') + (M.sel === id ? ' sel' : '') + '" data-g="' + id + '" style="--i:' + i + ';' + (h.vazio ? '' : '--hc:' + h.bg + ';--hi:' + h.ink) + '" aria-label="Gôndola ' + id + '">' +
+        '<span class="n">' + id + '</span><span class="t">' + (h.vazio ? 'vazia' : esc(h.txt)) + '</span>' + (d && !h.vazio ? '<span class="s">' + d.lotes + ' lotes</span>' : '') + (d && d.vencidos ? '<span class="tag">' + d.vencidos + '</span>' : '') + '</button>';
+    }).join('') + '</div>';
+    $$('.gt', stage).forEach(b => b.addEventListener('click', () => { M.sel = +b.dataset.g; M.shelf = null; desenhaPalco(); desenhaLateral(); rolaParaLateral(); }));
+    const aviso = $('#orfas'); if (aviso) aviso.innerHTML = '';
+  }
+
   function layoutAtual() { return M.edit ? M.draft : M.data.layout; }
 
   function desenhaPalco() {
     const L = layoutAtual();
     const stage = $('#stage');
     if (!stage) return;
+    const grade = M.vista === 'grade' && !M.edit;
+    stage.classList.toggle('stage-bare', grade);
+    if (grade) { stage.style.height = 'auto'; stage.style.overflowX = ''; return desenhaGrade(stage); }
     const w = stage.clientWidth || 800;
-    const s = w / L.largura;
+    const s = escala(w, L);
     stage.style.height = (L.altura * s) + 'px';
+    stage.style.overflowX = s * L.largura > w + 1 ? 'auto' : 'hidden';
     const porId = new Map(M.data.gondolas.map(g => [g.id, g]));
     const noLayout = new Set(L.gondolas.map(g => g.id));
     stage.innerHTML = `<div class="canvas" id="canvas" style="width:${L.largura}px;height:${L.altura}px;transform:scale(${s})">
@@ -82,7 +102,7 @@ const Mapa = (() => {
     const tip = $('#tip');
     $$('#canvas .gon').forEach(el => {
       const id = +el.dataset.g;
-      el.addEventListener('click', () => { if (M.edit) { M.sel = id; desenhaPalco(); desenhaLateral(); } else { M.sel = id; M.shelf = null; desenhaPalco(); desenhaLateral(); } });
+      el.addEventListener('click', () => { if (M.edit) { M.sel = id; desenhaPalco(); desenhaLateral(); } else { M.sel = id; M.shelf = null; desenhaPalco(); desenhaLateral(); rolaParaLateral(); } });
       el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } });
       el.addEventListener('mousemove', e => {
         if (M.edit) return;
@@ -188,7 +208,7 @@ const Mapa = (() => {
       return;
     }
     el.innerHTML = lateralGondola();
-    $('#fecha', el).addEventListener('click', () => { M.sel = null; M.shelf = null; desenhaPalco(); desenhaLateral(); });
+    $('#fecha', el).addEventListener('click', () => { M.sel = null; M.shelf = null; desenhaPalco(); desenhaLateral(); const st = $('#stage'); if (st && innerWidth < 1180) st.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
     $$('.shelf[data-chave]', el).forEach(b => b.addEventListener('click', () => { M.shelf = { g: M.sel, chave: b.dataset.chave }; desenhaLateral(); }));
   }
 
@@ -246,23 +266,24 @@ const Mapa = (() => {
     v.innerHTML = `
       <div class="editbar reveal" style="margin-bottom:16px;justify-content:space-between">
         <div class="seg" role="group" aria-label="O que mostrar no mapa">${Object.entries(METRICAS).map(([k, m]) => `<button data-metric="${k}" aria-pressed="${M.metric === k}" title="${esc(m.desc)}">${m.nome}</button>`).join('')}</div>
-        <div class="editbar">${legenda()}${M.ctx.admin && !M.edit ? `<button id="editar">${ico('edit')} Editar planta</button>` : ''}</div>
+        <div class="editbar">${legenda()}${!M.edit ? `<div class="seg" role="group" aria-label="Visualização"><button data-vista="grade" aria-pressed="${M.vista === 'grade'}">Grade</button><button data-vista="planta" aria-pressed="${M.vista === 'planta'}">Planta</button></div>` : ''}${M.ctx.admin && !M.edit ? `<button id="editar">${ico('edit')} Editar planta</button>` : ''}</div>
       </div>
       ${L.provisorio && !M.edit ? `<div class="callout reveal" style="--i:1;margin-bottom:16px">${ico('info')}<div><b>Planta provisória.</b> As 19 gôndolas estão em grade só para você já enxergar os dados. ${M.ctx.admin ? 'Clique em <b>Editar planta</b> para arrastar cada gôndola até a posição real e enviar a imagem do layout da loja como fundo.' : 'Peça a um administrador para montar a planta real.'}</div></div>` : ''}
       <div id="orfas" style="margin-bottom:16px"></div>
       <div class="mapa-wrap"><div class="stage reveal" style="--i:2" id="stage"></div><div id="lateral"></div></div>
       <div class="tip" id="tip"></div>`;
     $$('[data-metric]', v).forEach(b => b.addEventListener('click', () => { M.metric = b.dataset.metric; lsSet('mapaMetrica', M.metric); montaTudo(); }));
+    $$('[data-vista]', v).forEach(b => b.addEventListener('click', () => { M.vista = b.dataset.vista; lsSet('mapaVista', M.vista); montaTudo(); }));
     const ed = $('#editar', v);
     if (ed) ed.addEventListener('click', () => { M.edit = true; M.draft = JSON.parse(JSON.stringify(M.data.layout)); M.sel = null; M.shelf = null; montaTudo(); });
     desenhaPalco(); desenhaLateral();
     if (M.ro) M.ro.disconnect();
-    M.ro = new ResizeObserver(() => { const s = $('#stage'); if (s && s.clientWidth) { const L2 = layoutAtual(), k = s.clientWidth / L2.largura, c = $('#canvas'); if (c) { c.style.transform = `scale(${k})`; s.style.height = L2.altura * k + 'px'; } } });
+    M.ro = new ResizeObserver(() => { const st = $('#stage'); if (!st || !st.clientWidth || st.classList.contains('stage-bare')) return; const L2 = layoutAtual(), k = escala(st.clientWidth, L2), c = $('#canvas'); if (c) { c.style.transform = `scale(${k})`; st.style.height = L2.altura * k + 'px'; st.style.overflowX = k * L2.largura > st.clientWidth + 1 ? 'auto' : 'hidden'; } });
     M.ro.observe($('#stage'));
   }
 
   async function render(view, ctx) {
-    M.view = view; M.ctx = ctx; M.metric = lsGet('mapaMetrica', 'risco'); M.edit = false; M.draft = null;
+    M.view = view; M.ctx = ctx; M.metric = lsGet('mapaMetrica', 'risco'); M.vista = lsGet('mapaVista', innerWidth < 760 ? 'grade' : 'planta'); M.edit = false; M.draft = null;
     view.innerHTML = `<div class="skeleton" style="height:480px;border-radius:18px"></div>`;
     const [data, cfg] = await Promise.all([api('/api/mapa'), api('/api/config')]);
     data.faixas = cfg.faixas;

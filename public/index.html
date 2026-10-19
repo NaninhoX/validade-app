@@ -2,38 +2,51 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0a6cff">
+<link rel="manifest" href="manifest.webmanifest">
 <title>Controle de Validade</title>
 <link rel="icon" href="icon.svg">
 <link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="coletor.css">
 </head>
 <body>
 <div class="app">
   <aside class="side" aria-label="Navegação">
     <div class="brand"><div class="logo" id="logo"></div><div><b>Validade</b><span>Loja AP52 · São Pedro</span></div></div>
-    <nav style="display:contents">
-      <a class="nav" href="#/geral" data-r="geral"><span id="i-geral"></span><span class="lbl">Visão geral</span><span class="lbl-s">Geral</span></a>
-      <a class="nav" href="#/mapa" data-r="mapa"><span id="i-mapa"></span><span class="lbl">Mapa da loja</span><span class="lbl-s">Mapa</span></a>
-      <a class="nav" href="#/estoque" data-r="estoque"><span id="i-estoque"></span><span class="lbl">Estoque</span><span class="lbl-s">Estoque</span><span class="badge-n" id="nVenc" hidden></span></a>
-      <a class="nav" href="#/etiquetas" data-r="etiquetas"><span id="i-etiquetas"></span><span class="lbl">Etiquetas</span><span class="lbl-s">Etiq.</span></a>
-      <a class="nav" href="#/mov" data-r="mov"><span id="i-mov"></span><span class="lbl">Movimentações</span><span class="lbl-s">Mov.</span></a>
-      <a class="nav" href="#/config" data-r="config"><span id="i-config"></span><span class="lbl">Configurações</span><span class="lbl-s">Config.</span></a>
+    <nav class="navlist" aria-label="Seções">
+      <a class="nav" href="#/geral" data-r="geral"><span class="ic" id="i-geral"></span><span class="lbl">Visão geral</span><span class="lbl-s">Geral</span></a>
+      <a class="nav" href="#/mapa" data-r="mapa"><span class="ic" id="i-mapa"></span><span class="lbl">Mapa da loja</span><span class="lbl-s">Mapa</span></a>
+      <a class="nav destaque" href="#/coletor" data-r="coletor"><span class="ic" id="i-coletor"></span><span class="lbl">Coletor</span><span class="lbl-s">Coletor</span></a>
+      <a class="nav" href="#/estoque" data-r="estoque"><span class="ic" id="i-estoque"></span><span class="lbl">Estoque</span><span class="lbl-s">Estoque</span><span class="badge-n" id="nVenc" hidden></span></a>
+      <a class="nav sec" href="#/etiquetas" data-r="etiquetas"><span class="ic" id="i-etiquetas"></span><span class="lbl">Etiquetas</span><span class="lbl-s">Etiquetas</span></a>
+      <a class="nav sec" href="#/mov" data-r="mov"><span class="ic" id="i-mov"></span><span class="lbl">Movimentações</span><span class="lbl-s">Mov.</span></a>
+      <a class="nav sec" href="#/config" data-r="config"><span class="ic" id="i-config"></span><span class="lbl">Configurações</span><span class="lbl-s">Config.</span></a>
+      <button class="nav mais" id="maisBtn" aria-haspopup="true" aria-expanded="false"><span class="ic" id="i-mais"></span><span class="lbl-s">Mais</span></button>
     </nav>
     <div class="grow"></div>
-    <a class="nav" href="/coletor" target="_blank" rel="noopener"><span id="i-coletor"></span><span class="lbl">Abrir coletor</span></a>
     <div class="me"><div class="avatar" id="avatar">?</div><div class="who"><b id="meNome">—</b><span id="mePapel"></span></div><button class="icon subtle sm" id="sair" title="Sair" hidden></button></div>
   </aside>
 
   <div class="main">
     <header class="topbar">
+      <button class="icon subtle" id="voltar" aria-label="Voltar" hidden></button>
       <div class="title"><h1 id="tTitulo">Visão geral</h1><p id="tSub"></p></div>
-      <span class="sync-dot" title="Conectado"></span>
-      <button class="icon" id="atualiza" title="Atualizar"></button>
-      <a class="btn primary" id="export" href="/api/export.xlsx" download></a>
+      <button class="sync" id="sync" title="Situação do envio dos lançamentos"><span class="dot-s"></span><span id="syncTxt">Online</span></button>
+      <button class="icon hide-m" id="atualiza" title="Atualizar"></button>
+      <a class="btn primary hide-m" id="export" href="/api/export.xlsx" download></a>
     </header>
     <main class="page" id="view" tabindex="-1"></main>
   </div>
+</div>
+
+<div class="sheet-back" id="maisBack" hidden></div>
+<div class="sheet" id="maisSheet" role="menu" hidden>
+  <a class="sheet-item" href="#/etiquetas" data-r="etiquetas" role="menuitem"><span id="m-etiquetas"></span>Etiquetas</a>
+  <a class="sheet-item" href="#/mov" data-r="mov" role="menuitem"><span id="m-mov"></span>Movimentações</a>
+  <a class="sheet-item" href="#/config" data-r="config" role="menuitem"><span id="m-config"></span>Configurações</a>
+  <a class="sheet-item" href="/api/export.xlsx" download role="menuitem"><span id="m-export"></span>Exportar .xlsx</a>
+  <button class="sheet-item" id="maisSair" role="menuitem" hidden><span id="m-sair"></span>Sair</button>
 </div>
 
 <dialog id="dlg">
@@ -46,7 +59,9 @@
 </dialog>
 
 <script src="common.js"></script>
+<script src="scanner.js"></script>
 <script src="mapa.js"></script>
+<script src="coletor.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

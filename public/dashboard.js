@@ -3,6 +3,7 @@ const S = { login: false, usuario: null, admin: true, op: 'LOCAL', ops: [], cfg:
 const ROTAS = {
   geral: { titulo: 'Visão geral', sub: () => `Hoje, ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}` },
   mapa: { titulo: 'Mapa da loja', sub: () => 'Calor por gôndola, lado e prateleira' },
+  coletor: { titulo: 'Coletor', sub: () => 'Receber, conferir, dar baixa e buscar' },
   estoque: { titulo: 'Estoque', sub: () => 'Todos os lotes em loja' },
   etiquetas: { titulo: 'Etiquetas', sub: () => 'Itens em faixa de desconto' },
   mov: { titulo: 'Movimentações', sub: () => 'Tudo que o coletor e o painel registraram' },
@@ -39,8 +40,12 @@ async function enviar(body, msg) {
 
 // ---------- casca ----------
 function pintaNav(nome) {
-  $$('.nav[data-r]').forEach(a => { if (a.dataset.r === nome) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  $$('.nav[data-r], .sheet-item[data-r]').forEach(a => { if (a.dataset.r === nome) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  const sec = ['etiquetas', 'mov', 'config'].includes(nome);
+  const mb = $('#maisBtn'); if (sec) mb.setAttribute('aria-current', 'page'); else mb.removeAttribute('aria-current');
 }
+function fechaMais() { $('#maisSheet').hidden = true; $('#maisBack').hidden = true; $('#maisBtn').setAttribute('aria-expanded', 'false'); }
+function alternaMais() { const abre = $('#maisSheet').hidden; $('#maisSheet').hidden = !abre; $('#maisBack').hidden = !abre; $('#maisBtn').setAttribute('aria-expanded', String(abre)); }
 
 async function rota() {
   const h = location.hash.replace(/^#\/?/, '') || 'geral';
@@ -48,7 +53,9 @@ async function rota() {
   const r = ROTAS[nome] ? nome : 'geral';
   const q = new URLSearchParams(qs || '');
   const meu = ++token;
-  pintaNav(r);
+  pintaNav(r); fechaMais();
+  $('#voltar').hidden = r === 'geral';
+  window.scrollTo(0, 0);
   $('#tTitulo').textContent = ROTAS[r].titulo; $('#tSub').textContent = ROTAS[r].sub();
   document.title = ROTAS[r].titulo + ' · Controle de Validade';
   view.style.animation = 'none'; void view.offsetWidth; view.style.animation = '';
@@ -59,7 +66,10 @@ async function rota() {
     if (typeof html === 'string') view.innerHTML = html;
     if (PAGINAS[r].ligar) PAGINAS[r].ligar(q);
   } catch (e) {
-    if (meu === token) view.innerHTML = `<div class="callout warn">${ico('alert')}<div>Não consegui carregar: ${esc(e.message)}</div></div>`;
+    if (meu === token) {
+      view.innerHTML = `<div class="callout warn">${ico('alert')}<div style="flex:1"><b>${e.rede ? 'Sem conexão' : 'Não consegui carregar'}</b><div class="small" style="margin:4px 0 12px">${esc(e.message)}</div><button id="tentar">${ico('refresh')} Tentar de novo</button></div></div>`;
+      const b = $('#tentar'); if (b) b.addEventListener('click', rota);
+    }
   }
 }
 const skeleton = r => r === 'mapa' ? '' : `<div class="kpis">${'<div class="card skeleton" style="height:104px"></div>'.repeat(4)}</div><div class="card skeleton" style="height:320px;margin-top:18px"></div>`;
@@ -104,8 +114,8 @@ PAGINAS.geral = async () => {
   </div>
   <div class="grid cols-2" style="margin-top:18px">
     <div class="card reveal" style="--i:4"><div class="head"><h2>Validade do estoque</h2><span class="sub">toque numa fatia para filtrar</span></div>
-      <div style="display:flex;gap:28px;align-items:center;flex-wrap:wrap">${donut(por)}
-        <div class="legend">${por.map(s => `<div class="row click" data-status="${esc(s.status)}"><span class="dot" style="--c:${esc(s.cor)}"></span><span>${esc(s.status)}</span><b class="num">${s.lotes}</b><span class="num muted small" style="min-width:76px">${brl(s.valor)}</span></div>`).join('')}</div></div></div>
+      <div class="donut-wrap">${donut(por)}
+        <div class="legend">${por.map(s => `<div class="row click" data-status="${esc(s.status)}"><span class="dot" style="--c:${esc(s.cor)}"></span><div><div>${esc(s.status)}</div><div class="xs muted">${brl(s.valor)}</div></div><b class="num" style="font-size:17px">${s.lotes}</b></div>`).join('')}</div></div></div>
     <div class="card reveal" style="--i:5"><div class="head"><h2>Muro de validade</h2><span class="sub">valor (R$) que vence por mês</span></div>
       <div class="muro">${res.muro.map((m, i) => `<div class="b" title="${esc(nomeMes(m.chave))}: ${brl(m.valor)} em ${m.lotes} lotes"><span class="v">${m.valor >= 1000 ? (m.valor / 1000).toFixed(1).replace('.', ',') + 'k' : Math.round(m.valor)}</span><div class="col" style="height:${Math.max(1.5, m.valor / max * 100)}%;--c:${corMes(m.chave, i - 1)};--i:${i}"></div><span class="m">${esc(nomeMes(m.chave))}</span></div>`).join('')}</div></div>
   </div>
@@ -139,6 +149,10 @@ PAGINAS.geral.ligar = () => {
   $$('.row[data-q]').forEach(el => el.addEventListener('click', () => { location.hash = '#/estoque?q=' + encodeURIComponent(el.dataset.q); }));
 };
 
+// ---------- coletor ----------
+PAGINAS.coletor = async () => Coletor.html();
+PAGINAS.coletor.ligar = () => Coletor.ligar();
+
 // ---------- mapa ----------
 PAGINAS.mapa = async () => { await Mapa.render(view, { admin: S.admin }); return null; };
 
@@ -150,14 +164,14 @@ PAGINAS.estoque = async q => {
   S.cfg = cfg; E.marcas = todas.marcas;
   const gond = Array.from({ length: 19 }, (_, i) => i + 1);
   return `<div class="grid" style="gap:14px">
-    <div class="reveal" style="display:grid;grid-template-columns:minmax(220px,1.6fr) repeat(2,minmax(140px,.7fr));gap:10px">
+    <div class="reveal filters">
       <div class="search"><span id="ss"></span><input id="fq" type="search" placeholder="Buscar produto, EAN, lote ou endereço" value="${esc(E.q)}" aria-label="Buscar"></div>
       <select id="fgond" aria-label="Gôndola"><option value="">Todas as gôndolas</option>${gond.map(g => `<option ${E.gondola == g ? 'selected' : ''} value="${g}">Gôndola ${g}</option>`).join('')}</select>
       <select id="fmarca" aria-label="Marca"><option value="">Todas as marcas</option>${E.marcas.map(m => `<option ${E.marca === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
     </div>
-    <div class="seg reveal" style="--i:1;justify-self:start" id="fst"><button data-st="" aria-pressed="${E.status === ''}">Todos</button>${res.por_status.map(s => `<button data-st="${esc(s.status)}" aria-pressed="${E.status === s.status}">${esc(s.status)} <span class="faint">${s.lotes}</span></button>`).join('')}</div>
+    <div class="seg scrollx reveal" style="--i:1" id="fst"><button data-st="" aria-pressed="${E.status === ''}">Todos</button>${res.por_status.map(s => `<button data-st="${esc(s.status)}" aria-pressed="${E.status === s.status}">${esc(s.status)} <span class="faint">${s.lotes}</span></button>`).join('')}</div>
     <div class="card flush reveal" style="--i:2"><div class="head"><h2 id="estTit">Estoque</h2><span class="sub" id="estInfo"></span></div>
-      <div class="scroll" style="max-height:calc(100vh - 330px);margin-top:12px"><table><thead><tr><th>Status</th><th>Produto</th><th>Lote</th><th class="num">Qtd</th><th>Validade</th><th class="num">Dias</th><th>Endereço</th><th class="num">Preço</th><th class="num">Oferta</th><th></th></tr></thead><tbody id="est"></tbody></table></div>
+      <div class="scroll" style="max-height:calc(100vh - 330px);margin-top:12px"><table class="resp"><thead><tr><th>Status</th><th>Produto</th><th>Lote</th><th class="num">Qtd</th><th>Validade</th><th class="num">Dias</th><th>Endereço</th><th class="num">Preço</th><th class="num">Oferta</th><th></th></tr></thead><tbody id="est"></tbody></table></div>
       <div style="padding:14px 20px"><button id="maisEst" hidden>Carregar mais</button></div></div>
   </div>`;
 };
@@ -181,11 +195,11 @@ async function carregaEstoque(reset) {
   const r = await api('/api/lotes?' + p);
   E.total = r.total;
   $('#est').insertAdjacentHTML('beforeend', r.itens.map((l, i) => `
-    <tr style="animation:rise .35s var(--ease) both;animation-delay:${Math.min(i, 14) * 25}ms"><td>${pill(l.status, l.cor)}</td>
-    <td><div class="pname">${esc(l.nome || '(sem cadastro)')}</div><div class="xs muted">${esc(l.ean)}${l.marca ? ' · ' + esc(l.marca) : ''}</div></td>
-    <td>${esc(l.lote)}</td><td class="num">${l.qtd}</td><td class="nowrap">${brData(l.validade)}</td><td class="num">${l.dias}</td><td>${addr(l.endereco, l.endereco_ok)}</td>
-    <td class="num">${brl(l.preco)}</td><td class="num">${l.desconto ? `<b>${l.desconto}%</b>${l.preco_desc !== null ? `<div class="xs muted">${brl(l.preco_desc)}</div>` : ''}` : '—'}</td>
-    <td class="nowrap"><button class="icon subtle sm" data-act="baixa" data-id="${l.id}" title="Dar baixa">${ico('minus')}</button><button class="icon subtle sm" data-act="ajuste" data-id="${l.id}" title="Ajustar quantidade">${ico('edit')}</button><button class="icon subtle sm" data-act="mover" data-id="${l.id}" title="Mover de endereço">${ico('move')}</button></td></tr>`).join('') || (reset ? '<tr><td colspan="10" class="muted" style="padding:32px;text-align:center">Nenhum lote com esses filtros.</td></tr>' : ''));
+    <tr style="animation:rise .35s var(--ease) both;animation-delay:${Math.min(i, 14) * 25}ms"><td class="c-st">${pill(l.status, l.cor)}</td>
+    <td class="c-pr"><div class="pname">${esc(l.nome || '(sem cadastro)')}</div><div class="xs muted">${esc(l.ean)}${l.marca ? ' · ' + esc(l.marca) : ''}</div></td>
+    <td class="c-lt" data-l="Lote">${esc(l.lote)}</td><td class="c-qt num" data-l="Qtd">${l.qtd}</td><td class="c-vl nowrap" data-l="Validade">${brData(l.validade)}</td><td class="c-dd num" data-l="Dias">${l.dias}</td><td class="c-en">${addr(l.endereco, l.endereco_ok)}</td>
+    <td class="c-pc num" data-l="Preço">${brl(l.preco)}</td><td class="c-of num">${l.desconto ? `<b>${l.desconto}%</b>${l.preco_desc !== null ? `<div class="xs muted">${brl(l.preco_desc)}</div>` : ''}` : '—'}</td>
+    <td class="c-ac nowrap"><button class="icon subtle sm" data-act="baixa" data-id="${l.id}" title="Dar baixa">${ico('minus')}</button><button class="icon subtle sm" data-act="ajuste" data-id="${l.id}" title="Ajustar quantidade">${ico('edit')}</button><button class="icon subtle sm" data-act="mover" data-id="${l.id}" title="Mover de endereço">${ico('move')}</button></td></tr>`).join('')|| (reset ? '<tr><td colspan="10" class="muted" style="padding:32px;text-align:center">Nenhum lote com esses filtros.</td></tr>' : ''));
   E.offset += r.itens.length;
   $('#estInfo').textContent = `${int(Math.min(E.offset, E.total))} de ${int(E.total)} lotes`;
   $('#maisEst').hidden = E.offset >= E.total;
@@ -304,23 +318,34 @@ PAGINAS.config.ligar = () => {
 
 // ---------- início ----------
 (async () => {
-  for (const [id, ic] of [['logo', 'box'], ['i-geral', 'grid'], ['i-mapa', 'map'], ['i-estoque', 'layers'], ['i-etiquetas', 'tag'], ['i-mov', 'clock'], ['i-config', 'sliders'], ['i-coletor', 'scan']]) $('#' + id).innerHTML = ico(ic, id === 'logo' ? 20 : 20);
+  for (const [id, ic] of [['logo', 'box'], ['i-geral', 'grid'], ['i-mapa', 'map'], ['i-estoque', 'layers'], ['i-etiquetas', 'tag'], ['i-mov', 'clock'], ['i-config', 'sliders'], ['i-coletor', 'scan'], ['i-mais', 'more'],
+    ['m-etiquetas', 'tag'], ['m-mov', 'clock'], ['m-config', 'sliders'], ['m-export', 'download'], ['m-sair', 'logout']]) $('#' + id).innerHTML = ico(ic, 22);
   $('#atualiza').innerHTML = ico('refresh');
   $('#export').innerHTML = ico('download') + ' Exportar';
+  $('#voltar').innerHTML = ico('chevron');
+  $('#voltar').addEventListener('click', () => { if (history.length > 1) history.back(); else location.hash = '#/geral'; });
+  $('#maisBtn').addEventListener('click', alternaMais);
+  $('#maisBack').addEventListener('click', fechaMais);
+  $$('.sheet-item').forEach(a => a.addEventListener('click', fechaMais));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fechaMais(); });
   try {
     const eu = await api('/api/eu');
     S.login = eu.login; S.usuario = eu.usuario; S.admin = !eu.login || eu.usuario?.papel === 'admin';
     S.op = eu.usuario ? eu.usuario.nome : (lsGet('operador', eu.operadores[0] || 'LOCAL'));
     S.ops = eu.operadores;
-  } catch (e) { toast('Não consegui falar com o servidor: ' + e.message, 'bad', 8000); return; }
+  } catch (e) { toast(e.rede ? 'Sem conexão com o servidor. Verifique a internet e recarregue.' : 'Não consegui falar com o servidor: ' + e.message, 'bad', 8000); return; }
   $('#meNome').textContent = S.op; $('#avatar').textContent = S.op.slice(0, 1);
   $('#mePapel').textContent = S.login ? (S.admin ? 'Administrador' : 'Operador') : 'Modo local';
   if (S.login) {
-    const s = $('#sair'); s.hidden = false; s.innerHTML = ico('logout');
-    s.addEventListener('click', async () => { await api('/api/logout', { method: 'POST', body: {}, semRedirect: true }); location.href = '/login'; });
+    const sair = async () => { await api('/api/logout', { method: 'POST', body: {}, semRedirect: true }); location.href = '/login'; };
+    const s = $('#sair'); s.hidden = false; s.innerHTML = ico('logout'); s.addEventListener('click', sair);
+    const ms = $('#maisSair'); ms.hidden = false; ms.addEventListener('click', sair);
   }
   $('#atualiza').addEventListener('click', () => { S.resumo = null; rota(); });
+  Fila.inicia();
   carregaResumo().catch(() => {});
+  if (!location.hash && S.login && !S.admin) location.hash = '#/coletor';   // operador da loja entra direto no coletor
   rota();
 })();
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('/sw.js').catch(() => {});
 setInterval(() => { if (!document.hidden && (location.hash === '' || location.hash === '#/geral') && !$('#dlg').open) { S.resumo = null; rota(); } }, 120000);
