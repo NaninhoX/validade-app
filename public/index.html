@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a6cff">
+<title>Controle de Validade</title>
+<link rel="icon" href="icon.svg">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side" aria-label="Navegação">
+    <div class="brand"><div class="logo" id="logo"></div><div><b>Validade</b><span>Loja AP52 · São Pedro</span></div></div>
+    <nav style="display:contents">
+      <a class="nav" href="#/geral" data-r="geral"><span id="i-geral"></span><span class="lbl">Visão geral</span><span class="lbl-s">Geral</span></a>
+      <a class="nav" href="#/mapa" data-r="mapa"><span id="i-mapa"></span><span class="lbl">Mapa da loja</span><span class="lbl-s">Mapa</span></a>
+      <a class="nav" href="#/estoque" data-r="estoque"><span id="i-estoque"></span><span class="lbl">Estoque</span><span class="lbl-s">Estoque</span><span class="badge-n" id="nVenc" hidden></span></a>
+      <a class="nav" href="#/etiquetas" data-r="etiquetas"><span id="i-etiquetas"></span><span class="lbl">Etiquetas</span><span class="lbl-s">Etiq.</span></a>
+      <a class="nav" href="#/mov" data-r="mov"><span id="i-mov"></span><span class="lbl">Movimentações</span><span class="lbl-s">Mov.</span></a>
+      <a class="nav" href="#/config" data-r="config"><span id="i-config"></span><span class="lbl">Configurações</span><span class="lbl-s">Config.</span></a>
+    </nav>
+    <div class="grow"></div>
+    <a class="nav" href="/coletor" target="_blank" rel="noopener"><span id="i-coletor"></span><span class="lbl">Abrir coletor</span></a>
+    <div class="me"><div class="avatar" id="avatar">?</div><div class="who"><b id="meNome">—</b><span id="mePapel"></span></div><button class="icon subtle sm" id="sair" title="Sair" hidden></button></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="title"><h1 id="tTitulo">Visão geral</h1><p id="tSub"></p></div>
+      <span class="sync-dot" title="Conectado"></span>
+      <button class="icon" id="atualiza" title="Atualizar"></button>
+      <a class="btn primary" id="export" href="/api/export.xlsx" download></a>
+    </header>
+    <main class="page" id="view" tabindex="-1"></main>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog" id="dlgForm">
+    <h2 id="dlgTitulo" style="font-size:20px"></h2>
+    <p class="muted small" id="dlgSub" style="margin-top:4px;margin-bottom:16px"></p>
+    <div id="dlgCampos"></div>
+    <menu><button type="button" id="dlgCancel">Cancelar</button><button type="submit" id="dlgOk" class="primary">Confirmar</button></menu>
+  </form>
+</dialog>
+
+<script src="common.js"></script>
+<script src="mapa.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>
