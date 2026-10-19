@@ -1,5 +1,5 @@
 // Uso: node scripts/import.js <arquivo.xlsx> [--substituir]
-//   Local: grava em data/validade.db. Remoto: defina TURSO_DATABASE_URL e TURSO_AUTH_TOKEN antes de rodar.
+//   Local: grava em data/pg (PGlite). Neon: defina DATABASE_URL no terminal antes de rodar.
 const path = require('node:path');
 const { open } = require('../lib/db');
 const { importar } = require('../lib/excel');

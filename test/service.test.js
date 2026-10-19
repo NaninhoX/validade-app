@@ -1,8 +1,5 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
 const { open } = require('../lib/db');
 const S = require('../lib/service');
 const A = require('../lib/auth');
@@ -10,15 +7,18 @@ const U = require('../lib/util');
 const X = require('../lib/excel');
 const { classificar, FAIXAS_PADRAO, ehRacao, descontoPct } = require('../lib/rules');
 
-let n = 0;
+let compartilhado;
+// Um Postgres de verdade (PGlite) em memória, limpo antes de cada teste.
 async function novoDb() {
-  const arq = path.join(os.tmpdir(), `validade-test-${process.pid}-${Date.now()}-${n++}.db`);
-  const db = await open({ url: 'file:' + arq.replace(/\\/g, '/') });
+  if (!compartilhado) compartilhado = await open({ dir: 'memory://' });
+  const db = compartilhado;
+  await db.run('TRUNCATE produtos, lotes, eventos, usuarios, config RESTART IDENTITY');
   await S.upsertProduto(db, { ean: '7891000000017', nome: 'RAÇÃO SECA TESTE 1KG', preco: 20, categoria: 'RAÇÃO' });
   await S.upsertProduto(db, { ean: '7891000000024', nome: 'BRINQUEDO BOLA', preco: 10, categoria: 'ACESSÓRIO' });
-  db.apagar = () => { db.close(); for (const s of ['', '-wal', '-shm']) { try { fs.rmSync(arq + s, { force: true }); } catch { /* Windows segura o arquivo até o processo sair */ } } };
+  db.apagar = () => {};
   return db;
 }
+test.after(() => compartilhado && compartilhado.close());
 const mais = d => { const x = new Date(); x.setDate(x.getDate() + d); return U.hojeISO(x); };
 const base = { ean: '7891000000017', lote: 'L1', validade: mais(100), endereco: '3-A-1', operador: 'TESTE' };
 

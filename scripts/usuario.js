@@ -1,5 +1,5 @@
 // Uso: node scripts/usuario.js NOME PIN [admin|operador]
-//   Cria o usuário ou troca o PIN/papel. Funciona no banco local e no remoto (defina TURSO_DATABASE_URL e TURSO_AUTH_TOKEN).
+//   Cria o usuário ou troca o PIN/papel. Funciona no banco local e no Neon (defina DATABASE_URL no terminal para usar o Neon).
 const { open } = require('../lib/db');
 const { salvarUsuario } = require('../lib/auth');
 

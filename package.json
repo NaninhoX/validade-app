@@ -1,7 +1,7 @@
 {
   "name": "controle-validade",
   "version": "0.1.0",
-  "description": "Controle de validade: dashboard + coletor + SQLite + export xlsx",
+  "description": "Controle de validade: dashboard, mapa de calor e coletor (PostgreSQL)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,12 +12,16 @@
   },
   "type": "commonjs",
   "dependencies": {
-    "@libsql/client": "^0.18.0",
+    "@electric-sql/pglite": "^0.5.10",
     "@zxing/library": "^0.23.0",
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "pg": "^8.23.1"
   },
   "private": true,
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite-socket": "^0.2.13"
   }
 }

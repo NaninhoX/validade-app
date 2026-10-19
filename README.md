@@ -10,34 +10,41 @@ Node 20 ou mais novo.
 npm install
 npm run import -- "../Controle_Validade_v12.xlsx"   # carga inicial (já feita neste PC)
 npm start                                           # http://localhost:3000  ·  coletor em /coletor
-npm test
+npm test                                            # 20 testes contra Postgres
 ```
 
-Localmente o banco é o arquivo `data/validade.db` e o login fica desligado (só o localhost acessa). Com `npm run lan` ou `REQUIRE_LOGIN=1` o login passa a ser obrigatório.
+O banco é **PostgreSQL** nos dois ambientes, com o mesmo SQL:
 
-## Publicar (Git + Vercel)
+| Onde | Banco |
+|---|---|
+| Seu computador | PGlite (um Postgres que roda dentro do Node, guardado em `data/pg`; não precisa instalar nada) |
+| Vercel | **Neon**, pela variável `DATABASE_URL` |
 
-A Vercel não guarda arquivos entre chamadas, então em produção o banco é o **Turso** (SQLite hospedado, plano gratuito serve). O código é o mesmo; só muda a variável de ambiente.
+Localmente o login fica desligado (só o localhost acessa). Com `npm run lan` ou `REQUIRE_LOGIN=1` ele passa a ser obrigatório.
 
-1. **Banco** — crie um banco no Turso (pelo painel da Vercel em *Storage / Marketplace → Turso*, ou `turso db create validade`). Anote `TURSO_DATABASE_URL` (`libsql://…`) e `TURSO_AUTH_TOKEN`.
-2. **Git** — `git init`, commit e push para um repositório **privado**. O `.gitignore` já deixa de fora `node_modules`, `data/` e `.env`.
-3. **Vercel** — *Add New → Project*, escolha o repositório. Preset **Other**, sem comando de build. Em *Environment Variables* crie:
+## Publicar (Git + Vercel + Neon)
 
-   | Variável | Valor |
-   |---|---|
-   | `TURSO_DATABASE_URL` | `libsql://…` do passo 1 |
-   | `TURSO_AUTH_TOKEN` | token do passo 1 |
-   | `SESSION_SECRET` | texto aleatório com 32+ caracteres (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`) |
-
-4. **Dados e primeiro acesso** — no seu computador, com as mesmas variáveis `TURSO_*` definidas no terminal:
-
+1. **Git** — crie um repositório **privado** vazio no GitHub e, na pasta `validade-app`:
    ```bash
-   npm run import -- "../Controle_Validade_v12.xlsx"   # sobe produtos e estoque para o Turso
+   git remote add origin https://github.com/SEU-USUARIO/validade-app.git
+   git push -u origin main
+   ```
+   O `.gitignore` já deixa de fora `node_modules`, `data/` e `.env`.
+2. **Vercel** — *Add New → Project*, escolha o repositório. Preset **Other**, sem comando de build.
+3. **Neon** — no projeto da Vercel, *Storage → Create Database → Neon* (ou *Marketplace → Neon*) e conecte ao projeto. A Vercel cria sozinha a variável `DATABASE_URL`; **não precisa copiar a senha**.
+4. **Segredo da sessão** — em *Settings → Environment Variables* crie `SESSION_SECRET` com um texto aleatório de 32+ caracteres:
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+5. **Redeploy** (para as variáveis valerem) e abra o endereço no celular. As tabelas são criadas na primeira chamada.
+6. **Dados e primeiro acesso** — no seu computador, com a `DATABASE_URL` do Neon definida **só no terminal** (pegue em *Vercel → Storage → Neon → .env.local* ou no painel do Neon; não coloque em arquivo versionado):
+   ```bash
+   # PowerShell:  $env:DATABASE_URL = "postgres://..."
+   npm run import -- "../Controle_Validade_v12.xlsx"   # sobe produtos e estoque
    npm run usuario -- MICHEL 123456 admin               # troque pelo PIN que quiser (6 a 8 números)
    npm run usuario -- JOAO 654321 operador              # um por pessoa da loja
    ```
-
-5. Abra o endereço da Vercel no celular ou no Chrome do coletor, entre com nome + PIN e use **Adicionar à tela inicial**. O endereço é HTTPS, que é o que libera a câmera.
+7. Abra o endereço da Vercel, entre com nome + PIN e use **Adicionar à tela inicial**. O endereço é HTTPS, que é o que libera a câmera.
 
 Na Vercel o login é sempre obrigatório. Depois, novos usuários e PINs se gerenciam em **Configurações → Equipe**.
 
@@ -87,4 +94,5 @@ Usa o leitor nativo do Chrome (BarcodeDetector) e, onde ele não existe, o ZXing
 - Não lê vendas do PDV, então o saldo só diminui por baixa ou ronda — por isso a Ronda existe.
 - Importar pelo painel aceita arquivos de até ~4 MB (limite da Vercel); a carga grande vai por `npm run import`.
 - A câmera foi testada com leitura de imagens de código de barras, não com um aparelho real de loja.
+- O driver do Neon (`pg`) foi testado por rede contra um servidor Postgres local; a conexão com o Neon de verdade só é exercitada no primeiro deploy.
 - `npm audit` aponta 2 avisos moderados de `uuid` dentro do `exceljs`; o trecho afetado não é usado aqui.
