@@ -50,8 +50,9 @@ const Fila = (() => {
 
 const Coletor = (() => {
   let modo = 'entrada', tipoEntrada = 'RECEBIMENTO', produtoAtual = null;
-  let rondaItens = [], rondaFeitos = new Set(), rondaEnd = '', rondaTs = 0, rondaChave = '';
-  let CFG = null, ultimo = null, undoTimer, ac;
+  let rondaItens = [], rondaFeitos = new Set(), bipados = new Set(), rondaEnd = '', rondaTs = 0, rondaChave = '';
+  let turno = lsGet('turno', null), emTurno = -1;      // ronda do dia (guardada no aparelho até o fim do dia)
+  let CFG = null, ultimo = null, ultimoLote = null, ultimoTally = null, undoTimer, ac;
   const enter = {};
 
   const nome = () => (typeof S !== 'undefined' && S.op) || 'COLETOR';
@@ -122,14 +123,16 @@ const Coletor = (() => {
   </section>
 
   <section id="m-ronda" hidden>
-    <div id="rEscolha">
+    <div id="rDia"></div>
+    <div id="rEscolha" hidden>
+      <button id="rVoltaDia" class="sm" style="margin-bottom:12px">${ico('chevron')} Ronda do dia</button>
       <div class="f-wrap"><label class="f" for="rEnd">Endereço da ronda</label>
         <div class="in"><input id="rEnd" list="listaEnd" autocomplete="off" autocapitalize="characters" placeholder="bipe a etiqueta ou digite (1-B-3)"><button class="cam" data-cam="rEnd" aria-label="Ler etiqueta do endereço">${ico('camera', 24)}</button></div></div>
       <button id="rCarregar" class="big primary">Carregar endereço</button>
     </div>
     <div id="rCorpo" hidden>
       <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <button id="rTrocar" class="sm">${ico('chevron')} Trocar endereço</button><span class="small muted" id="rConta"></span>
+        <button id="rTrocar" class="sm">${ico('chevron')} <span id="rTrocarTxt">Trocar endereço</span></button><span class="small muted" id="rConta"></span>
       </div>
       <div id="rInfo" class="muted small"></div>
       <div class="prog" id="rProg"><i></i></div>
@@ -137,6 +140,10 @@ const Coletor = (() => {
         <div class="in"><input id="rBusca" inputmode="numeric" autocomplete="off"><button class="cam" data-cam="rBusca" aria-label="Ler código pela câmera">${ico('camera', 24)}</button></div></div>
       <div id="rLista"></div>
       <button id="rNovo" class="big">＋ Item que não estava na lista</button>
+      <div id="rFim" class="rfim" hidden>
+        <button id="rPular" class="big">Pular</button>
+        <button id="rConcluir" class="big primary">Concluir endereço</button>
+      </div>
     </div>
   </section>
 
@@ -162,12 +169,13 @@ const Coletor = (() => {
     modo = m; lsSet('coletorModo', m);
     $$('.cmodes button').forEach(b => b.setAttribute('aria-pressed', b.dataset.modo === m));
     ['entrada', 'ronda', 'baixa', 'busca'].forEach(x => { $('#m-' + x).hidden = x !== m; });
+    if (m === 'ronda' && !$('#rDia').hidden) desenhaDia();
     if (!foco || matchMedia('(pointer: coarse)').matches) return;   // no celular não abre o teclado sozinho
     ({ entrada: () => ($('#end').value ? $('#ean') : $('#end')), ronda: () => $('#rEnd'), baixa: () => $('#bEan'), busca: () => $('#sEan') }[m]()).focus({ preventScroll: true });
   }
 
-  function mostraUndo(grupo, txt) {
-    ultimo = grupo;
+  function mostraUndo(grupo, txt, loteId = null, tally = null) {
+    ultimo = grupo; ultimoLote = loteId; ultimoTally = tally;
     if (!grupo) return;
     $('#undoTxt').textContent = txt; $('#undo').hidden = false;
     clearTimeout(undoTimer); undoTimer = setTimeout(() => { const u = $('#undo'); if (u) u.hidden = true; }, 45000);
@@ -253,6 +261,121 @@ const Coletor = (() => {
   }
 
   // ---------- ronda ----------
+  const hojeLocal = () => new Date().toLocaleDateString('en-CA');
+  const kEan = x => String(x || '').replace(/\D/g, '').replace(/^0+/, '');
+  const exigeBip = it => it.dias <= 30;           // vencendo em até 30 dias só confirma com o código lido
+  const salvaTurno = () => lsSet('turno', turno);
+  const conta = k => { if (turno && emTurno >= 0 && !turno.fim) { turno.tally[k] = (turno.tally[k] || 0) + 1; salvaTurno(); } };
+  const novoTally = () => ({ conf: 0, fix: 0, zero: 0, ret: 0, etq: 0, mov: 0, semBip: 0 });
+
+  function mostraRonda(tela) {
+    $('#rDia').hidden = tela !== 'dia'; $('#rEscolha').hidden = tela !== 'escolha'; $('#rCorpo').hidden = tela !== 'corpo';
+    if (tela === 'dia') desenhaDia();
+  }
+
+  async function gerarTurno() {
+    const n = +lsGet('rondaN', 10);
+    const b = $('#rGerar'); if (b) b.disabled = true;
+    try {
+      const r = await api('/api/ronda?n=' + n);
+      if (!r.enderecos.length) { toast('Nada para conferir hoje — todos os endereços já foram vistos', 'ok', 4000); return; }
+      turno = { dia: hojeLocal(), n: r.enderecos.length, criado: Date.now(), fim: null, cobertura: r.cobertura,
+        itens: r.enderecos.map(e => ({ e: e.endereco, g: e.gondola, lotes: e.lotes, venc: e.vencidos, urg: e.urgentes, etq: e.etiquetar, dias: e.dias_sem, ok: e.valido, feito: false, pulou: false })),
+        tally: novoTally() };
+      salvaTurno(); emTurno = -1; desenhaDia();
+    } catch (e) { toast(e.status ? e.message : 'Sem conexão para montar a ronda', 'bad', 4000); }
+    finally { const x = $('#rGerar'); if (x) x.disabled = false; }
+  }
+
+  async function painelSemana() {
+    const box = $('#rPainel'); if (!box) return;
+    try {
+      const p = await api('/api/ronda/painel?dias=7');
+      if (!$('#rPainel')) return;
+      box.innerHTML = p.length ? `<div class="rd-painel"><div class="rp-h"><span>Últimos 7 dias</span><span>Endereços</span><span>Itens</span><span>Divergência</span></div>` +
+        p.slice(0, 7).map(d => `<div><span>${esc(brData(d.dia).slice(0, 5))}</span><span>${d.enderecos}</span><span>${d.lotes}</span><span>${d.divergencia === null ? '—' : d.divergencia.toLocaleString('pt-BR') + '%'}</span></div>`).join('') + '</div>'
+        : '<p class="small muted">Ainda não há rondas registradas. Divergência = itens que não bateram com o sistema.</p>';
+    } catch { box.innerHTML = ''; }
+  }
+
+  function chipsEnd(t) {
+    const c = [`<span class="rc">${t.lotes} lote${t.lotes > 1 ? "s" : ""}</span>`];
+    if (t.venc) c.push(`<span class="rc bad">${t.venc} vencido${t.venc > 1 ? 's' : ''}</span>`);
+    if (t.urg) c.push(`<span class="rc warn">${t.urg} vence${t.urg > 1 ? 'm' : ''} em até 30 d</span>`);
+    for (const [p, q] of Object.entries(t.etq || {}).sort((a, b) => b[0] - a[0])) c.push(`<span class="rc tag">${q} p/ etiquetar ${p}%</span>`);
+    c.push(`<span class="rc">${t.dias === null ? 'nunca conferido' : 'conferido há ' + t.dias + ' d'}</span>`);
+    if (!t.ok) c.push('<span class="rc warn">fora do padrão</span>');
+    return c.join('');
+  }
+
+  function desenhaDia() {
+    const box = $('#rDia'); if (!box) return;
+    if (turno && turno.dia !== hojeLocal() && !turno.fim) { turno = null; salvaTurno(); }
+    if (!turno) {
+      const n = +lsGet('rondaN', 10);
+      box.innerHTML = `<div class="rd-start">
+        <h2>Ronda do dia</h2>
+        <p class="muted">O app escolhe os endereços onde há mais a perder ou mais tempo sem conferir, já na ordem de caminhada.</p>
+        <div class="f" style="margin-top:14px">Quantos endereços hoje?</div>
+        <div class="chips" id="rTam" style="margin-top:6px">${[5, 10, 20].map(x => `<button class="chip" data-n="${x}" aria-pressed="${x === n}">${x}</button>`).join('')}</div>
+        <button id="rGerar" class="big primary" style="margin-top:16px">Gerar ronda de hoje</button>
+        <div id="rPainel" style="margin-top:18px"></div>
+        <button id="rManual" class="sm" style="margin-top:14px">Conferir um endereço específico</button></div>`;
+      painelSemana();
+      return;
+    }
+    if (turno.fim) { box.innerHTML = resumoTurno(); return; }
+    const feitos = turno.itens.filter(i => i.feito).length;
+    const prox = turno.itens.findIndex(i => !i.feito && !i.pulou);
+    let g = null;
+    const cartoes = turno.itens.map((t, k) => {
+      const cab = t.g !== g ? `<div class="rd-g">${t.g >= 99 ? 'Sem gôndola' : 'Gôndola ' + t.g}</div>` : '';
+      g = t.g;
+      return cab + `<button class="alvo ${t.feito ? 'feito' : ''} ${k === prox ? 'prox' : ''}" data-i="${k}" id="al-${k}">
+        <span class="aend">${esc(t.e)}</span><span class="adesc">${esc(descEndereco(t.e)) || ''}${t.pulou && !t.feito ? ' · pulado' : ''}</span>
+        <span class="achips">${t.feito ? '<span class="rc ok">conferido</span>' : chipsEnd(t)}</span>
+        <span class="ach">${t.feito ? ico('check') : ico('chevron')}</span></button>`;
+    }).join('');
+    box.innerHTML = `<div class="rd-head"><b>${feitos} de ${turno.n} endereços</b><span class="muted small">cobre ${turno.cobertura.toLocaleString('pt-BR')}% do valor em risco</span></div>
+      <div class="prog"><i style="width:${turno.n ? feitos / turno.n * 100 : 0}%"></i></div>
+      ${cartoes}
+      <div class="rd-foot">${feitos === turno.n ? '<button id="rEncerrar" class="big primary">Ver resultado da ronda</button>' : '<button id="rEncerrar" class="sm">Encerrar ronda agora</button>'}</div>`;
+    const alvo = $('#al-' + prox); if (alvo && feitos) alvo.scrollIntoView({ block: 'center' });
+  }
+
+  function resumoTurno() {
+    const t = turno.tally, itens = t.conf + t.fix + t.zero, div = itens ? (t.fix + t.zero) / itens * 100 : 0;
+    const feitos = turno.itens.filter(i => i.feito).length;
+    const min = Math.max(1, Math.round((turno.fim - turno.criado) / 60000));
+    const leitura = itens < 10 ? '' : div < 10 ? 'O sistema está bem calibrado: quase tudo bateu com a prateleira.'
+      : div > 40 ? 'Muita coisa não bateu: a contagem inicial está desatualizada. Vale repetir a ronda nestes endereços nos próximos dias.' : 'Parte do estoque não bateu — as correções já foram aplicadas.';
+    const cel = (v, rot) => `<div class="rs-c"><b>${v}</b><span>${rot}</span></div>`;
+    return `<div class="rd-start"><h2>Ronda ${feitos === turno.n ? 'concluída' : 'encerrada'}</h2>
+      <p class="muted">${feitos} de ${turno.n} endereços em ${min} min${feitos ? ` · ${(min / feitos).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} min por endereço` : ''}</p>
+      <div class="rs-grid">${cel(itens, 'itens conferidos')}${cel(`${t.fix + t.zero} <small>(${div.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%)</small>`, 'não bateram')}${cel(t.etq, 'etiquetas coladas')}${cel(t.ret, 'vencidos retirados')}${cel(t.mov, 'itens movidos')}${cel(t.semBip, 'sem leitura do código')}</div>
+      ${leitura ? `<p class="small" style="margin:14px 0">${esc(leitura)}</p>` : ''}
+      <button id="rNova" class="big primary">Nova ronda</button>
+      <a class="sm" href="#/etiquetas" style="display:inline-block;margin-top:12px">Ver lista de etiquetas</a></div>`;
+  }
+
+  function encerraTurno() {
+    if (!turno) return;
+    turno.fim = Date.now(); salvaTurno(); emTurno = -1; mostraRonda('dia');
+  }
+
+  function proximoDoTurno(de) {
+    const k = turno.itens.findIndex((t, i) => i > de && !t.feito && !t.pulou);
+    return k >= 0 ? k : turno.itens.findIndex(t => !t.feito && !t.pulou);
+  }
+
+  function avancaTurno() {
+    const k = proximoDoTurno(emTurno);
+    if (k < 0) { if (turno.itens.every(t => t.feito)) return encerraTurno(); emTurno = -1; return mostraRonda('dia'); }
+    abreTurno(k);
+  }
+
+  function abreTurno(i) { emTurno = i; carregaRonda(turno.itens[i].e); }
+
   async function carregaRonda(end, manter = false) {
     end = (end || '').trim().toUpperCase();
     if (!end) return;
@@ -260,30 +383,113 @@ const Coletor = (() => {
     rondaChave = end; rondaTs = Date.now();
     try {
       const r = await api('/api/enderecos/' + encodeURIComponent(end));
-      if (!manter || rondaEnd !== r.endereco) rondaFeitos = new Set();
+      if (!manter || rondaEnd !== r.endereco) { rondaFeitos = new Set(); bipados = new Set(); }
       rondaEnd = r.endereco; rondaItens = r.itens;
       $('#rEnd').value = rondaEnd;
-      $('#rInfo').innerHTML = (descEndereco(rondaEnd) ? esc(descEndereco(rondaEnd)) + ' · ' : '') + (r.ultima_contagem ? `última contagem ${brDataHora(r.ultima_contagem)}` : 'nunca contado')
-        + (r.endereco_ok ? '' : ' · <span style="color:var(--warn)">endereço fora do padrão</span>');
-      $('#rEscolha').hidden = true; $('#rCorpo').hidden = false;
+      const pos = emTurno >= 0 ? `<b>Endereço ${emTurno + 1} de ${turno.n}</b> · ` : '';
+      $('#rInfo').innerHTML = pos + (descEndereco(rondaEnd) ? esc(descEndereco(rondaEnd)) + ' · ' : '') + (r.ultima_contagem ? `última contagem ${brDataHora(r.ultima_contagem)}` : 'nunca contado')
+        + (r.endereco_ok ? '' : ' · <span style="color:var(--warn)">endereço fora do padrão — mova os itens para o endereço certo</span>');
+      $('#rTrocarTxt').textContent = emTurno >= 0 ? 'Lista' : 'Trocar endereço';
+      $('#rFim').hidden = emTurno < 0;
+      mostraRonda('corpo');
       desenhaRonda();
+      window.scrollTo({ top: 0 });
       if (!matchMedia('(pointer: coarse)').matches) $('#rBusca').focus({ preventScroll: true });
     } catch (e) { toast(e.status ? e.message : 'Sem conexão para carregar a ronda', 'bad'); }
   }
+
   function desenhaRonda() {
     const feitos = rondaItens.filter(i => rondaFeitos.has(i.id)).length;
     $('#rProg').firstElementChild.style.width = rondaItens.length ? (feitos / rondaItens.length * 100) + '%' : '100%';
     $('#rConta').textContent = `${feitos} de ${rondaItens.length} conferidos`;
-    $('#rLista').innerHTML = (rondaItens.length ? '' : '<p class="muted" style="margin-bottom:12px">Nada cadastrado neste endereço. Use “＋ Item” para incluir o que encontrar.</p>') +
-      rondaItens.map((i, k) => `
-      <div class="citem ${rondaFeitos.has(i.id) ? 'feito' : ''}" id="ri-${i.id}" style="animation-delay:${Math.min(k, 8) * 40}ms">
+    const tudo = rondaItens.every(i => rondaFeitos.has(i.id));
+    const cc = $('#rConcluir'); if (cc) cc.classList.toggle('primary', tudo);
+    $('#rLista').innerHTML = (rondaItens.length ? '' : '<p class="muted" style="margin-bottom:12px">Nada neste endereço (ou tudo já foi retirado). Use “＋ Item” para incluir o que encontrar.</p>') +
+      rondaItens.map((i, k) => {
+        const feito = rondaFeitos.has(i.id), venc = i.dias <= 0, precisaBip = !venc && exigeBip(i) && !bipados.has(i.id);
+        const faixa = venc ? '<div class="etq venc">Vencido: retirar da prateleira</div>'
+          : i.etiquetar ? `<div class="etq">${ico('tag')}<span>Etiquetar ${i.desconto}% e levar para a frente</span><button class="sm primary" data-r="etq" data-id="${i.id}">Etiquetei</button></div>`
+          : i.etiquetado ? `<div class="etq ok">${ico('check')}<span>Etiquetado ${i.desconto}%</span></div>` : '';
+        return `
+      <div class="citem ${feito ? 'feito' : ''}" id="ri-${i.id}" style="animation-delay:${Math.min(k, 8) * 40}ms">
         <div><div class="pname">${esc(i.nome || i.ean)}</div><div class="muted small">lote ${esc(i.lote)} · ${esc(i.ean)}${i.desconto ? ` · oferta ${i.desconto}%` : ''}</div></div>
         <div style="text-align:right">${pill(i.status, i.cor)}<div class="small" style="margin-top:3px">${brData(i.validade)}</div></div>
+        ${faixa}
         <div class="acts">
-          <button data-r="ok" data-id="${i.id}" class="${rondaFeitos.has(i.id) ? '' : 'primary'}">${ico('check')} ${i.qtd} un. conferem</button>
+          ${venc ? `<button data-r="ret" data-id="${i.id}" class="primary">Retirei da loja</button>` : ''}
+          ${venc ? '' : `<button data-r="${precisaBip ? 'bip' : 'ok'}" data-id="${i.id}" class="${feito || !i.endereco_ok ? '' : 'primary'}">${precisaBip ? ico('camera') + ' Bipar para confirmar' : ico('check') + ' ' + i.qtd + ' un. conferem'}</button>`}
           <button data-r="fix" data-id="${i.id}">Corrigir</button>
           <button data-r="zero" data-id="${i.id}" class="danger">Não achei</button>
-        </div></div>`).join('');
+          <button data-r="mov" data-id="${i.id}" class="${i.endereco_ok ? '' : 'primary'}">${ico('move')} Mover</button>
+        </div>
+        ${precisaBip && !feito ? `<button class="sm subtle" data-r="semcod" data-id="${i.id}" style="justify-self:start;grid-column:1/-1">Código ilegível ou sem etiqueta</button>` : ''}
+      </div>`;
+      }).join('');
+  }
+
+  async function registra(it, qtd, motivo, tally) {
+    const r = await lancar({ tipo: 'CONTAGEM', lote_id: it.id, qtd, motivo });
+    rondaFeitos.add(it.id); it.qtd = qtd; conta(tally);
+    if (r.grupo) mostraUndo(r.grupo, `${motivo.replace('Ronda: ', '')}: ${qtd} × ${it.nome}`, it.id, tally);
+    if (qtd === 0) rondaItens = rondaItens.filter(x => x.id !== it.id);
+    desenhaRonda();
+  }
+
+  async function acaoRonda(b) {
+    const it = rondaItens.find(i => i.id === +b.dataset.id);
+    if (!it) return;
+    const a = b.dataset.r;
+    if (a === 'ok') return registra(it, it.qtd, 'Ronda: confere', 'conf');
+    if (a === 'bip') {
+      const v = await Scanner.abrir({ titulo: `Bipe: ${it.nome || it.ean}`, aceitar: 'ean' });
+      if (!v) return;
+      if (kEan(v) !== kEan(it.ean)) { beep(false); toast('Esse código não é deste produto', 'bad', 3500); return; }
+      bipados.add(it.id);
+      return registra(it, it.qtd, 'Ronda: confere', 'conf');
+    }
+    if (a === 'semcod') {
+      if (!confirm('Confirmar sem ler o código? Isso fica registrado.')) return;
+      bipados.add(it.id);
+      conta('semBip');
+      return registra(it, it.qtd, 'Ronda: confere (sem bipar)', 'conf');
+    }
+    if (a === 'fix') {
+      const d = await dialogo({ titulo: 'Quantidade contada', sub: `${it.nome} · lote ${it.lote} (sistema: ${it.qtd})`, campos: [{ id: 'q', label: 'Quantidade real', valor: it.qtd, inputmode: 'numeric' }] });
+      if (!d || !/^\d+$/.test(d.q.trim())) return;
+      return registra(it, +d.q, 'Ronda: corrigido', 'fix');
+    }
+    if (a === 'zero') {
+      if (!confirm(`Confirma que NÃO há mais "${it.nome}" (lote ${it.lote}) aqui?`)) return;
+      return registra(it, 0, 'Ronda: não encontrado', 'zero');
+    }
+    if (a === 'ret') {
+      if (!confirm(`Confirma que retirou ${it.qtd} un. de "${it.nome}" (lote ${it.lote}, vencido) da loja?`)) return;
+      const r = await lancar({ tipo: 'BAIXA', lote_id: it.id, qtd: it.qtd, motivo: 'Vencido' });
+      conta('ret');
+      if (r.grupo) mostraUndo(r.grupo, `Retirado: ${it.qtd} × ${it.nome}`, it.id, 'ret');
+      rondaItens = rondaItens.filter(x => x.id !== it.id);
+      return desenhaRonda();
+    }
+    if (a === 'etq') {
+      const r = await lancar({ tipo: 'ETIQUETA', lote_id: it.id, desconto: it.desconto });
+      it.etiquetado = true; it.etiquetar = false; conta('etq');
+      if (r.grupo) mostraUndo(r.grupo, `Etiquetado ${it.desconto}%: ${it.nome}`, null, 'etq');
+      return desenhaRonda();
+    }
+    if (a === 'mov') {
+      const d = await dialogo({ titulo: 'Mover de endereço', sub: `${it.nome} · lote ${it.lote} (aqui: ${it.qtd})`, campos: [
+        { id: 'q', label: 'Quantidade a mover', valor: it.qtd, inputmode: 'numeric' },
+        { id: 'dest', label: 'Endereço de destino (ex.: 7-B-2)', valor: '' }] });
+      if (!d) return;
+      const q = d.q.trim(), dest = d.dest.trim().toUpperCase();
+      if (!/^\d+$/.test(q) || +q < 1 || +q > it.qtd) { toast('Quantidade inválida', 'bad'); return; }
+      if (!parseEndereco(dest).valido) { toast('Destino fora do padrão (ex.: 7-B-2)', 'bad'); return; }
+      const r = await lancar({ tipo: 'TRANSFERENCIA', lote_id: it.id, qtd: +q, endereco_destino: dest });
+      conta('mov');
+      if (r.grupo) mostraUndo(r.grupo, `Movido: ${q} × ${it.nome} → ${dest}`, null, 'mov');
+      if (+q === it.qtd) rondaItens = rondaItens.filter(x => x.id !== it.id); else it.qtd -= +q;
+      return desenhaRonda();
+    }
   }
 
   // ---------- ligação dos eventos ----------
@@ -308,7 +514,13 @@ const Coletor = (() => {
     // desfazer e recusados
     $('#undoBtn').addEventListener('click', async () => {
       if (!ultimo) return;
-      try { await api('/api/desfazer', { method: 'POST', body: { grupo: ultimo } }); toast('Desfeito', 'ok'); $('#undo').hidden = true; ultimo = null; if (modo === 'ronda' && rondaEnd) carregaRonda(rondaEnd, true); }
+      try {
+        await api('/api/desfazer', { method: 'POST', body: { grupo: ultimo } });
+        toast('Desfeito', 'ok'); $('#undo').hidden = true; ultimo = null;
+        if (ultimoLote) rondaFeitos.delete(ultimoLote);
+        if (ultimoTally && turno && !turno.fim && turno.tally[ultimoTally] > 0) { turno.tally[ultimoTally]--; salvaTurno(); }
+        if (modo === 'ronda' && rondaEnd && !$('#rCorpo').hidden) carregaRonda(rondaEnd, true);
+      }
       catch (e) { toast(e.message, 'bad', 5000); }
     });
     $('#rejeitados').addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (!b) return; const r = Fila.rejeitados(); r.splice(+b.dataset.i, 1); lsSet('rejeitados', r); Fila.atualiza(); });
@@ -345,39 +557,54 @@ const Coletor = (() => {
 
     // ronda
     aoEnter('rEnd', () => carregaRonda($('#rEnd').value));
-    $('#rEnd').addEventListener('change', () => { if ($('#rEnd').value.trim()) carregaRonda($('#rEnd').value); });
-    $('#rCarregar').addEventListener('click', () => carregaRonda($('#rEnd').value));
-    $('#rTrocar').addEventListener('click', () => { $('#rCorpo').hidden = true; $('#rEscolha').hidden = false; $('#rEnd').value = ''; rondaChave = ''; });
+    $('#rEnd').addEventListener('change', () => { if ($('#rEnd').value.trim()) { emTurno = -1; carregaRonda($('#rEnd').value); } });
+    $('#rCarregar').addEventListener('click', () => { emTurno = -1; carregaRonda($('#rEnd').value); });
+    $('#rVoltaDia').addEventListener('click', () => mostraRonda('dia'));
+    $('#rTrocar').addEventListener('click', () => {
+      if (emTurno >= 0) { emTurno = -1; mostraRonda('dia'); return; }
+      $('#rEnd').value = ''; rondaChave = ''; mostraRonda('escolha');
+    });
+    $('#rDia').addEventListener('click', e => {
+      const t = e.target.closest('button, a');
+      if (!t) return;
+      if (t.dataset.n) { lsSet('rondaN', +t.dataset.n); desenhaDia(); }
+      else if (t.id === 'rGerar') gerarTurno();
+      else if (t.id === 'rManual') { emTurno = -1; mostraRonda('escolha'); }
+      else if (t.id === 'rNova') { turno = null; salvaTurno(); desenhaDia(); }
+      else if (t.id === 'rEncerrar') {
+        if (turno.itens.every(i => i.feito) || confirm('Encerrar a ronda agora? Os endereços que faltam continuam na fila de amanhã.')) encerraTurno();
+      } else if (t.classList.contains('alvo')) abreTurno(+t.dataset.i);
+    });
+    $('#rPular').addEventListener('click', () => { turno.itens[emTurno].pulou = true; salvaTurno(); avancaTurno(); });
+    $('#rConcluir').addEventListener('click', () => {
+      const falta = rondaItens.filter(i => !rondaFeitos.has(i.id)).length;
+      const semEtiqueta = rondaItens.filter(i => i.etiquetar).length;
+      const avisos = [];
+      if (falta) avisos.push(`${falta} item(ns) ainda sem conferir`);
+      if (semEtiqueta) avisos.push(`${semEtiqueta} item(ns) sem etiqueta de desconto`);
+      if (avisos.length && !confirm(`${avisos.join(' e ')}. Concluir este endereço mesmo assim?`)) return;
+      turno.itens[emTurno].feito = true; salvaTurno(); avancaTurno();
+    });
     $('#rLista').addEventListener('click', async e => {
       const b = e.target.closest('button[data-r]');
-      if (!b) return;
-      const it = rondaItens.find(i => i.id === +b.dataset.id);
-      let qtd = it.qtd, motivo = 'Ronda: confere';
-      if (b.dataset.r === 'fix') {
-        const d = await dialogo({ titulo: 'Quantidade contada', sub: `${it.nome} · lote ${it.lote} (sistema: ${it.qtd})`, campos: [{ id: 'q', label: 'Quantidade real', valor: it.qtd, inputmode: 'numeric' }] });
-        if (!d || !/^\d+$/.test(d.q.trim())) return;
-        qtd = +d.q; motivo = 'Ronda: corrigido';
-      } else if (b.dataset.r === 'zero') {
-        if (!confirm(`Confirma que NÃO há mais "${it.nome}" (lote ${it.lote}) aqui?`)) return;
-        qtd = 0; motivo = 'Ronda: não encontrado';
-      }
-      try {
-        const r = await lancar({ tipo: 'CONTAGEM', lote_id: it.id, qtd, motivo });
-        rondaFeitos.add(it.id); it.qtd = qtd;
-        if (r.grupo) mostraUndo(r.grupo, `${motivo.replace('Ronda: ', '')}: ${qtd} × ${it.nome}`);
-        if (qtd === 0) rondaItens = rondaItens.filter(x => x.id !== it.id);
-        desenhaRonda();
-      } catch (er) { toast(er.message, 'bad', 5000); }
+      if (!b || b.disabled) return;
+      b.disabled = true;
+      try { await acaoRonda(b); }
+      catch (er) { toast(er.message || 'Não consegui registrar', 'bad', 5000); }
+      finally { b.disabled = false; }
     });
     aoEnter('rBusca', () => {
       const v = $('#rBusca').value.replace(/\D/g, ''); $('#rBusca').value = '';
       if (!v) return;
-      const k = x => x.replace(/^0+/, '');
-      const alvo = rondaItens.find(i => k(i.ean) === k(v) && !rondaFeitos.has(i.id)) || rondaItens.find(i => k(i.ean) === k(v));
+      const alvo = rondaItens.find(i => kEan(i.ean) === kEan(v) && !rondaFeitos.has(i.id)) || rondaItens.find(i => kEan(i.ean) === kEan(v));
       if (!alvo) { beep(false); toast('Este produto não estava na lista do endereço. Use “＋ Item que não estava na lista”.', 'bad', 4500); return; }
       beep(true);
       const el = $('#ri-' + alvo.id); el.classList.add('destaque'); el.scrollIntoView({ block: 'center', behavior: 'smooth' });
       setTimeout(() => el.classList.remove('destaque'), 2500);
+      if (exigeBip(alvo) && !rondaFeitos.has(alvo.id) && alvo.dias > 0) {      // ler o código é a confirmação dos itens que vencem logo
+        bipados.add(alvo.id);
+        registra(alvo, alvo.qtd, 'Ronda: confere', 'conf').catch(er => toast(er.message || 'Não consegui registrar', 'bad', 5000));
+      }
     });
     $('#rNovo').addEventListener('click', () => { $('#end').value = rondaEnd; atualizaEnd(); setTipo('CONTAGEM'); setModo('entrada'); $('#ean').focus(); });
 

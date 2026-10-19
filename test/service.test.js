@@ -199,3 +199,67 @@ test('resumo e fila usam as faixas; exportação gera um xlsx válido', async ()
   assert.equal(Buffer.from(buf).subarray(0, 2).toString(), 'PK');
   db.apagar();
 });
+
+test('ronda do dia: ranqueia por risco × tempo sem conferir, ordena para caminhar e exclui o já conferido hoje', async () => {
+  const db = await novoDb();
+  const l = (o) => S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 5, ...base, ...o });
+  await l({ endereco: '7-B-2', lote: 'V', validade: mais(-3) });                 // vencido: pior caso
+  await l({ endereco: '2-A-1', lote: 'U', validade: mais(10) });                 // urgente
+  await l({ endereco: '2-C', lote: 'N', validade: mais(400), ean: '7891000000024' }); // longe de vencer
+  await l({ endereco: '9-A-3', lote: 'H', validade: mais(20) });
+  const r = await S.ronda(db, { n: 5 });
+  assert.equal(r.enderecos.length, 4);
+  // a lista volta na ordem de caminhada: gôndola 2 (A antes de C), 7, 9
+  assert.deepEqual(r.enderecos.map(e => e.endereco), ['2-A-1', '2-C', '7-B-2', '9-A-3']);
+  const por = Object.fromEntries(r.enderecos.map(e => [e.endereco, e]));
+  assert.equal(por['7-B-2'].vencidos, 1);
+  assert.ok(por['7-B-2'].score > por['2-A-1'].score && por['2-A-1'].score > por['2-C'].score);
+  assert.deepEqual(por['2-A-1'].etiquetar, { 50: 1 });
+  assert.ok(r.cobertura > 0 && r.cobertura <= 100);
+  // limita ao tamanho pedido: fica com os de maior nota
+  const so2 = await S.ronda(db, { n: 5 });
+  assert.equal(so2.n, 5);
+  // conferir o endereço hoje o tira da fila
+  const item = (await S.esperadoNoEndereco(db, '7-B-2')).itens[0];
+  await S.leitura(db, { tipo: 'CONTAGEM', lote_id: item.id, qtd: 5, motivo: 'Ronda: confere', operador: 'TESTE' });
+  const depois = await S.ronda(db, { n: 5 });
+  assert.ok(!depois.enderecos.some(e => e.endereco === '7-B-2'));
+  assert.equal(depois.conferidos_hoje, 1);
+});
+
+test('etiqueta de desconto: registra, deixa de pedir, volta a pedir se a faixa mudar e desfaz', async () => {
+  const db = await novoDb();
+  const r0 = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 3, ...base, endereco: '4-B-2', validade: mais(20) });
+  const id = r0.lote.id;
+  assert.equal(r0.lote.etiquetar, true);
+  const r1 = await S.leitura(db, { tipo: 'ETIQUETA', lote_id: id, desconto: 50, operador: 'TESTE' });
+  assert.equal(r1.lote.etiquetado, true);
+  assert.equal(r1.lote.etiquetar, false);
+  assert.equal(r1.lote.qtd, 3);                                   // saldo intacto
+  const p = await S.ronda(db, { n: 5 });
+  assert.deepEqual(p.enderecos[0].etiquetar, {});
+  // etiqueta de 30% numa faixa que agora pede 50% continua pendente
+  await S.leitura(db, { tipo: 'ETIQUETA', lote_id: id, desconto: 30, operador: 'TESTE' });
+  assert.equal((await S.lotesAtivos(db, { endereco: '4-B-2' }))[0].etiquetar, true);
+  const un = await S.leitura(db, { tipo: 'ETIQUETA', lote_id: id, desconto: 50, operador: 'TESTE' });
+  await S.desfazer(db, un.grupo);
+  assert.equal((await S.lotesAtivos(db, { endereco: '4-B-2' }))[0].acao, 'Etiquetado 30%');
+  await assert.rejects(S.leitura(db, { tipo: 'ETIQUETA', lote_id: id, desconto: 0, operador: 'TESTE' }), /desconto/);
+  await assert.rejects(S.leitura(db, { tipo: 'ETIQUETA', ...base, desconto: 50 }), /informe o lote/);
+});
+
+test('painel da ronda: conta conferidos, corrigidos e não achei por dia', async () => {
+  const db = await novoDb();
+  const a = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 5, ...base, lote: 'A', endereco: '1-A-1' });
+  const b = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 5, ...base, lote: 'B', endereco: '1-A-1' });
+  const c = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 5, ...base, lote: 'C', endereco: '1-A-2' });
+  const cont = (x, qtd, motivo) => S.leitura(db, { tipo: 'CONTAGEM', lote_id: x.lote.id, qtd, motivo, operador: 'TESTE' });
+  await cont(a, 5, 'Ronda: confere');
+  await cont(b, 4, 'Ronda: corrigido');
+  await cont(c, 0, 'Ronda: não encontrado');
+  await S.leitura(db, { tipo: 'ETIQUETA', lote_id: a.lote.id, desconto: 30, operador: 'TESTE' });
+  const [hoje] = await S.rondaPainel(db, 7);
+  assert.equal(hoje.dia, U.hojeISO());
+  assert.deepEqual([hoje.enderecos, hoje.lotes, hoje.confere, hoje.corrigido, hoje.nao_achei, hoje.etiquetas], [2, 3, 1, 1, 1, 1]);
+  assert.equal(hoje.divergencia, 66.7);
+});

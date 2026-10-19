@@ -10,7 +10,7 @@ Node 20 ou mais novo.
 npm install
 npm run import -- "../Controle_Validade_v12.xlsx"   # carga inicial (já feita neste PC)
 npm start                                           # http://localhost:3000  (o coletor é a aba "Coletor")
-npm test                                            # 20 testes contra Postgres
+npm test                                            # 23 testes contra Postgres
 ```
 
 O banco é **PostgreSQL** nos dois ambientes, com o mesmo SQL:
@@ -78,6 +78,7 @@ Endereços antigos fora disso (`19`, `4-E-1`) continuam no estoque, aparecem em 
 - **Visão geral** — valor em risco, validade do estoque (donut), muro de validade por mês, “fazer hoje”, gôndolas que pedem atenção, marcas, qualidade dos dados.
 - **Mapa da loja** — planta com calor por gôndola; clique para ver lados A/B, pontas e cada prateleira, e os lotes dela. Métricas: Risco, Validade, Ocupação, Ronda. **Editar planta** (administrador): arraste e redimensione as gôndolas, gire, envie a imagem do layout da loja como fundo, escolha se a prateleira 1 é a de cima ou a de baixo. Enquanto não for salva, a planta é uma grade provisória.
 - **Estoque**, **Etiquetas** (imprimir), **Movimentações** (com desfazer), **Configurações** (regras, equipe, importar/exportar).
+- **Ronda do dia** (Coletor → Ronda) — o app escolhe os 5, 10 ou 20 endereços com maior nota (dinheiro que pode se perder ali × dias sem conferir) e os ordena para caminhar: gôndola, depois F → A → C → B. Em cada endereço: "conferem", Corrigir, Não achei, Mover, **Etiquetei** (registra a etiqueta do desconto) e **Retirei da loja** (baixa dos vencidos). Lote que vence em até 30 dias só é confirmado com o código lido (há uma saída "sem código", que fica registrada). Ao fim, o resumo mostra a divergência (itens que não bateram) e o painel dos últimos 7 dias sai dos próprios lançamentos.
 - **Coletor** (aba do app, mesmo login; `/coletor` só redireciona para ela; operadores já abrem nela) — Entrada (receber soma / contar define), Ronda por endereço, Baixa, Buscar. Atalhos de lado e prateleira por toque, câmera para o EAN e para a etiqueta do endereço, fila offline com reenvio sem duplicar, desfazer do último lançamento, aviso de FEFO.
 
 ## Câmera
