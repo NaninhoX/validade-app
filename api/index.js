@@ -3,8 +3,9 @@
 const { handler } = require('../lib/app');
 
 module.exports = (req, res) => {
-  // garante o prefixo /api caso a plataforma entregue o caminho reescrito
-  if (!req.url.startsWith('/api')) req.url = '/api' + (req.url.startsWith('/') ? '' : '/') + req.url;
-  res.setHeader('x-debug-url', req.url);
+  // A Vercel mantém o caminho original e acrescenta ?path=… na reescrita; tira esse parâmetro para o roteador não vê-lo.
+  const u = new URL(req.url, 'http://x');
+  u.searchParams.delete('path');
+  req.url = u.pathname + u.search;
   return handler(req, res);
 };
