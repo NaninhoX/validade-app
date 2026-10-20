@@ -114,6 +114,8 @@ const Coletor = (() => {
       <div class="f-wrap"><label class="f" for="cNome">Produto novo — nome</label><input id="cNome" autocomplete="off"></div>
       <div class="f-wrap"><label class="f" for="cPreco">Preço (opcional)</label><input id="cPreco" inputmode="decimal" autocomplete="off"></div>
     </div>
+    <div class="f-wrap" id="precoWrap" hidden><label class="f" for="pPreco">Preço de venda <span class="muted">(este produto ainda não tem preço)</span></label>
+      <input id="pPreco" inputmode="decimal" autocomplete="off" placeholder="ex.: 39,90"></div>
     <div class="f-wrap"><label class="f" for="lote"><span class="step">3</span>Lote</label><input id="lote" autocomplete="off" autocapitalize="characters"></div>
     <div class="f-wrap"><label class="f" for="val"><span class="step">4</span>Validade (DDMMAA, DD/MM/AAAA ou MM/AA)</label><input id="val" inputmode="numeric" autocomplete="off" placeholder="ex.: 150327"></div>
     <div class="prev" id="prev" aria-live="polite"></div>
@@ -201,7 +203,7 @@ const Coletor = (() => {
     const ean = $('#ean').value.trim();
     if (!ean) return;
     produtoAtual = null;
-    $('#prod').hidden = true; $('#cadRapido').hidden = true;
+    $('#prod').hidden = true; $('#cadRapido').hidden = true; $('#precoWrap').hidden = true;
     try { produtoAtual = await api('/api/produto/' + encodeURIComponent(ean.replace(/\D/g, ''))); }
     catch (e) { if (e.status) { toast(e.message, 'bad'); return; } produtoAtual = { offline: true, cadastrado: true, lotes: [] }; }
     const box = $('#prod');
@@ -217,6 +219,7 @@ const Coletor = (() => {
       box.hidden = false;
       box.innerHTML = `<b>${esc(p.nome)}</b><span class="muted small">${p.preco ? brl(p.preco) : 'sem preço'}${p.marca ? ' · ' + esc(p.marca) : ''}</span>` +
         (produtoAtual.lotes.length ? `<div class="chips">${produtoAtual.lotes.map(l => `<button class="lotechip" data-lote="${esc(l.lote)}" data-val="${l.validade}" data-end="${esc(l.endereco)}">${esc(l.lote)} · ${brData(l.validade)} · ${l.qtd}un · ${esc(l.endereco || 'sem end.')}</button>`).join('')}</div>` : '<span class="muted small">Nenhum lote em estoque.</span>');
+      if (!p.preco) { $('#precoWrap').hidden = false; $('#pPreco').focus(); return; }
     }
     $('#lote').focus();
   }
@@ -244,6 +247,11 @@ const Coletor = (() => {
       if (!$('#cNome').value.trim()) { toast('Informe o nome do produto novo', 'bad'); beep(false); return $('#cNome').focus(); }
       body.nome = $('#cNome').value.trim(); body.preco = $('#cPreco').value.replace(',', '.');
     }
+    const pp = $('#pPreco').value.trim();
+    if (!$('#precoWrap').hidden && pp) {
+      if (!/^d+([.,]d{1,2})?$/.test(pp)) { toast('Preço inválido (ex.: 39,90)', 'bad'); beep(false); return $('#pPreco').focus(); }
+      body.preco = pp.replace(',', '.');
+    }
     $('#salvar').disabled = true;
     try {
       const r = await lancar(body);
@@ -252,8 +260,8 @@ const Coletor = (() => {
       if (r.avisos?.length) beep(false);
       toast(r.fila ? 'Guardado — será enviado quando a rede voltar' : `${tipoEntrada === 'RECEBIMENTO' ? '+' : '='}${qtd} ${nomeProd}`, r.fila ? '' : 'ok', 2500);
       if (r.grupo) mostraUndo(r.grupo, `${tipoEntrada === 'RECEBIMENTO' ? 'Recebido' : 'Contado'}: ${qtd} × ${nomeProd}`);
-      ['ean', 'lote', 'val', 'qtd', 'cNome', 'cPreco'].forEach(id => { $('#' + id).value = ''; });
-      $('#prev').textContent = ''; $('#prod').hidden = true; $('#cadRapido').hidden = true; produtoAtual = null;
+      ['ean', 'lote', 'val', 'qtd', 'cNome', 'cPreco', 'pPreco'].forEach(id => { $('#' + id).value = ''; });
+      $('#prev').textContent = ''; $('#prod').hidden = true; $('#cadRapido').hidden = true; $('#precoWrap').hidden = true; produtoAtual = null;
       $('#ean').focus();
       carregaEnderecos();
     } catch (e) { toast(e.message, 'bad', 5000); }
@@ -279,7 +287,7 @@ const Coletor = (() => {
     try {
       const r = await api('/api/ronda?n=' + n);
       if (!r.enderecos.length) { toast('Nada para conferir hoje — todos os endereços já foram vistos', 'ok', 4000); return; }
-      turno = { dia: hojeLocal(), n: r.enderecos.length, criado: Date.now(), fim: null, cobertura: r.cobertura,
+      turno = { dia: hojeLocal(), n: r.enderecos.length, criado: Date.now(), fim: null, cobertura: r.cobertura, resp: r.responsaveis || {},
         itens: r.enderecos.map(e => ({ e: e.endereco, g: e.gondola, lotes: e.lotes, venc: e.vencidos, urg: e.urgentes, etq: e.etiquetar, dias: e.dias_sem, ok: e.valido, feito: false, pulou: false })),
         tally: novoTally() };
       salvaTurno(); emTurno = -1; desenhaDia();
@@ -329,7 +337,7 @@ const Coletor = (() => {
     const prox = turno.itens.findIndex(i => !i.feito && !i.pulou);
     let g = null;
     const cartoes = turno.itens.map((t, k) => {
-      const cab = t.g !== g ? `<div class="rd-g">${t.g >= 99 ? 'Sem gôndola' : 'Gôndola ' + t.g}</div>` : '';
+      const cab = t.g !== g ? `<div class="rd-g">${t.g >= 99 ? 'Sem gôndola' : 'Gôndola ' + t.g}${(turno.resp || {})[t.g] ? ' · ' + esc(turno.resp[t.g].join(', ')) : ''}</div>` : '';
       g = t.g;
       return cab + `<button class="alvo ${t.feito ? 'feito' : ''} ${k === prox ? 'prox' : ''}" data-i="${k}" id="al-${k}">
         <span class="aend">${esc(t.e)}</span><span class="adesc">${esc(descEndereco(t.e)) || ''}${t.pulou && !t.feito ? ' · pulado' : ''}</span>
@@ -407,16 +415,16 @@ const Coletor = (() => {
     $('#rLista').innerHTML = (rondaItens.length ? '' : '<p class="muted" style="margin-bottom:12px">Nada neste endereço (ou tudo já foi retirado). Use “＋ Item” para incluir o que encontrar.</p>') +
       rondaItens.map((i, k) => {
         const feito = rondaFeitos.has(i.id), venc = i.dias <= 0, precisaBip = !venc && exigeBip(i) && !bipados.has(i.id);
-        const faixa = venc ? '<div class="etq venc">Vencido: retirar da prateleira</div>'
+        const faixa = venc ? '<div class="etq venc">Vencido: retirar da prateleira e mandar para RMA (CD)</div>'
           : i.etiquetar ? `<div class="etq">${ico('tag')}<span>Etiquetar ${i.desconto}% e levar para a frente</span><button class="sm primary" data-r="etq" data-id="${i.id}">Etiquetei</button></div>`
           : i.etiquetado ? `<div class="etq ok">${ico('check')}<span>Etiquetado ${i.desconto}%</span></div>` : '';
         return `
       <div class="citem ${feito ? 'feito' : ''}" id="ri-${i.id}" style="animation-delay:${Math.min(k, 8) * 40}ms">
-        <div><div class="pname">${esc(i.nome || i.ean)}</div><div class="muted small">lote ${esc(i.lote)} · ${esc(i.ean)}${i.desconto ? ` · oferta ${i.desconto}%` : ''}</div></div>
+        <div><div class="pname">${esc(i.nome || i.ean)}</div><div class="muted small">lote ${esc(i.lote)} · ${esc(i.ean)}${i.desconto ? ` · oferta ${i.desconto}%` : ''}</div>${i.preco == null ? `<button class="sm subtle" data-r="preco" data-id="${i.id}" style="margin:4px 0 0 -10px">＋ Informar preço</button>` : `<div class="xs muted">${brl(i.preco)}</div>`}</div>
         <div style="text-align:right">${pill(i.status, i.cor)}<div class="small" style="margin-top:3px">${brData(i.validade)}</div></div>
         ${faixa}
         <div class="acts">
-          ${venc ? `<button data-r="ret" data-id="${i.id}" class="primary">Retirei da loja</button>` : ''}
+          ${venc ? `<button data-r="ret" data-id="${i.id}" class="primary">Retirei (RMA)</button>` : ''}
           ${venc ? '' : `<button data-r="${precisaBip ? 'bip' : 'ok'}" data-id="${i.id}" class="${feito || !i.endereco_ok ? '' : 'primary'}">${precisaBip ? ico('camera') + ' Bipar para confirmar' : ico('check') + ' ' + i.qtd + ' un. conferem'}</button>`}
           <button data-r="fix" data-id="${i.id}">Corrigir</button>
           <button data-r="zero" data-id="${i.id}" class="danger">Não achei</button>
@@ -440,6 +448,16 @@ const Coletor = (() => {
     if (!it) return;
     const a = b.dataset.r;
     if (a === 'ok') return registra(it, it.qtd, 'Ronda: confere', 'conf');
+    if (a === 'preco') {
+      const d = await dialogo({ titulo: 'Preço de venda', sub: it.nome || it.ean, campos: [{ id: 'p', label: 'Preço (R$)', valor: '', inputmode: 'decimal' }] });
+      if (!d) return;
+      const p = d.p.trim();
+      if (!/^d+([.,]d{1,2})?$/.test(p)) { toast('Preço inválido (ex.: 39,90)', 'bad'); return; }
+      const r = await api('/api/produtos', { method: 'POST', body: { ean: it.ean, nome: it.nome, preco: p.replace(',', '.') } });
+      rondaItens.filter(x => x.ean === it.ean).forEach(x => { x.preco = r.preco; });
+      toast('Preço salvo', 'ok', 1800);
+      return desenhaRonda();
+    }
     if (a === 'bip') {
       const v = await Scanner.abrir({ titulo: `Bipe: ${it.nome || it.ean}`, aceitar: 'ean' });
       if (!v) return;
@@ -463,8 +481,8 @@ const Coletor = (() => {
       return registra(it, 0, 'Ronda: não encontrado', 'zero');
     }
     if (a === 'ret') {
-      if (!confirm(`Confirma que retirou ${it.qtd} un. de "${it.nome}" (lote ${it.lote}, vencido) da loja?`)) return;
-      const r = await lancar({ tipo: 'BAIXA', lote_id: it.id, qtd: it.qtd, motivo: 'Vencido' });
+      if (!confirm(`Confirma que retirou ${it.qtd} un. de "${it.nome}" (lote ${it.lote}, vencido) da loja para o RMA?`)) return;
+      const r = await lancar({ tipo: 'BAIXA', lote_id: it.id, qtd: it.qtd, motivo: 'RMA' });
       conta('ret');
       if (r.grupo) mostraUndo(r.grupo, `Retirado: ${it.qtd} × ${it.nome}`, it.id, 'ret');
       rondaItens = rondaItens.filter(x => x.id !== it.id);
@@ -542,6 +560,7 @@ const Coletor = (() => {
     aoEnter('ean', buscaProdutoEntrada);
     aoEnter('cNome', () => $('#cPreco').focus());
     aoEnter('cPreco', () => $('#lote').focus());
+    aoEnter('pPreco', () => $('#lote').focus());
     aoEnter('lote', () => $('#val').focus());
     aoEnter('val', () => $('#qtd').focus());
     aoEnter('qtd', salvarEntrada);
@@ -627,10 +646,10 @@ const Coletor = (() => {
       const b = e.target.closest('button[data-b]');
       if (!b) return;
       const l = window.__baixaLotes.find(x => x.id === +b.dataset.b);
-      CFG = CFG || await api('/api/config').catch(() => ({ motivos_baixa: ['Venda', 'Vencido', 'RMA Fornecedor', 'Avaria', 'Furto', 'Retirada Preventiva', 'Doação', 'Outro'] }));
+      CFG = CFG || await api('/api/config').catch(() => ({ motivos_baixa: ['Venda', 'RMA', 'Avaria', 'Furto', 'Retirada Preventiva', 'Doação', 'Outro'] }));
       const d = await dialogo({ titulo: 'Dar baixa', sub: `lote ${l.lote} · saldo ${l.qtd}`, campos: [
         { id: 'q', label: 'Quantidade', valor: l.qtd, inputmode: 'numeric' },
-        { id: 'm', label: 'Motivo', tipo: 'select', opcoes: l.dias <= 0 ? ['Vencido', ...CFG.motivos_baixa.filter(x => x !== 'Vencido')] : CFG.motivos_baixa }] });
+        { id: 'm', label: 'Motivo', tipo: 'select', opcoes: l.dias <= 0 ? ['RMA', ...CFG.motivos_baixa.filter(x => x !== 'RMA')] : CFG.motivos_baixa }] });
       if (!d || !/^\d+$/.test(d.q.trim()) || +d.q < 1) return;
       try {
         const r = await lancar({ tipo: 'BAIXA', lote_id: l.id, qtd: +d.q, motivo: d.m });

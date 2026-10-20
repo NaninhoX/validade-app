@@ -93,14 +93,25 @@ function donut(por) {
   </svg><div class="center"><div><b data-count="${total}">0</b><div class="xs muted">lotes</div></div></div></div>`;
 }
 
+// Muro de validade: barras por mês, em itens (unidades) ou em R$.
+let MURO = { dados: [], cor: '#9f1239' };
+const muroMet = () => (lsGet('muroMet', 'qtd') === 'valor' ? 'valor' : 'qtd');
+const muroSub = () => (muroMet() === 'valor' ? 'valor (R$) que vence por mês' : 'itens (unidades) que vencem por mês');
+function muroBarras() {
+  const met = muroMet(), d = MURO.dados;
+  const max = Math.max(1, ...d.map(m => m[met]));
+  const corMes = (k, i) => (k === 'Vencidos' ? MURO.cor : k === 'Depois' ? '#22c55e' : i <= 1 ? '#f97316' : i === 2 ? '#eab308' : i <= 4 ? '#3b82f6' : '#06b6d4');
+  const nomeMes = k => (k === 'Vencidos' ? 'Venc.' : k === 'Depois' ? '12m+' : new Date(k + '-15T12:00:00').toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''));
+  const rot = v => (met === 'valor' ? (v >= 1000 ? (v / 1000).toFixed(1).replace('.', ',') + 'k' : Math.round(v)) : v >= 10000 ? Math.round(v / 1000) + 'k' : int(v));
+  return d.map((m, i) => `<div class="b" title="${esc(nomeMes(m.chave))}: ${int(m.qtd)} itens · ${brl(m.valor)} · ${m.lotes} lotes"><span class="v">${rot(m[met])}</span><div class="col" style="height:${Math.max(1.5, m[met] / max * 100)}%;--c:${corMes(m.chave, i - 1)};--i:${i}"></div><span class="m">${esc(nomeMes(m.chave))}</span></div>`).join('');
+}
+
 const PAGINAS = {};
 PAGINAS.geral = async () => {
   const [res, fila, mapa, cfg] = await Promise.all([carregaResumo(), api('/api/fila?limite=8'), api('/api/mapa'), api('/api/config')]);
   S.cfg = cfg;
   const t = res.totais, por = res.por_status, q = res.qualidade;
-  const max = Math.max(1, ...res.muro.map(m => m.valor));
-  const corMes = (k, i) => (k === 'Vencidos' ? por[0].cor : k === 'Depois' ? '#22c55e' : i <= 1 ? '#f97316' : i === 2 ? '#eab308' : i <= 4 ? '#3b82f6' : '#06b6d4');
-  const nomeMes = k => (k === 'Vencidos' ? 'Venc.' : k === 'Depois' ? '12m+' : new Date(k + '-15T12:00:00').toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''));
+  MURO = { dados: res.muro, cor: por[0].cor };
   const gRisco = [...mapa.gondolas].sort((a, b) => b.risco - a.risco).slice(0, 5);
   const f = cfg.faixas;
   const f30 = f.find(x => x.ate === 30), f90 = f.find(x => x.ate === 90);
@@ -116,8 +127,10 @@ PAGINAS.geral = async () => {
     <div class="card reveal" style="--i:4"><div class="head"><h2>Validade do estoque</h2><span class="sub">toque numa fatia para filtrar</span></div>
       <div class="donut-wrap">${donut(por)}
         <div class="legend">${por.map(s => `<div class="row click" data-status="${esc(s.status)}"><span class="dot" style="--c:${esc(s.cor)}"></span><div><div>${esc(s.status)}</div><div class="xs muted">${brl(s.valor)}</div></div><b class="num" style="font-size:17px">${s.lotes}</b></div>`).join('')}</div></div></div>
-    <div class="card reveal" style="--i:5"><div class="head"><h2>Muro de validade</h2><span class="sub">valor (R$) que vence por mês</span></div>
-      <div class="muro">${res.muro.map((m, i) => `<div class="b" title="${esc(nomeMes(m.chave))}: ${brl(m.valor)} em ${m.lotes} lotes"><span class="v">${m.valor >= 1000 ? (m.valor / 1000).toFixed(1).replace('.', ',') + 'k' : Math.round(m.valor)}</span><div class="col" style="height:${Math.max(1.5, m.valor / max * 100)}%;--c:${corMes(m.chave, i - 1)};--i:${i}"></div><span class="m">${esc(nomeMes(m.chave))}</span></div>`).join('')}</div></div>
+    <div class="card reveal" style="--i:5"><div class="head"><h2>Muro de validade</h2>
+        <div class="seg" id="muroMet" role="group" aria-label="Medida do muro"><button data-met="qtd" aria-pressed="${muroMet() === 'qtd'}">Itens</button><button data-met="valor" aria-pressed="${muroMet() === 'valor'}">R$</button></div></div>
+      <div class="xs muted" id="muroSub" style="margin:-6px 0 4px">${muroSub()}</div>
+      <div class="muro" id="muro">${muroBarras()}</div></div>
   </div>
   <div class="grid cols-2" style="margin-top:18px">
     <div class="card reveal" style="--i:6"><div class="head"><h2>Fazer hoje</h2><a href="#/estoque" class="small">Ver estoque →</a></div>
@@ -147,6 +160,13 @@ PAGINAS.geral.ligar = () => {
   requestAnimationFrame(() => requestAnimationFrame(() => $$('.seg-arc').forEach(c => { c.style.strokeDasharray = `${c.dataset.len} ${c.dataset.c - c.dataset.len}`; })));
   $$('[data-status]').forEach(el => el.addEventListener('click', () => { location.hash = '#/estoque?status=' + encodeURIComponent(el.dataset.status); }));
   $$('.row[data-q]').forEach(el => el.addEventListener('click', () => { location.hash = '#/estoque?q=' + encodeURIComponent(el.dataset.q); }));
+  const seg = $('#muroMet');
+  if (seg) seg.addEventListener('click', e => {
+    const b = e.target.closest('button[data-met]'); if (!b) return;
+    lsSet('muroMet', b.dataset.met);
+    $$('#muroMet button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    $('#muroSub').textContent = muroSub(); $('#muro').innerHTML = muroBarras();
+  });
 };
 
 // ---------- coletor ----------
@@ -215,7 +235,7 @@ async function acaoLote(e) {
   if (b.dataset.act === 'baixa') {
     const d = await dialogo({ titulo: 'Dar baixa', sub: `${nome} — saldo ${l.qtd}`, campos: [
       { id: 'qtd', label: 'Quantidade', tipo: 'number', min: 1, valor: l.qtd, inputmode: 'numeric' },
-      { id: 'motivo', label: 'Motivo', tipo: 'select', opcoes: l.dias <= 0 ? ['Vencido', ...S.cfg.motivos_baixa.filter(x => x !== 'Vencido')] : S.cfg.motivos_baixa }] });
+      { id: 'motivo', label: 'Motivo', tipo: 'select', opcoes: l.dias <= 0 ? ['RMA', ...S.cfg.motivos_baixa.filter(x => x !== 'RMA')] : S.cfg.motivos_baixa }] });
     if (d) ok = await enviar({ tipo: 'BAIXA', lote_id: l.id, qtd: d.qtd, motivo: d.motivo }, 'Baixa registrada');
   } else if (b.dataset.act === 'ajuste') {
     const d = await dialogo({ titulo: 'Ajustar quantidade', sub: `${nome} — saldo ${l.qtd}`, campos: [{ id: 'qtd', label: 'Quantidade contada', tipo: 'number', min: 0, valor: l.qtd, inputmode: 'numeric' }] });
@@ -260,8 +280,14 @@ PAGINAS.mov.ligar = () => view.addEventListener('click', async e => {
 
 // ---------- configurações ----------
 PAGINAS.config = async () => {
-  const [cfg, users] = await Promise.all([api('/api/config'), S.admin ? api('/api/usuarios').catch(() => null) : null]);
+  const [cfg, users, layout, resp] = await Promise.all([api('/api/config'), S.admin ? api('/api/usuarios').catch(() => null) : null,
+    S.admin ? api('/api/layout').catch(() => null) : null, S.admin ? api('/api/responsaveis').catch(() => ({})) : null]);
   S.cfg = cfg;
+  const ativos = (users || []).filter(u => u.ativo).map(u => u.nome);
+  const gIds = [...new Set([...(layout ? layout.gondolas.map(g => g.id) : []), ...Object.keys(resp || {}).map(Number)])].sort((a, b) => a - b);
+  const cartaoResp = !S.admin || !users ? '' : `<div class="card reveal" style="--i:3"><div class="head"><div><h2>Responsáveis por gôndola</h2><div class="sub">Toque nos nomes. Eles aparecem no mapa da loja.</div></div></div>
+      <div id="respG">${gIds.map(id => `<div class="resp-row" data-g="${id}"><b>${id}</b><div class="chips" style="margin:0">${ativos.map(n => `<button class="chip" data-n="${esc(n)}" aria-pressed="${((resp || {})[id] || []).includes(n)}">${esc(n.charAt(0) + n.slice(1).toLowerCase())}</button>`).join('')}</div></div>`).join('') || '<p class="muted">Nenhuma gôndola na planta.</p>'}</div>
+      <div style="margin-top:14px"><button class="primary" id="salvaResp">${ico('check')} Salvar responsáveis</button></div></div>`;
   return `<div class="grid cols-2" style="align-items:start">
     <div class="grid">
       <div class="card reveal"><div class="head"><div><h2>Regras de desconto</h2><div class="sub">Uma regra só para o painel, o mapa, as etiquetas e o coletor</div></div></div>
@@ -280,9 +306,18 @@ PAGINAS.config = async () => {
     ${S.admin ? `<div class="card reveal" style="--i:2"><div class="head"><div><h2>Equipe</h2><div class="sub">${S.login ? 'Cada pessoa entra com nome e PIN' : 'Login desligado neste computador — crie os acessos antes de publicar'}</div></div><button class="sm" id="novoUser">${ico('plus')} Novo</button></div>
       ${users ? users.map(u => `<div class="row" style="grid-template-columns:auto 1fr auto;${u.ativo ? '' : 'opacity:.5'}"><div class="avatar" style="width:36px;height:36px">${esc(u.nome.slice(0, 1))}</div><div><div class="pname">${esc(u.nome)}</div><div class="xs muted">${u.papel === 'admin' ? 'Administrador' : 'Operador'} · ${u.tem_pin ? 'PIN definido' : '<span style="color:var(--warn)">sem PIN (não consegue entrar)</span>'}${u.ativo ? '' : ' · inativo'}</div></div>
         <div class="nowrap"><button class="sm" data-pin="${esc(u.nome)}">${ico('lock')} PIN</button> <button class="sm subtle" data-ativo="${esc(u.nome)}" data-v="${u.ativo ? 0 : 1}">${u.ativo ? 'Desativar' : 'Ativar'}</button></div></div>`).join('') : '<p class="muted">Não foi possível listar.</p>'}</div>` : ''}
+    ${cartaoResp}
   </div>`;
 };
 PAGINAS.config.ligar = () => {
+  const rg = $('#respG');
+  if (rg) rg.addEventListener('click', e => { const b = e.target.closest('button[data-n]'); if (b) b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); });
+  const sr = $('#salvaResp');
+  if (sr) sr.addEventListener('click', async () => {
+    const r = {};
+    $$('#respG .resp-row').forEach(row => { const l = $$('button[aria-pressed=true]', row).map(b => b.dataset.n); if (l.length) r[row.dataset.g] = l; });
+    try { await api('/api/responsaveis', { method: 'PUT', body: r }); toast('Responsáveis salvos', 'ok'); } catch (e) { toast(e.message, 'bad', 5000); }
+  });
   const sf = $('#salvaFaixas');
   if (sf) sf.addEventListener('click', async () => {
     const faixas = S.cfg.faixas.map(f => ({ ...f }));

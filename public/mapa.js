@@ -54,13 +54,17 @@ const Mapa = (() => {
   const escala = (largPalco, L) => Math.max(largPalco / L.largura, largPalco < 760 ? 0.62 : 0);
   const rolaParaLateral = () => { if (innerWidth < 1180) { const l = $('#lateral'); if (l) setTimeout(() => l.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); } };
 
+  // nomes dos responsáveis pela gôndola (Configurações → Responsáveis por gôndola)
+  const nomeBonito = n => n.charAt(0) + n.slice(1).toLowerCase();
+  const resp = id => ((M.data.responsaveis || {})[id] || []).map(nomeBonito).join(', ');
+
   function desenhaGrade(stage) {
     const ids = [...new Set([...M.data.layout.gondolas.map(g => g.id), ...M.data.gondolas.map(g => g.id)])].sort((a, b) => a - b);
     const porId = new Map(M.data.gondolas.map(g => [g.id, g]));
     stage.innerHTML = '<div class="gridview">' + ids.map((id, i) => {
       const d = porId.get(id), h = calor(d, false);
       return '<button class="gt' + (h.vazio ? ' vazia' : '') + (M.sel === id ? ' sel' : '') + '" data-g="' + id + '" style="--i:' + i + ';' + (h.vazio ? '' : '--hc:' + h.bg + ';--hi:' + h.ink) + '" aria-label="Gôndola ' + id + '">' +
-        '<span class="n">' + id + '</span><span class="t">' + (h.vazio ? 'vazia' : esc(h.txt)) + '</span>' + (d && !h.vazio ? '<span class="s">' + d.lotes + ' lotes</span>' : '') + (d && d.vencidos ? '<span class="tag">' + d.vencidos + '</span>' : '') + '</button>';
+        '<span class="n">' + id + '</span><span class="t">' + (h.vazio ? 'vazia' : esc(h.txt)) + '</span>' + (d && !h.vazio ? '<span class="s">' + d.lotes + ' lotes</span>' : '') + (resp(id) ? '<span class="r">' + esc(resp(id)) + '</span>' : '') + (d && d.vencidos ? '<span class="tag">' + d.vencidos + '</span>' : '') + '</button>';
     }).join('') + '</div>';
     $$('.gt', stage).forEach(b => b.addEventListener('click', () => { M.sel = +b.dataset.g; M.shelf = null; desenhaPalco(); desenhaLateral(); rolaParaLateral(); }));
     const aviso = $('#orfas'); if (aviso) aviso.innerHTML = '';
@@ -89,7 +93,7 @@ const Mapa = (() => {
         const style = `left:${g.x}px;top:${g.y}px;width:${g.w}px;height:${g.h}px;--i:${i};${h.vazio ? '' : `--hc:${h.bg};--hi:${h.ink}`}`;
         const small = Math.min(g.w, g.h) < 40;
         return `<div class="gon${h.vazio ? ' vazia' : ''}${M.sel === g.id ? ' sel' : ''}${M.edit ? ' edit' : ''}" data-g="${g.id}" style="${style}" tabindex="0" role="button" aria-label="Gôndola ${g.id}">
-          <div class="n" style="${small ? 'font-size:16px' : ''}">${g.id}</div>${small ? '' : `<div class="t">${h.vazio ? 'vazia' : esc(h.txt)}</div>`}
+          <div class="n" style="${small ? 'font-size:16px' : ''}">${g.id}</div>${small ? '' : `<div class="t">${h.vazio ? 'vazia' : esc(h.txt)}</div>`}${!small && resp(g.id) && Math.min(g.w, g.h) >= 54 ? `<div class="r">${esc(resp(g.id))}</div>` : ''}
           ${d && d.vencidos ? `<span class="tag">${d.vencidos}</span>` : ''}${M.edit && M.sel === g.id ? '<span class="rz" data-rz="1"></span>' : ''}</div>`;
       }).join('')}</div>`;
     const orfas = M.data.gondolas.filter(g => !noLayout.has(g.id));
@@ -166,7 +170,7 @@ const Mapa = (() => {
         ${c.itens.map(it => `<div class="item"><span class="dot" style="--c:${esc(it.cor)}"></span><div style="min-width:0"><div class="pname" style="font-size:13px">${esc(it.nome || it.ean)}</div><div class="xs muted">lote ${esc(it.lote)} · vence ${brData(it.validade)} (${it.dias}d)${it.desconto ? ' · oferta ' + it.desconto + '%' : ''}</div></div><div style="text-align:right">${pill(it.status, it.cor)}<div class="xs muted" style="margin-top:3px">${it.qtd} un</div></div></div>`).join('')}</div>`;
     }
     return `<div class="card drawer">
-      <div class="head" style="margin-bottom:10px"><div><h2 style="font-size:20px">Gôndola ${g.id}</h2><div class="sub">${g.lotes ? `${g.lotes} lotes · ${int(g.qtd)} itens · ${brl(g.valor)}` : 'sem estoque cadastrado'}</div></div>
+      <div class="head" style="margin-bottom:10px"><div><h2 style="font-size:20px">Gôndola ${g.id}</h2><div class="sub">${g.lotes ? `${g.lotes} lotes · ${int(g.qtd)} itens · ${brl(g.valor)}` : 'sem estoque cadastrado'}</div>${resp(g.id) ? `<div class="sub" style="margin-top:2px">Responsável: <b>${esc(resp(g.id))}</b></div>` : ''}</div>
         <button class="icon subtle" id="fecha" aria-label="Fechar">${ico('x')}</button></div>
       ${g.risco ? `<div class="callout warn" style="margin-bottom:12px">${ico('flame')}<div><b>${brl(g.risco)}</b> em risco${g.vencidos ? ` · <b>${g.vencidos}</b> vencido${g.vencidos > 1 ? 's' : ''}` : ''}${g.nunca_contada ? ' · endereços ainda sem contagem' : g.dias_sem_ronda > 7 ? ` · ronda há ${g.dias_sem_ronda} dias` : ''}</div></div>` : ''}
       <div class="faces">${face('A')}${face('B')}</div>

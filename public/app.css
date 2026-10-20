@@ -313,3 +313,8 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0
 
 #voltar svg { transform: rotate(180deg); }
 .nav:active { transform: scale(.96); }
+.gon .r, .gt .r { font-size: 10.5px; font-weight: 600; opacity: .85; margin-top: 2px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gon .r { padding: 0 6px; }
+.resp-row { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.resp-row > b { font: 700 18px var(--font-display); text-align: center; }
+.resp-row .chip { min-height: 34px; font-size: 13.5px; padding: 0 12px; }

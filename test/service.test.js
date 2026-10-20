@@ -263,3 +263,35 @@ test('painel da ronda: conta conferidos, corrigidos e não achei por dia', async
   assert.deepEqual([hoje.enderecos, hoje.lotes, hoje.confere, hoje.corrigido, hoje.nao_achei, hoje.etiquetas], [2, 3, 1, 1, 1, 1]);
   assert.equal(hoje.divergencia, 66.7);
 });
+
+test('responsáveis por gôndola: valida usuários e aparece no mapa e na ronda', async () => {
+  const db = await novoDb();
+  await A.salvarUsuario(db, { nome: 'DAVI', pin: '123456', papel: 'operador' });
+  await A.salvarUsuario(db, { nome: 'DENI', pin: '123456', papel: 'operador' });
+  const r = await S.setResponsaveis(db, { 3: ['davi', 'DENI', 'DAVI'], 5: [] });
+  assert.deepEqual(r, { 3: ['DAVI', 'DENI'] });
+  await assert.rejects(S.setResponsaveis(db, { 3: ['FULANO'] }), /não existe/);
+  await assert.rejects(S.setResponsaveis(db, { 99: ['DAVI'] }), /inválida/);
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base });
+  assert.deepEqual((await S.mapa(db)).responsaveis, { 3: ['DAVI', 'DENI'] });
+  assert.deepEqual((await S.ronda(db, { n: 5 })).responsaveis[3], ['DAVI', 'DENI']);
+});
+
+test('contagem grava o preço de produto que ainda não tinha', async () => {
+  const db = await novoDb();
+  await S.upsertProduto(db, { ean: '7891000000031', nome: 'PETISCO SEM PRECO' });
+  assert.equal((await S.getProduto(db, '7891000000031')).preco, null);
+  const r = await S.leitura(db, { tipo: 'CONTAGEM', qtd: 4, ...base, ean: '7891000000031', preco: '12,90' });
+  assert.equal((await S.getProduto(db, '7891000000031')).preco, 12.9);
+  assert.equal(r.lote.valor, 51.6);
+  await assert.rejects(S.leitura(db, { tipo: 'CONTAGEM', qtd: 1, ...base, lote: 'X', ean: '7891000000031', preco: 'abc' }), /preço inválido/);
+});
+
+test('baixa: RMA substitui Vencido e RMA Fornecedor', async () => {
+  const db = await novoDb();
+  assert.ok(S.MOTIVOS_BAIXA.includes('RMA'));
+  assert.ok(!S.MOTIVOS_BAIXA.includes('Vencido') && !S.MOTIVOS_BAIXA.includes('RMA Fornecedor'));
+  const r = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 3, ...base, validade: mais(-2) });
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: r.lote.id, qtd: 3, motivo: 'RMA', operador: 'TESTE' });
+  await assert.rejects(S.leitura(db, { tipo: 'BAIXA', ...base, validade: mais(-2), qtd: 1, motivo: 'Vencido' }), /motivo/);
+});
