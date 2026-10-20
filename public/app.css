@@ -362,3 +362,26 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0
 .nova-g { border: 1px dashed var(--line-2); border-radius: 12px; padding: 12px; }
 .nova-g > summary { cursor: pointer; font-weight: 600; display: flex; gap: 8px; align-items: center; min-height: 32px; list-style: none; }
 .nova-g > summary::-webkit-details-marker { display: none; }
+
+/* mapa único: zoom e arrasto, painel por cima */
+.stage-wrap { position: relative; }
+.stage { height: clamp(440px, calc(100vh - 230px), 860px); touch-action: none; cursor: grab; overscroll-behavior: contain; user-select: none; -webkit-user-select: none; }
+.stage.pan { cursor: grabbing; }
+.stage.stage-bare { height: auto; touch-action: auto; cursor: auto; user-select: auto; }
+.ctrls { position: absolute; left: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 6px; z-index: 6; }
+.ctrls[hidden] { display: none; }
+.ctrls button { width: 42px; height: 42px; min-height: 42px; padding: 0; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-1); display: grid; place-items: center; }
+.ctrls button[hidden] { display: none; }
+.ov { position: absolute; right: 12px; top: 12px; bottom: 12px; width: 372px; z-index: 7; overflow: auto; border-radius: var(--r-lg); overscroll-behavior: contain; }
+.ov[hidden] { display: none; }
+.ov .drawer { position: static; max-height: none; min-height: 100%; box-shadow: var(--shadow-2); animation: none; }
+@media (max-width: 899px) {
+  .ov { position: fixed; left: 8px; right: 8px; top: auto; bottom: calc(80px + env(safe-area-inset-bottom)); width: auto; max-height: 52vh; }
+  .ov .drawer { min-height: 0; }
+}
+.gon { animation: none; }
+.gon .gn { top: auto; bottom: 100%; margin-bottom: 4px; transform: scale(var(--inv, 1)); transform-origin: left bottom; display: grid; gap: 1px; line-height: 1.15; text-shadow: 0 0 5px var(--bg), 0 0 5px var(--bg); }
+.gon .gn small { font: 600 10.5px var(--font); color: var(--muted); }
+.gon.perto .gn { display: none; }
+.gon .tag { transform: scale(var(--inv, 1)); transform-origin: right top; }
+.gon .rz { transform: scale(var(--inv, 1)); transform-origin: center; }
