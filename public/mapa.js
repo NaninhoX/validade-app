@@ -1,7 +1,7 @@
 'use strict';
 // Mapa de calor da loja: planta (gôndolas) + detalhe por lado e prateleira. A planta é editável (arrastar/redimensionar) por administradores.
 const Mapa = (() => {
-  const M = { vista: 'planta', data: null, metric: 'risco', sel: null, shelf: null, selSeta: null, cam: null, kfit: 1, detKey: '', camAlvo: null, suprime: false, painelMin: false, edit: false, editG: false, draftG: null, draftDim: null, draft: null, view: null, ctx: null, ro: null };
+  const M = { vista: 'planta', data: null, metric: 'risco', sel: null, shelf: null, selCam: null, selPt: null, lado: 'B', cam: null, kfit: 1, detKey: '', camAlvo: null, suprime: false, painelMin: false, edit: false, editG: false, draftG: null, draftDim: null, draft: null, view: null, ctx: null, ro: null };
 
   // ---------- cores ----------
   const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
@@ -184,6 +184,8 @@ const Mapa = (() => {
     c.style.transform = `translate(${M.cam.tx}px, ${M.cam.ty}px) scale(${M.cam.k})`;
     c.style.setProperty('--inv', String(Math.min(1.6, 1 / M.cam.k)));       // rótulos e selos mantêm o tamanho na tela
     $('#stage').classList.toggle('zoom-longe', M.cam.k < (M.kfit || 1) * 1.6);
+    const fx = $('#fluxo');
+    if (fx) { fx.classList.toggle('anim', !!anima); desenhaFluxo(); if (anima) setTimeout(() => { fx.classList.remove('anim'); desenhaFluxo(); }, 600); }
   }
 
   // enquadra a planta inteira
@@ -285,13 +287,12 @@ const Mapa = (() => {
     stage.innerHTML = `<div class="canvas" id="canvas" style="width:${L.largura}px;height:${L.altura}px">
       ${L.fundo ? `<div class="bg" style="background-image:url('${esc(L.fundo)}');opacity:${L.fundo_opacidade}"></div>` : ''}
       <div class="grid-bg"></div>
-      ${(L.setas || []).map((a, i) => `<div class="seta${M.edit ? ' edit' : ''}${M.edit && M.selSeta === i ? ' sel' : ''}" data-s="${i}" style="left:${a.x}px;top:${a.y - 12}px;width:${a.c}px;transform:rotate(${a.rot}deg)">${setaSvg(a)}</div>`).join('')}
       ${L.gondolas.map((g, i) => {
         const d = porId.get(g.id), c = caixa(g), texto = larguraNaTela(g, kDet) >= DETALHE_PX, nome = (cfgTodas()[g.id] || {}).nome, r = respGondola(g.id);
         const resumo = d && d.lotes ? `${d.risco ? brlK(d.risco) : 'ok'}` : '';
         return `<div class="gon${M.sel === g.id ? ' sel' : ''}${M.edit ? ' edit' : ''}${texto ? ' perto' : ''}" data-g="${g.id}" style="left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px;--i:${i}" tabindex="0" role="button" aria-label="${esc(rotuloG(g.id))}">
           ${svgPlanta(g, d, texto)}<span class="gn"><b>${g.id}</b>${nome ? ` · ${esc(nome)}` : ''}${!texto && (resumo || r) ? `<small>${[resumo, r].filter(Boolean).map(esc).join(' · ')}</small>` : ''}</span>${d && d.vencidos ? `<span class="tag">${d.vencidos}</span>` : ''}${M.edit && M.sel === g.id ? '<span class="rz" data-rz="1"></span>' : ''}</div>`;
-      }).join('')}</div>`;
+      }).join('')}</div><svg id="fluxo" class="fluxo" aria-hidden="true"></svg>`;
     aplicaCam(false);
     const orfas = M.data.gondolas.filter(g => !noLayout.has(g.id));
     const aviso = $('#orfas');
@@ -302,7 +303,8 @@ const Mapa = (() => {
   // abre/seleciona uma gôndola: painel por cima e câmera aproximada
   function escolheGondola(id, chave) {
     const mudou = M.sel !== id;
-    M.selSeta = null; M.sel = id;
+    M.selCam = null; M.selPt = null; M.sel = id;
+    if (chave && /^[AB]-/.test(chave)) M.lado = chave[0];
     if (chave) M.shelf = { g: id, chave }; else if (mudou) M.shelf = null;
     if (M.edit || M.editG) { desenhaPalco(); desenhaLateral(); return; }
     desenhaLateral();
@@ -331,7 +333,6 @@ const Mapa = (() => {
       el.addEventListener('mouseleave', () => tip.classList.remove('on'));
       if (M.edit) arrasta(el, id);
     });
-    if (M.edit) $$('#canvas .seta').forEach(el => arrastaSeta(el, +el.dataset.s));
   }
 
   // arrastar / redimensionar (modo edição). Redimensionar mexe só no comprimento: a proporção real é mantida.
@@ -340,7 +341,7 @@ const Mapa = (() => {
       e.stopPropagation();
       const s = M.cam.k, g = M.draft.gondolas.find(x => x.id === id);
       const rz = e.target.dataset.rz;
-      if (M.sel !== id || M.selSeta !== null) { M.sel = id; M.selSeta = null; desenhaLateral(); }
+      if (M.sel !== id || M.selCam !== null) { M.sel = id; M.selCam = null; M.selPt = null; desenhaLateral(); }
       const x0 = e.clientX, y0 = e.clientY, gx = g.x, gy = g.y, gw = g.w, gh = g.h;
       const { L, T } = geomG(id), vert = g.rot === 90;
       try { el.setPointerCapture(e.pointerId); } catch { /* ponteiro sintético */ }
@@ -359,18 +360,129 @@ const Mapa = (() => {
     });
   }
 
-  function arrastaSeta(el, i) {
-    el.addEventListener('pointerdown', e => {
-      e.stopPropagation();
-      const s = M.cam.k, a = M.draft.setas[i];
-      M.selSeta = i; M.sel = null;
-      const x0 = e.clientX, y0 = e.clientY, ax = a.x, ay = a.y;
-      try { el.setPointerCapture(e.pointerId); } catch { /* ponteiro sintético */ }
-      const mover = ev => { a.x = Math.round((ax + (ev.clientX - x0) / s) / 5) * 5; a.y = Math.round((ay + (ev.clientY - y0) / s) / 5) * 5; el.style.left = a.x + 'px'; el.style.top = (a.y - 12) + 'px'; };
-      const fim = () => { el.removeEventListener('pointermove', mover); el.removeEventListener('pointerup', fim); desenhaPalco(); desenhaLateral(); };
-      el.addEventListener('pointermove', mover); el.addEventListener('pointerup', fim);
-      e.preventDefault();
+  // ---------- caminhos de fluxo (camada em pixels de tela, sobre o mapa) ----------
+  // Cada caminho é uma linha de 2 a 30 pontos (reta ou curva suave) com seta no fim. Bifurcar = outro caminho que sai de um ponto.
+  const caminhosDe = L => L.caminhos || (L.setas || []).map(a => { const r = (a.rot || 0) * Math.PI / 180, c = a.c || 80; return { curva: false, pts: [{ x: a.x, y: a.y }, { x: a.x + Math.cos(r) * c, y: a.y + Math.sin(r) * c }] }; });
+
+  function dCaminho(pts, curva) {
+    const P = pts.map(p => ({ x: p.x * M.cam.k + M.cam.tx, y: p.y * M.cam.k + M.cam.ty }));
+    let d = `M${P[0].x} ${P[0].y}`, fim = P[P.length - 1], ang = 0;
+    if (!curva || P.length < 3) {
+      for (let i = 1; i < P.length; i++) d += ` L${P[i].x} ${P[i].y}`;
+      const a = P[P.length - 2]; ang = Math.atan2(fim.y - a.y, fim.x - a.x);
+    } else {          // curva suave passando por todos os pontos (Catmull-Rom convertida em Bézier)
+      for (let i = 0; i < P.length - 1; i++) {
+        const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
+        const c1 = { x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6 }, c2 = { x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6 };
+        d += ` C${c1.x} ${c1.y} ${c2.x} ${c2.y} ${p2.x} ${p2.y}`;
+        if (i === P.length - 2) ang = Math.atan2(p2.y - c2.y, p2.x - c2.x);
+      }
+    }
+    const h = 13, ca = Math.cos(ang), sa = Math.sin(ang);
+    const seta = `M${fim.x} ${fim.y} L${fim.x - h * ca + h * 0.5 * sa} ${fim.y - h * sa - h * 0.5 * ca} L${fim.x - h * ca - h * 0.5 * sa} ${fim.y - h * sa + h * 0.5 * ca} Z`;
+    return { d, seta, P };
+  }
+
+  function desenhaFluxo() {
+    const svg = $('#fluxo');
+    if (!svg || !M.cam) return;
+    const cs = caminhosDe(layoutExibido()), ed = M.edit;
+    svg.classList.toggle('edit', !!ed);
+    svg.innerHTML = cs.map((c, i) => {
+      const { d, seta, P } = dCaminho(c.pts, c.curva), sel = ed && M.selCam === i;
+      return `<g class="cam${sel ? ' sel' : ''}" data-c="${i}"><path class="cam-hit" d="${d}"/><path class="cam-linha" d="${d}"/><path class="cam-seta" d="${seta}"/>` +
+        (sel ? P.map((p, j) => `<circle class="cam-no${M.selPt === j ? ' sel' : ''}" data-p="${j}" cx="${p.x}" cy="${p.y}" r="7"/>`).join('') : '') + '</g>';
+    }).join('');
+    if (ed) ligaFluxo(svg);
+  }
+
+  function pontoDoMundo(e) {
+    const r = $('#stage').getBoundingClientRect();
+    return { x: (e.clientX - r.left - M.cam.tx) / M.cam.k, y: (e.clientY - r.top - M.cam.ty) / M.cam.k };
+  }
+
+  function ligaFluxo(svg) {
+    const L = M.draft;
+    $$('.cam', svg).forEach(g => {
+      const i = +g.dataset.c;
+      $$('.cam-hit, .cam-linha, .cam-seta', g).forEach(p => {
+        p.addEventListener('pointerdown', e => { e.stopPropagation(); if (M.selCam !== i) { M.selCam = i; M.selPt = null; desenhaFluxo(); desenhaLateral(); } });
+        p.addEventListener('dblclick', e => {            // dois cliques na linha criam um ponto ali
+          e.stopPropagation();
+          const w = pontoDoMundo(e), pts = L.caminhos[i].pts;
+          let melhor = 0, dist = Infinity;
+          for (let j = 0; j < pts.length - 1; j++) {
+            const a = pts[j], b = pts[j + 1], dx = b.x - a.x, dy = b.y - a.y, t = Math.max(0, Math.min(1, ((w.x - a.x) * dx + (w.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+            const dd = Math.hypot(w.x - (a.x + t * dx), w.y - (a.y + t * dy));
+            if (dd < dist) { dist = dd; melhor = j; }
+          }
+          pts.splice(melhor + 1, 0, { x: Math.round(w.x / 5) * 5, y: Math.round(w.y / 5) * 5 });
+          M.selCam = i; M.selPt = melhor + 1; desenhaFluxo(); desenhaLateral();
+        });
+      });
+      $$('.cam-no', g).forEach(n => n.addEventListener('pointerdown', e => {
+        e.stopPropagation(); e.preventDefault();
+        const j = +n.dataset.p, pt = L.caminhos[i].pts[j], k = M.cam.k;
+        M.selPt = j;
+        // pontos de outros caminhos no mesmo lugar (bifurcações) acompanham o arrasto
+        const juntos = L.caminhos.flatMap(c => c.pts).filter(q => q !== pt && Math.abs(q.x - pt.x) < 0.6 && Math.abs(q.y - pt.y) < 0.6);
+        const x0 = e.clientX, y0 = e.clientY, px = pt.x, py = pt.y, outros = juntos.map(q => [q, q.x, q.y]);
+        const mover = ev => {
+          const nx = Math.round((px + (ev.clientX - x0) / k) / 5) * 5, ny = Math.round((py + (ev.clientY - y0) / k) / 5) * 5;
+          pt.x = nx; pt.y = ny; outros.forEach(([q]) => { q.x = nx; q.y = ny; });
+          desenhaFluxo();
+        };
+        const fim = () => { window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', fim); desenhaLateral(); };
+        window.addEventListener('pointermove', mover); window.addEventListener('pointerup', fim);
+      }));
     });
+  }
+
+  // ---------- vista de frente (como uma pessoa olhando as prateleiras de um lado da gôndola) ----------
+  const ladoFrente = () => { const l = ladosG(M.sel); return l.includes(M.lado) ? M.lado : l[0]; };
+
+  function desenhaFrente() {
+    const el = $('#frente');
+    if (!el) return;
+    if (M.edit || M.editG || M.sel === null || SACARIA(M.sel) || M.vista === 'grade' && innerWidth < 700) { el.hidden = true; el.innerHTML = ''; return; }
+    const id = M.sel, d = M.data.gondolas.find(g => g.id === id), lado = ladoFrente(), n = nMod(id), p = pontasDe(id), s = setor(id, lado);
+    // Quem olha o lado B está "em cima" do desenho, olhando para baixo: a esquerda dele é o lado direito do desenho. No lado A é o contrário.
+    const ordem = Array.from({ length: n }, (_, i) => i + 1).sort((a, b) => (lado === 'B' ? colunaDoModulo(id, b) - colunaDoModulo(id, a) : colunaDoModulo(id, a) - colunaDoModulo(id, b)));
+    const esq = lado === 'B' ? p.dir : p.esq, dir = lado === 'B' ? p.esq : p.dir;
+    const nomes = cfgG(id).nomes || {};
+    const ponta = l => {
+      const c = celulaPonta(d, l), k = calor(c, true), st = setor(id, l);
+      return `<button class="fr-ponta${c ? '' : ' vazia'}" ${c ? `data-chave="${esc(c.chave)}"` : 'disabled'} style="${c && !k.vazio ? `--hc:${k.bg};--hi:${k.ink}` : ''}" title="${esc(NOME_LADO[l])}${st.nome ? ' · ' + esc(st.nome) : ''}">
+        <b>${esc(l)}</b>${c ? `<span>${c.lotes}</span>` : ''}</button>`;
+    };
+    const modulo = m => {
+      const chave = `${lado}-${m}`, c = d ? d.celulas.find(z => z.chave === chave) : null, k = calor(c, true), nome = nomes[chave];
+      const sel = M.shelf && M.shelf.g === id && M.shelf.chave === chave;
+      let corpo = '<div class="fr-vazio">sem lotes</div>';
+      if (c) {
+        const por = new Map();
+        for (const it of c.itens) { const x = por.get(it.status) || { cor: it.cor, n: 0 }; x.n++; por.set(it.status, x); }
+        const etq = c.itens.filter(it => it.etiquetar).length;
+        corpo = `<div class="fr-st">${esc(c.pior)}</div>
+          <div class="fr-lin"><b>${c.lotes}</b> lote${c.lotes > 1 ? 's' : ''} · ${int(c.qtd)} un</div>
+          <div class="fr-lin">${c.risco ? 'Em risco <b>' + brl(c.risco) + '</b>' : 'Sem risco'}</div>
+          <div class="fr-bar" title="Lotes por status">${[...por].map(([st, x]) => `<i style="flex:${x.n};background:${esc(x.cor)}" title="${esc(st)}: ${x.n}"></i>`).join('')}</div>
+          <div class="fr-chips">${c.vencidos ? `<span class="fr-c bad">${c.vencidos} vencido${c.vencidos > 1 ? 's' : ''}</span>` : ''}${c.criticos ? `<span class="fr-c warn">${c.criticos} ≤ 30 d</span>` : ''}${etq ? `<span class="fr-c tag">${etq} p/ etiquetar</span>` : ''}</div>
+          <div class="fr-lin xs">${c.dias_sem_ronda === null || c.dias_sem_ronda === undefined ? 'nunca contado' : 'ronda há ' + c.dias_sem_ronda + ' d'}</div>`;
+      }
+      return `<button class="fr-mod${sel ? ' sel' : ''}${c ? '' : ' vazia'}" ${c ? `data-chave="${esc(chave)}"` : 'disabled'} style="${c && !k.vazio ? `--hc:${k.bg};--hi:${k.ink}` : ''}" aria-label="${esc(enderecoDe(id, chave))}">
+        <div class="fr-h"><b>${m}</b><span>${esc(nome || '')}</span></div>${corpo}</button>`;
+    };
+    el.hidden = false;
+    el.innerHTML = `<div class="card reveal"><div class="head"><div><h2>${esc(rotuloG(id))} · ${esc(NOME_LADO[lado])} visto de frente</h2>
+        <div class="sub">${s.nome ? esc(s.nome) + ' · ' : ''}${s.resp.length ? esc(respTxt(s)) + ' · ' : ''}como quem está no corredor olhando as prateleiras: esquerda e direita são as suas</div></div>
+        ${ladosG(id).length > 1 ? `<div class="seg" id="frLado" role="group" aria-label="Lado visto">${ladosG(id).map(l => `<button data-lado="${l}" aria-pressed="${l === lado}">${esc(NOME_LADO[l])}</button>`).join('')}</div>` : ''}</div>
+      <div class="fr-row">${ponta(esq)}${ordem.map(modulo).join('')}${ponta(dir)}</div></div>`;
+    $$('#frLado button', el).forEach(b => b.addEventListener('click', () => { M.lado = b.dataset.lado; desenhaFrente(); }));
+    $$('.fr-mod[data-chave], .fr-ponta[data-chave]', el).forEach(b => b.addEventListener('click', () => {
+      M.shelf = { g: id, chave: b.dataset.chave }; if (/^[AB]-/.test(b.dataset.chave)) M.lado = b.dataset.chave[0];
+      desenhaPalco(); desenhaLateral();
+    }));
   }
 
   // ---------- painel lateral ----------
@@ -396,13 +508,14 @@ const Mapa = (() => {
       <div class="head" style="margin-bottom:10px"><div><h2 style="font-size:20px">${esc(rotuloG(g.id))}</h2><div class="sub">${g.lotes ? `${g.lotes} lotes · ${int(g.qtd)} itens · ${brl(g.valor)}` : 'sem estoque cadastrado'}</div></div>
         <button class="icon subtle" id="fecha" aria-label="Fechar">${ico('x')}</button></div>
       ${g.risco ? `<div class="callout warn" style="margin-bottom:12px">${ico('flame')}<div><b>${brl(g.risco)}</b> em risco${g.vencidos ? ` · <b>${g.vencidos}</b> vencido${g.vencidos > 1 ? 's' : ''}` : ''}${g.nunca_contada ? ' · endereços ainda sem contagem' : g.dias_sem_ronda > 7 ? ` · ronda há ${g.dias_sem_ronda} dias` : ''}</div></div>` : ''}
+      ${SACARIA(g.id) ? '' : `<div style="margin:0 0 10px"><button class="sm" id="vFrente">${ico('chevron')} Ver de frente (abaixo do mapa)</button></div>`}
       <h3 style="margin:2px 0 4px">Setores</h3>${lados.map(resumoLado).join('')}
       ${geral ? `<div style="margin-top:12px"><h3 style="margin-bottom:6px">Sem lado/prateleira definidos</h3><button class="shelf" data-chave="geral" style="--hc:${calor(geral, true).bg};--hi:${calor(geral, true).ink}"><span class="lv">?</span><span><span class="nm">${esc(geral.pior)}</span><br><span class="vl">${geral.lotes} lote${geral.lotes > 1 ? 's' : ''} · ${int(geral.qtd)} un</span></span><span class="vl"></span></button><p class="xs muted" style="margin-top:6px">Esses lotes estão só com o número da gôndola. Na próxima ronda, informe lado e prateleira (ex.: ${g.id}-A-1).</p></div>` : ''}
       ${itens || '<p class="xs muted" style="margin-top:12px">Toque num módulo da vista de cima para ver os lotes dele.</p>'}</div>`;
   }
 
   function lateralEdicao() {
-    const L = M.draft, g = L.gondolas.find(x => x.id === M.sel), a = M.selSeta !== null ? L.setas[M.selSeta] : null;
+    const L = M.draft, g = L.gondolas.find(x => x.id === M.sel), cam = M.selCam !== null ? L.caminhos[M.selCam] : null;
     const livres = [...new Set([...Array.from({ length: 19 }, (_, i) => i + 1), ...Object.keys(cfgTodas()).map(Number)])].sort((a, b) => a - b).filter(n => !L.gondolas.some(x => x.id === n));
     return `<div class="card drawer"><div class="head"><div><h2>Editar planta</h2><div class="sub">Arraste as gôndolas e as setas; a bolinha azul muda o comprimento (a proporção real é mantida).</div></div></div>
       <div class="grid" style="gap:14px">
@@ -416,9 +529,10 @@ const Mapa = (() => {
           ${L.fundo ? `<label class="f" style="margin-top:10px">Transparência da imagem</label><input id="eOp" type="range" min="0" max="1" step="0.05" value="${L.fundo_opacidade}" style="min-height:24px;padding:0">` : ''}</div>
         <div><label class="f">Gôndola selecionada</label>${g ? `<div class="editbar"><b style="font-size:18px">${g.id}</b><button class="sm" id="eGira">${ico('rotate')} Girar</button><button class="sm danger" id="eRemove">${ico('minus')} Tirar da planta</button></div>` : '<p class="small muted">Clique numa gôndola para selecionar.</p>'}</div>
         ${livres.length ? `<div><label class="f">Adicionar gôndola</label><div class="editbar">${livres.map(n => `<button class="sm" data-add="${n}">${n}</button>`).join('')}</div></div>` : ''}
-        <div><label class="f">Setas de fluxo (por onde os clientes andam)</label>
-          <div class="editbar"><button class="sm" id="eNovaSeta">${ico('plus')} Adicionar seta</button>${a ? `<button class="sm" id="eGiraSeta">${ico('rotate')} Girar 45°</button><button class="sm danger" id="eRemSeta">${ico('minus')} Remover</button>` : ''}</div>
-          ${a ? `<label class="f" style="margin-top:10px">Comprimento da seta</label><input id="eSetaC" type="range" min="30" max="400" step="10" value="${a.c}" style="min-height:24px;padding:0">` : '<p class="xs muted" style="margin-top:6px">Clique numa seta para selecionar.</p>'}</div>
+        <div><label class="f">Caminhos de fluxo <span class="muted">(por onde os clientes andam)</span></label>
+          <div class="editbar"><button class="sm" id="cNovo">${ico('plus')} Novo caminho</button>${cam ? `<button class="sm" id="cCurva">${cam.curva ? 'Deixar reto' : 'Curvar'}</button><button class="sm danger" id="cRem">${ico('minus')} Remover caminho</button>` : ''}</div>
+          ${cam ? `<div class="editbar" style="margin-top:8px"><button class="sm" id="cBif" ${M.selPt === null ? 'disabled' : ''}>Bifurcar do ponto</button><button class="sm" id="cRemPt" ${M.selPt === null || cam.pts.length <= 2 ? 'disabled' : ''}>Remover ponto</button></div>
+            <div class="xs muted" style="margin-top:6px">Arraste os pontos. Dois cliques na linha criam um ponto. Clique num ponto para bifurcar ou removê-lo.</div>` : '<p class="xs muted" style="margin-top:6px">Clique numa seta para editar, ou crie um novo caminho.</p>'}</div>
         <div class="editbar" style="justify-content:flex-end"><button id="eCancela">Cancelar</button><button class="primary" id="eSalva">${ico('check')} Salvar planta</button></div>
       </div></div>`;
   }
@@ -497,7 +611,7 @@ const Mapa = (() => {
     $('#gSalva').addEventListener('click', async () => {
       try {
         const L = JSON.parse(JSON.stringify(M.data.layout));
-        L.setas = L.setas || [];
+        L.caminhos = caminhosDe(L); delete L.setas;
         let mexeu = false;
         for (const n of M.removidasG || []) if (L.gondolas.some(g => g.id === n)) { L.gondolas = L.gondolas.filter(g => g.id !== n); mexeu = true; }
         M.data.gondolas_cfg = await api('/api/gondolas', { method: 'PUT', body: M.draftG });
@@ -552,6 +666,7 @@ const Mapa = (() => {
 
   function desenhaLateral() {
     const el = $('#lateral');
+    desenhaFrente();
     if (!el) return;
     const editando = M.editG || M.edit, aberto = editando || M.sel !== null;
     const cp = $('#cPainel'); if (cp) cp.hidden = !editando;
@@ -562,11 +677,12 @@ const Mapa = (() => {
     el.innerHTML = lateralGondola();
     $('#fecha', el).addEventListener('click', () => { M.sel = null; M.shelf = null; desenhaPalco(); desenhaLateral(); if (M.vista !== 'grade') { enquadra(true); setTimeout(agendaDetalhe, 620); } });
     $$('.shelf[data-chave]', el).forEach(b => b.addEventListener('click', () => { M.shelf = { g: M.sel, chave: b.dataset.chave }; desenhaPalco(); desenhaLateral(); }));
+    const vf = $('#vFrente', el); if (vf) vf.addEventListener('click', () => { const f = $('#frente'); if (f && !f.hidden) f.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   }
 
   function ligaEdicao() {
     const L = M.draft;
-    if (!L.setas) L.setas = [];
+    L.caminhos = caminhosDe(L); delete L.setas;
     $('#eLarg').addEventListener('change', e => { L.largura = +e.target.value; desenhaPalco(); });
     $('#eAlt').addEventListener('change', e => { L.altura = +e.target.value; desenhaPalco(); });
     $$('[data-edim]').forEach(inp => inp.addEventListener('change', () => { M.draftDim[inp.dataset.edim] = +inp.value; desenhaPalco(); }));
@@ -589,17 +705,19 @@ const Mapa = (() => {
     const rm = $('#eRemove'); if (rm) rm.addEventListener('click', () => { L.gondolas = L.gondolas.filter(x => x.id !== M.sel); M.sel = null; desenhaPalco(); desenhaLateral(); });
     $$('[data-add]').forEach(b => b.addEventListener('click', () => {
       const id = +b.dataset.add, { L: comp, T } = geomG(id), vert = PE_PD(id), len = 200, curto = Math.round(len * T / comp * 10) / 10;
-      L.gondolas.push({ id, x: 60 + (id % 5) * 40, y: 60, w: vert ? curto : len, h: vert ? len : curto, rot: vert ? 90 : 0 }); M.sel = id; M.selSeta = null; desenhaPalco(); desenhaLateral();
+      L.gondolas.push({ id, x: 60 + (id % 5) * 40, y: 60, w: vert ? curto : len, h: vert ? len : curto, rot: vert ? 90 : 0 }); M.sel = id; M.selCam = null; M.selPt = null; desenhaPalco(); desenhaLateral();
     }));
-    $('#eNovaSeta').addEventListener('click', () => { L.setas.push({ x: Math.round(L.largura / 2 / 5) * 5, y: Math.round(L.altura / 2 / 5) * 5, c: 100, rot: 0 }); M.selSeta = L.setas.length - 1; M.sel = null; desenhaPalco(); desenhaLateral(); });
-    const gs = $('#eGiraSeta'); if (gs) gs.addEventListener('click', () => { const a = L.setas[M.selSeta]; a.rot = (a.rot + 45) % 360; desenhaPalco(); });
-    const rs = $('#eRemSeta'); if (rs) rs.addEventListener('click', () => { L.setas.splice(M.selSeta, 1); M.selSeta = null; desenhaPalco(); desenhaLateral(); });
-    const sc = $('#eSetaC'); if (sc) sc.addEventListener('input', e => { L.setas[M.selSeta].c = +e.target.value; desenhaPalco(); });
-    $('#eCancela').addEventListener('click', () => { M.edit = false; M.draft = null; M.draftDim = null; M.sel = null; M.selSeta = null; montaTudo(); });
+    const cs = L.caminhos;
+    $('#cNovo').addEventListener('click', () => { const x = Math.round(L.largura / 2 / 5) * 5, y = Math.round(L.altura / 2 / 5) * 5; cs.push({ curva: false, pts: [{ x: x - 60, y }, { x: x + 60, y }] }); M.selCam = cs.length - 1; M.selPt = null; desenhaPalco(); desenhaLateral(); });
+    const cu = $('#cCurva'); if (cu) cu.addEventListener('click', () => { cs[M.selCam].curva = !cs[M.selCam].curva; desenhaFluxo(); desenhaLateral(); });
+    const cr = $('#cRem'); if (cr) cr.addEventListener('click', () => { cs.splice(M.selCam, 1); M.selCam = null; M.selPt = null; desenhaFluxo(); desenhaLateral(); });
+    const cb = $('#cBif'); if (cb) cb.addEventListener('click', () => { const p = cs[M.selCam].pts[M.selPt]; cs.push({ curva: false, pts: [{ x: p.x, y: p.y }, { x: p.x + 70, y: p.y + 40 }] }); M.selCam = cs.length - 1; M.selPt = 1; desenhaFluxo(); desenhaLateral(); });
+    const cp = $('#cRemPt'); if (cp) cp.addEventListener('click', () => { cs[M.selCam].pts.splice(M.selPt, 1); M.selPt = null; desenhaFluxo(); desenhaLateral(); });
+    $('#eCancela').addEventListener('click', () => { M.edit = false; M.draft = null; M.draftDim = null; M.sel = null; M.selCam = null; M.selPt = null; montaTudo(); });
     $('#eSalva').addEventListener('click', async () => {
       try {
         M.data.dimensoes = await api('/api/dimensoes', { method: 'PUT', body: M.draftDim });
-        M.data.layout = await api('/api/layout', { method: 'PUT', body: M.draft }); M.edit = false; M.draft = null; M.draftDim = null; M.selSeta = null; toast('Planta salva', 'ok'); montaTudo(); }
+        M.data.layout = await api('/api/layout', { method: 'PUT', body: M.draft }); M.edit = false; M.draft = null; M.draftDim = null; M.selCam = null; M.selPt = null; toast('Planta salva', 'ok'); montaTudo(); }
       catch (er) { toast(er.message, 'bad', 5000); }
     });
   }
@@ -648,13 +766,14 @@ const Mapa = (() => {
         <div class="ctrls" id="ctrls"><button id="cMais" aria-label="Aproximar">${ico('plus')}</button><button id="cMenos" aria-label="Afastar">${ico('minus')}</button><button id="cFit" aria-label="Ver a loja toda">${ico('map')}</button><button id="cPainel" aria-label="Mostrar ou esconder o painel" hidden>${ico('sliders')}</button></div>
         <div id="lateral" class="ov" hidden></div>
       </div>
+      <div id="frente" class="frente" hidden></div>
       <div class="tip" id="tip"></div>`;
     $$('[data-metric]', v).forEach(b => b.addEventListener('click', () => { M.metric = b.dataset.metric; lsSet('mapaMetrica', M.metric); montaTudo(); }));
     $$('[data-vista]', v).forEach(b => b.addEventListener('click', () => { M.vista = b.dataset.vista; lsSet('mapaVista', M.vista); montaTudo(); }));
     const ed = $('#editar', v);
     const edg = $('#editarG', v);
     if (edg) edg.addEventListener('click', () => { M.editG = true; M.novasG = null; M.removidasG = null; M.painelMin = false; M.draftG = JSON.parse(JSON.stringify(M.data.gondolas_cfg || {})); M.sel = null; M.shelf = null; montaTudo(); });
-    if (ed) ed.addEventListener('click', () => { M.edit = true; M.painelMin = false; M.draftDim = { ...dim() }; M.draft = JSON.parse(JSON.stringify(M.data.layout)); M.draft.setas = M.draft.setas || []; M.sel = null; M.selSeta = null; M.shelf = null; montaTudo(); });
+    if (ed) ed.addEventListener('click', () => { M.edit = true; M.painelMin = false; M.draftDim = { ...dim() }; M.draft = JSON.parse(JSON.stringify(M.data.layout)); M.draft.caminhos = caminhosDe(M.draft); delete M.draft.setas; M.sel = null; M.selCam = null; M.selPt = null; M.shelf = null; montaTudo(); });
     ligaCamera($('#stage'));
     $('#cPainel').addEventListener('click', () => { M.painelMin = !M.painelMin; desenhaLateral(); });
     desenhaPalco(); desenhaLateral();
@@ -664,7 +783,7 @@ const Mapa = (() => {
   }
 
   async function render(view, ctx) {
-    M.view = view; M.ctx = ctx; M.cam = null; M.metric = lsGet('mapaMetrica', 'risco'); M.vista = lsGet('mapaVista', innerWidth < 760 ? 'grade' : 'planta'); M.edit = false; M.draft = null; M.selSeta = null; M.editG = false; M.draftG = null; M.draftDim = null;
+    M.view = view; M.ctx = ctx; M.cam = null; M.metric = lsGet('mapaMetrica', 'risco'); M.vista = lsGet('mapaVista', innerWidth < 760 ? 'grade' : 'planta'); M.edit = false; M.draft = null; M.selCam = null; M.selPt = null; M.editG = false; M.draftG = null; M.draftDim = null;
     view.innerHTML = `<div class="skeleton" style="height:480px;border-radius:18px"></div>`;
     const [data, cfg] = await Promise.all([api('/api/mapa'), api('/api/config')]);
     data.faixas = cfg.faixas; setAreas(data.areas);

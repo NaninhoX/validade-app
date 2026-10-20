@@ -290,14 +290,17 @@ test('endereços das gôndolas 9 e 10 usam PE/PD; nas demais, F/C', () => {
   assert.deepEqual(U.lados(9), ['A', 'B', 'PE', 'PD']);
 });
 
-test('medidas editáveis e setas de fluxo na planta', async () => {
+test('medidas editáveis e caminhos de fluxo na planta', async () => {
   const db = await novoDb();
   assert.deepEqual(await S.getDimensoes(db), { modulo_c: 140, modulo_l: 40, ponta_c: 100, ponta_p: 40 });
   await S.setDimensoes(db, { modulo_c: 150, modulo_l: 45, ponta_c: 95, ponta_p: 40 });
   assert.equal((await S.getDimensoes(db)).modulo_c, 150);
   await assert.rejects(S.setDimensoes(db, { modulo_c: 10, modulo_l: 45, ponta_c: 95, ponta_p: 40 }), /entre 40 e 300/);
-  const l = await S.setLayout(db, { ...(await S.getLayout(db)), setas: [{ x: 100, y: 200, c: 90, rot: 450 }] });
-  assert.deepEqual(l.setas, [{ id: 1, x: 100, y: 200, c: 90, rot: 90 }]);
+  const l = await S.setLayout(db, { ...(await S.getLayout(db)), caminhos: [{ curva: true, pts: [{ x: 100, y: 200 }, { x: 150.26, y: 220 }, { x: 300, y: 220 }] }] });
+  assert.deepEqual(l.caminhos, [{ curva: true, pts: [{ x: 100, y: 200 }, { x: 150.3, y: 220 }, { x: 300, y: 220 }] }]);
+  await assert.rejects(S.setLayout(db, { ...l, caminhos: [{ pts: [{ x: 1, y: 1 }] }] }), /ao menos 2 pontos/);
+  const antigo = await S.setLayout(db, { ...l, caminhos: undefined, setas: [{ x: 100, y: 200, c: 90, rot: 90 }] });   // layouts antigos com setas viram caminhos
+  assert.deepEqual(antigo.caminhos, [{ curva: false, pts: [{ x: 100, y: 200 }, { x: 100, y: 290 }] }]);
 });
 
 test('contagem grava o preço de produto que ainda não tinha', async () => {

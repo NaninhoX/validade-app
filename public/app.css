@@ -385,3 +385,50 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0
 .gon.perto .gn { display: none; }
 .gon .tag { transform: scale(var(--inv, 1)); transform-origin: right top; }
 .gon .rz { transform: scale(var(--inv, 1)); transform-origin: center; }
+
+/* contornos de seleção finos, sempre do tamanho de uma divisória de módulo (1 px na tela, qualquer zoom) */
+.gon.sel { outline: calc(1.5px * var(--inv, 1)) solid var(--accent); outline-offset: calc(3px * var(--inv, 1)); border-radius: 2px; }
+.gon.edit { outline: calc(1px * var(--inv, 1)) dashed var(--accent); outline-offset: calc(2px * var(--inv, 1)); }
+.mp-cel.sel rect, .mp-cel:focus-visible rect { stroke: var(--accent); stroke-width: 1.6; }
+
+/* caminhos de fluxo (camada em pixels de tela) */
+.fluxo { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 3; transition: opacity .2s; }
+.fluxo.anim { opacity: 0; }
+.cam-linha { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 9 8; opacity: .9; animation: fluir 1.4s linear infinite; }
+.cam-seta { fill: var(--accent); stroke: var(--accent); stroke-width: 1; stroke-linejoin: round; }
+.cam-hit { fill: none; stroke: transparent; stroke-width: 18; }
+.fluxo.edit .cam-hit, .fluxo.edit .cam-seta { pointer-events: stroke; cursor: pointer; }
+.fluxo.edit .cam-seta { pointer-events: all; }
+.cam.sel .cam-linha { stroke-width: 4; opacity: 1; }
+.cam-no { fill: var(--surface); stroke: var(--accent); stroke-width: 2.5; pointer-events: all; cursor: grab; }
+.cam-no.sel { fill: var(--accent); }
+@keyframes fluir { to { stroke-dashoffset: -34; } }
+@media (prefers-reduced-motion: reduce) { .cam-linha { animation: none; } }
+
+/* vista de frente */
+.frente { margin-top: 14px; }
+.frente[hidden] { display: none; }
+.fr-row { display: flex; gap: 8px; align-items: stretch; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+.fr-mod { flex: 1 1 150px; min-width: 138px; min-height: 250px; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 6px; text-align: left; padding: 12px; border-radius: 12px; height: auto; white-space: normal;
+  background: var(--hc, var(--heat-empty)); color: var(--hi, var(--ink)); border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 58px, rgba(0, 0, 0, .12) 58px, rgba(0, 0, 0, .12) 60px); }
+.fr-mod.vazia { background: var(--heat-empty); color: var(--faint); border-style: dashed; cursor: default; }
+.fr-mod.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fr-mod:not(.vazia):hover { filter: brightness(1.06); transform: translateY(-2px); }
+.fr-h { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.fr-h b { font: 700 22px var(--font-display); letter-spacing: -.02em; }
+.fr-h span { font-size: 11.5px; font-weight: 600; opacity: .85; text-align: right; overflow-wrap: anywhere; }
+.fr-st { font: 700 17px var(--font-display); }
+.fr-lin { font-size: 12.5px; }
+.fr-vazio { margin: auto; font-size: 13px; }
+.fr-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: rgba(0, 0, 0, .15); margin: 4px 0; }
+.fr-bar i { display: block; min-width: 3px; }
+.fr-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.fr-c { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, .85); color: #14161a; }
+.fr-c.bad { background: #fff; color: #b4132e; }
+.fr-ponta { flex: 0 0 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px 4px; border-radius: 12px; height: auto; min-height: 250px;
+  background: var(--hc, var(--heat-empty)); color: var(--hi, var(--ink)); border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); }
+.fr-ponta.vazia { border-style: dashed; color: var(--faint); cursor: default; }
+.fr-ponta b { font: 700 18px var(--font-display); }
+.fr-ponta span { font-size: 12px; font-weight: 700; }
+@media (max-width: 899px) { .frente { margin-bottom: 70px; } }
