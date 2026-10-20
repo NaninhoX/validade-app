@@ -134,18 +134,20 @@ function parseEndereco(e) {
   e = String(e || '').trim().toUpperCase().replace(/\s+/g, '').replace(/[–—_.\/]/g, '-');
   let m;
   if (!e) return { valido: false, texto: '' };
-  const ok = (g, l, n) => ({ valido: g >= 1 && g <= 40 && (n === null || (n >= 1 && n <= 5)) && (/^[AB]$/.test(l) || (g === 9 || g === 10 ? /^P[ED]$/ : /^[FC]$/).test(l)), gondola: g, lado: l, nivel: n });
+  const ok = (g, l, n) => ({ valido: g >= 1 && g <= 40 && (n === null || (n >= 1 && n <= 10)) && (/^[AB]$/.test(l) || (g === 9 || g === 10 ? /^P[ED]$/ : /^[FC]$/).test(l)), gondola: g, lado: l, nivel: n });
+  if ((m = e.match(/^(\d{1,2})$/)) && +m[1] === 19) return { valido: true, gondola: 19, lado: null, nivel: null };
+  if ((m = e.match(/^(\d{1,2})-P(\d{1,2})$/)) && +m[1] === 19) return { valido: +m[2] >= 1 && +m[2] <= 40, gondola: 19, lado: 'P', nivel: +m[2] };
   if ((m = e.match(/^(\d{1,2})-(F|C|PE|PD)$/))) return ok(+m[1], m[2], null);
   if ((m = e.match(/^(\d{1,2})-(F|C|PE|PD)-(\d)$/))) return ok(+m[1], m[2], +m[3]);
   if ((m = e.match(/^(\d{1,2})-([AB])-(\d)$/))) return ok(+m[1], m[2], +m[3]);
   return { valido: false, texto: e };
 }
-const LADO_TXT = { A: 'lado A', B: 'lado B', F: 'ponta da frente', C: 'ponta das costas', PE: 'ponta esquerda', PD: 'ponta direita' };
-const ladosDe = g => (+g === 9 || +g === 10 ? ['A', 'B', 'PE', 'PD'] : ['A', 'B', 'F', 'C']);
+const LADO_TXT = { A: 'lado A', B: 'lado B', F: 'ponta da frente', C: 'ponta das costas', PE: 'ponta esquerda', PD: 'ponta direita', P: 'pallet' };
+const ladosDe = g => (+g === 19 ? ['P'] : +g === 9 || +g === 10 ? ['A', 'B', 'PE', 'PD'] : ['A', 'B', 'F', 'C']);
 function descEndereco(e) {
   const p = parseEndereco(e);
   if (!p.gondola) return '';
-  return `Gôndola ${p.gondola} · ${LADO_TXT[p.lado]}${p.nivel ? ' · prateleira ' + p.nivel : ''}`;
+  return `Gôndola ${p.gondola} · ${LADO_TXT[p.lado]}${p.nivel ? (p.lado === 'P' ? ' ' : ' · prateleira ') + p.nivel : ''}`;
 }
 
 const pill = (status, cor) => `<span class="pill" style="--c:${esc(cor || '#6e6e73')}">${esc(status)}</span>`;

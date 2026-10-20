@@ -282,8 +282,8 @@ PAGINAS.mov.ligar = () => view.addEventListener('click', async e => {
 
 // ---------- configurações ----------
 PAGINAS.config = async () => {
-  const [cfg, users, layout, setores, dims] = await Promise.all([api('/api/config'), S.admin ? api('/api/usuarios').catch(() => null) : null,
-    S.admin ? api('/api/layout').catch(() => null) : null, S.admin ? api('/api/setores').catch(() => ({})) : null, S.admin ? api('/api/dimensoes').catch(() => null) : null]);
+  const [cfg, users, layout, setores] = await Promise.all([api('/api/config'), S.admin ? api('/api/usuarios').catch(() => null) : null,
+    S.admin ? api('/api/layout').catch(() => null) : null, S.admin ? api('/api/setores').catch(() => ({})) : null]);
   S.cfg = cfg;
   const ativos = (users || []).filter(u => u.ativo).map(u => u.nome);
   const gIds = [...new Set([...Array.from({ length: 18 }, (_, i) => i + 1), ...(layout ? layout.gondolas.map(g => g.id) : []), ...Object.keys(setores || {}).map(Number)])].sort((a, b) => a - b);
@@ -294,10 +294,7 @@ PAGINAS.config = async () => {
         return `<details class="setor-g" data-g="${id}"><summary><b>${id}</b><span class="xs muted">${resumo || 'sem setores definidos'}</span></summary>
         ${ladosDe2(id).map(l => `<div class="setor-l" data-lado="${l}"><label class="f">${NOME_LADO2[l]}</label><input type="text" maxlength="40" placeholder="Nome do setor (opcional)" value="${esc((s[l] && s[l].nome) || '')}" aria-label="Nome do ${NOME_LADO2[l]} da gôndola ${id}">
           <div class="chips" style="margin:8px 0 0">${ativos.map(n => `<button class="chip" data-n="${esc(n)}" aria-pressed="${!!(s[l] && s[l].resp.includes(n))}">${esc(n.charAt(0) + n.slice(1).toLowerCase())}</button>`).join('')}</div></div>`).join('')}</details>`; }).join('')}</div>
-      <div style="margin-top:14px"><button class="primary" id="salvaSetores">${ico('check')} Salvar setores</button></div></div>
-    <div class="card reveal" style="--i:4"><div class="head"><div><h2>Medidas das prateleiras</h2><div class="sub">Em centímetros. Usadas para desenhar as gôndolas em escala no mapa — ajuste quando medir.</div></div></div>
-      <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px">${[['modulo_c', 'Módulo: comprimento'], ['modulo_l', 'Módulo: profundidade (cada lado)'], ['ponta_c', 'Ponta: largura'], ['ponta_p', 'Ponta: profundidade']].map(([k, r]) => `<div><label class="f" for="dm_${k}">${r}</label><input id="dm_${k}" type="number" min="10" max="300" value="${(dims || {})[k] ?? ''}"></div>`).join('')}</div>
-      <div style="margin-top:14px"><button class="primary" id="salvaDim">${ico('check')} Salvar medidas</button></div></div>`;
+      <div style="margin-top:14px"><button class="primary" id="salvaSetores">${ico('check')} Salvar setores</button></div></div>`;
   return `<div class="grid cols-2" style="align-items:start">
     <div class="grid">
       <div class="card reveal"><div class="head"><div><h2>Regras de desconto</h2><div class="sub">Uma regra só para o painel, o mapa e o coletor</div></div></div>
@@ -331,12 +328,6 @@ PAGINAS.config.ligar = () => {
       if (nome || resp.length) (r[g.dataset.g] = r[g.dataset.g] || {})[l.dataset.lado] = { nome, resp };
     }));
     try { await api('/api/setores', { method: 'PUT', body: r }); toast('Setores salvos', 'ok'); } catch (e) { toast(e.message, 'bad', 5000); }
-  });
-  const sd = $('#salvaDim');
-  if (sd) sd.addEventListener('click', async () => {
-    const d = {};
-    for (const k of ['modulo_c', 'modulo_l', 'ponta_c', 'ponta_p']) d[k] = Number($('#dm_' + k).value);
-    try { await api('/api/dimensoes', { method: 'PUT', body: d }); toast('Medidas salvas — o mapa já usa as novas', 'ok'); } catch (e) { toast(e.message, 'bad', 5000); }
   });
   const sf = $('#salvaFaixas');
   if (sf) sf.addEventListener('click', async () => {

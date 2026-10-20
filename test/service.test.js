@@ -37,10 +37,10 @@ test('endereço: gôndola-lado-prateleira, pontas F/C e legado', () => {
   assert.deepEqual([p.valido, p.gondola, p.lado, p.nivel, p.tipo], [true, 1, 'B', 3, 'face']);
   assert.deepEqual([U.parseEndereco('1-C').valido, U.parseEndereco('1-C').tipo, U.parseEndereco('1-F').nivel], [true, 'ponta', null]);
   assert.equal(U.parseEndereco('2-F-4').nivel, 4);
-  assert.equal(U.parseEndereco('19').valido, false);        // legado: só a gôndola
+  assert.equal(U.parseEndereco('19').valido, true);         // sacaria: 19 vale (ainda sem pallet)
   assert.equal(U.parseEndereco('19').gondola, 19);
   assert.equal(U.parseEndereco('4-E-1').valido, false);     // lado inexistente
-  assert.equal(U.parseEndereco('3-A-6').valido, false);     // só 5 prateleiras
+  assert.equal(U.parseEndereco('3-A-11').valido, false);    // no máximo 10 módulos
   assert.equal(U.parseEndereco(' 3 - a - 1 ').valido, true); // normaliza
   assert.match(U.erroEndereco('4-E-1'), /fora do padrão/);
 });
@@ -88,7 +88,7 @@ test('recebimento soma, contagem define, baixa subtrai e não deixa saldo negati
 test('endereço novo precisa seguir o padrão', async () => {
   const db = await novoDb();
   await assert.rejects(S.leitura(db, { ...base, tipo: 'RECEBIMENTO', qtd: 1, endereco: '4-E-1' }), /fora do padrão/);
-  await assert.rejects(S.leitura(db, { ...base, tipo: 'RECEBIMENTO', qtd: 1, endereco: '3-A-9' }), /fora do padrão/);
+  await assert.rejects(S.leitura(db, { ...base, tipo: 'RECEBIMENTO', qtd: 1, endereco: '3-A-11' }), /fora do padrão/);
   await S.leitura(db, { ...base, tipo: 'RECEBIMENTO', qtd: 1, endereco: '3-C' });          // ponta sem prateleira
   assert.equal((await S.lotesAtivos(db)).length, 1);
   db.apagar();
@@ -352,4 +352,53 @@ test('placar por responsável conta só os lados dele; produtos em estoque sem p
   await S.upsertProduto(db, { ean: '7891000000031', nome: 'SEM PRECO' });
   await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 1, ...base, ean: '7891000000031', lote: 'Z', validade: mais(200) });
   assert.equal((await S.resumo(db)).qualidade.produtos_sem_preco, 1);
+});
+
+test('sacaria (19): vale sozinha ou com pallet; pallet só na sacaria', () => {
+  assert.equal(U.parseEndereco('19').valido, true);
+  const p = U.parseEndereco('19-P3');
+  assert.deepEqual([p.valido, p.tipo, p.lado, p.nivel], [true, 'pallet', 'P', 3]);
+  assert.equal(U.parseEndereco('7-P3').valido, false);
+  assert.equal(U.parseEndereco('19-P41').valido, false);
+  assert.equal(U.parseEndereco('18').valido, false);
+  assert.deepEqual(U.lados(19), ['P']);
+});
+
+test('migração A↔B nas gôndolas 11–18: troca endereços (inclusive quando os dois lados têm o mesmo lote), ajusta histórico, roda uma vez', async () => {
+  const { inverterLados } = require('../lib/migracao');
+  const db = await novoDb();
+  const v = mais(200);
+  const a = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 3, ...base, endereco: '11-A-2', validade: v });
+  const b = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 4, ...base, endereco: '11-B-2', validade: v });   // mesmo lote do outro lado: os dois trocam de lugar, sem colisão
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 5, ...base, lote: 'X', endereco: '13-A-1', validade: v });
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 6, ...base, lote: 'Y', endereco: '3-A-1', validade: v });       // gôndola 3: não mexe
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 7, ...base, lote: 'Z', endereco: '12-F', validade: v });        // ponta: não mexe
+  await A.salvarUsuario(db, { nome: 'DAVI', pin: '123456', papel: 'operador' });
+  await S.setSetores(db, { 11: { A: { nome: 'Rações', resp: ['DAVI'] } } });
+  const r = await inverterLados(db);
+  assert.deepEqual([r.ja_feita, r.lotes, r.somados], [false, 3, 0]);
+  const por = Object.fromEntries((await S.lotesAtivos(db)).map(l => [`${l.lote}@${l.endereco}`, l.qtd]));
+  assert.deepEqual(por, { 'L1@11-B-2': 3, 'L1@11-A-2': 4, 'X@13-B-1': 5, 'Y@3-A-1': 6, 'Z@12-F': 7 });
+  const evs = await db.all("SELECT endereco FROM eventos WHERE lote='L1' AND desfeito=0");
+  assert.deepEqual(evs.map(e => e.endereco).sort(), ['11-A-2', '11-B-2']);
+  assert.ok((await S.eventos(db, { limite: 50 })).some(e => e.endereco === '13-B-1'));
+  assert.deepEqual(Object.keys((await S.getSetores(db))[11]), ['B']);
+  assert.equal((await inverterLados(db)).ja_feita, true);        // segunda vez não faz nada
+  assert.equal((await S.lotesAtivos(db)).length, 5);
+});
+
+test('configuração das gôndolas: lados, módulos, medidas, nomes e sacaria com pallets', async () => {
+  const db = await novoDb();
+  const r = await S.setGondolasCfg(db, {
+    7: { lados: 'A', modulos: 4, dim: { modulo_c: 130, modulo_l: '' }, nomes: { 'A-2': ' Fantasia ' } },
+    19: { c: 700, l: 420, pallets: [{ x: 10, y: 10, c: 120, l: 100, nome: 'Rações 15kg' }, { id: 5, x: 200, y: 10 }] },
+  });
+  assert.deepEqual(r[7], { lados: 'A', modulos: 4, dim: { modulo_c: 130 }, nomes: { 'A-2': 'Fantasia' } });
+  assert.deepEqual(r[19].pallets.map(p => p.id), [1, 5]);
+  assert.equal(r[19].tipo, 'area');
+  await assert.rejects(S.setGondolasCfg(db, { 7: { lados: 'A', nomes: { 'B-1': 'x' } } }), /não existe/);
+  await assert.rejects(S.setGondolasCfg(db, { 7: { modulos: 4, nomes: { 'A-5': 'x' } } }), /não existe/);
+  await assert.rejects(S.setGondolasCfg(db, { 7: { dim: { modulo_c: 5 } } }), /entre 40 e 300/);
+  await assert.rejects(S.setGondolasCfg(db, { 19: { pallets: [{ id: 2 }, { id: 2 }] } }), /repetido/);
+  assert.deepEqual((await S.mapa(db)).gondolas_cfg[7].nomes, { 'A-2': 'Fantasia' });
 });

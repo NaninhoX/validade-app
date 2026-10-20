@@ -349,3 +349,13 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0
 .setor-l { padding: 10px 0 4px 44px; }
 .setor-l input { min-height: 44px; }
 @media (max-width: 700px) { .setor-l { padding-left: 0; } }
+
+/* editar gôndolas */
+.pal { display: grid; grid-template-columns: 30px minmax(0, 1fr) repeat(4, 62px) 38px; gap: 6px; align-items: end; margin-bottom: 8px; }
+.pal > b { font: 700 13px var(--font-display); align-self: center; }
+.pal input { min-height: 38px; padding: 0 8px; }
+.pal label { display: grid; gap: 2px; }
+.pal > input { grid-column: 2; }
+.nomes-mod { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
+.nomes-mod input { min-height: 38px; font-size: 13px; }
+@media (max-width: 700px) { .pal { grid-template-columns: 30px repeat(4, minmax(0, 1fr)) 38px; } .pal > input { grid-column: 2 / -2; } }

@@ -8,7 +8,8 @@
     "lan": "node server.js --lan",
     "import": "node --env-file-if-exists=.env.local scripts/import.js",
     "usuario": "node --env-file-if-exists=.env.local scripts/usuario.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "inverter-lados": "node --env-file-if-exists=.env.local scripts/inverter-lados.js"
   },
   "type": "commonjs",
   "dependencies": {

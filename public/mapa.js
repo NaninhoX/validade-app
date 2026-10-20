@@ -1,7 +1,7 @@
 'use strict';
 // Mapa de calor da loja: planta (gôndolas) + detalhe por lado e prateleira. A planta é editável (arrastar/redimensionar) por administradores.
 const Mapa = (() => {
-  const M = { vista: 'planta', data: null, metric: 'risco', sel: null, shelf: null, selSeta: null, edit: false, draft: null, view: null, ctx: null, ro: null };
+  const M = { vista: 'planta', data: null, metric: 'risco', sel: null, shelf: null, selSeta: null, edit: false, editG: false, draftG: null, draftDim: null, draft: null, view: null, ctx: null, ro: null };
 
   // ---------- cores ----------
   const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
@@ -49,16 +49,28 @@ const Mapa = (() => {
 
   const enderecoDe = (g, chave) => (chave === 'geral' ? String(g) : `${g}-${chave}`);
 
-  // ---------- geometria das gôndolas (medidas reais em cm, editáveis em Configurações) ----------
-  // Visão aérea: lado B é a metade de cima, lado A a de baixo; 5 módulos em fila e uma ponta em cada extremo.
-  // Gôndolas 1–8: ponta F à direita, C à esquerda. 11 em diante: o contrário. 9 e 10: PE à esquerda, PD à direita.
+  // ---------- geometria das gôndolas (medidas reais em cm) ----------
+  // Visão aérea: lado B é a metade de cima, lado A a de baixo; módulos em fila, uma ponta em cada extremo.
+  // Gôndolas 1–8: Frente (F) à direita, Costas (C) à esquerda. 11 em diante: o contrário. 9 e 10: PE à esquerda, PD à direita.
+  // O módulo 1 é sempre o mais perto da Frente (ou da PE). Sacaria (19) é uma área livre com pallets.
+  const U_NIVEIS = 10;
   const PE_PD = id => id === 9 || id === 10;
+  const SACARIA = id => id === 19;
   const pontasDe = id => (PE_PD(id) ? { esq: 'PE', dir: 'PD' } : id <= 8 ? { esq: 'C', dir: 'F' } : { esq: 'F', dir: 'C' });
-  const NOME_LADO = { A: 'Lado A', B: 'Lado B', F: 'Frente', C: 'Costas', PE: 'Ponta esquerda', PD: 'Ponta direita' };
-  const dim = () => M.data.dimensoes || { modulo_c: 140, modulo_l: 40, ponta_c: 100, ponta_p: 40 };
-  function geom() {
-    const D = dim();
-    return { D, L: 2 * D.ponta_p + 5 * D.modulo_c, T: Math.max(2 * D.modulo_l, D.ponta_c) };
+  const NOME_LADO = { A: 'Lado A', B: 'Lado B', F: 'Frente', C: 'Costas', PE: 'Ponta esquerda', PD: 'Ponta direita', P: 'Sacaria' };
+  const DIM0 = { modulo_c: 140, modulo_l: 40, ponta_c: 100, ponta_p: 40 };
+  const dim = () => (M.edit && M.draftDim) || M.data.dimensoes || DIM0;
+  const cfgTodas = () => (M.editG && M.draftG) || M.data.gondolas_cfg || {};
+  const cfgG = id => cfgTodas()[id] || {};
+  const dimG = id => ({ ...dim(), ...(cfgG(id).dim || {}) });
+  const ladosG = id => (cfgG(id).lados === 'A' ? ['A'] : cfgG(id).lados === 'B' ? ['B'] : ['B', 'A']);    // de cima para baixo
+  const nMod = id => cfgG(id).modulos || 5;
+  const frenteNaEsquerda = id => ['F', 'PE'].includes(pontasDe(id).esq);
+  const colunaDoModulo = (id, n) => (frenteNaEsquerda(id) ? n - 1 : nMod(id) - n);     // posição (0 = esquerda) do módulo n
+  function geomG(id) {
+    if (SACARIA(id)) { const c = cfgG(id); return { area: true, L: c.c || 600, T: c.l || 400 }; }
+    const D = dimG(id), n = nMod(id);
+    return { D, n, L: 2 * D.ponta_p + n * D.modulo_c, T: Math.max(ladosG(id).length * D.modulo_l, D.ponta_c) };
   }
   const setor = (g, lado) => ((M.data.setores || {})[g] || {})[lado] || { nome: '', resp: [] };
   const bonito = n => n.charAt(0) + n.slice(1).toLowerCase();
@@ -68,52 +80,63 @@ const Mapa = (() => {
 
   // caixa realmente desenhada dentro do retângulo g.x/y/w/h da planta, respeitando a proporção real
   function caixa(g) {
-    const { L, T } = geom(), vert = g.rot === 90;
+    const { L, T } = geomG(g.id), vert = g.rot === 90;
     const aw = vert ? T : L, ah = vert ? L : T;
     const k = Math.min(g.w / aw, g.h / ah), w = aw * k, h = ah * k;
     return { x: g.x + (g.w - w) / 2, y: g.y + (g.h - h) / 2, w, h, aw, ah };
   }
   const celulaPonta = (d, lado) => (d ? d.celulas.find(c => c.chave === lado) || d.celulas.find(c => c.lado === lado && c.tipo !== 'face') || null : null);
 
-  // desenha os retângulos (em cm) de uma gôndola; `texto` liga números e rótulos dentro dos módulos (visão detalhada)
+  // desenha os retângulos (em cm) de uma gôndola; `texto` liga números e rótulos (visão detalhada)
   function formas(id, d, { texto, ox = 0, oy = 0 }) {
-    const { D, T } = geom(), p = pontasDe(id);
-    const yB = oy + (T - 2 * D.modulo_l) / 2, yA = yB + D.modulo_l, yPonta = oy + (T - D.ponta_c) / 2;
-    const cel = (chave, x, y, w, h, rotulo) => {
+    const gm = geomG(id);
+    const cel = (chave, x, y, w, h, rotulo, nome, ponta) => {
       const c = chave && d ? d.celulas.find(z => z.chave === chave) : null;
       const k = calor(c, true);
       const sel = M.shelf && M.shelf.g === id && M.shelf.chave === chave;
-      const estilo = c && !k.vazio ? `style="fill:${k.bg}"` : "";
+      const estilo = c && !k.vazio ? `style="fill:${k.bg}"` : '';
       let t = '';
       if (texto) {
         const cor = c && !k.vazio ? k.ink : 'var(--faint)';
-        t = `<text x="${x + 6}" y="${y + 14}" font-size="11" font-weight="700" fill="${cor}" opacity=".8">${esc(rotulo)}</text>` +
-          (c ? `<text x="${x + w / 2}" y="${y + h / 2 + 1}" text-anchor="middle" font-size="14" font-weight="700" fill="${cor}">${esc(c.pior || '')}</text>
-            <text x="${x + w / 2}" y="${y + h - 6}" text-anchor="middle" font-size="10.5" fill="${cor}">${c.lotes} lote${c.lotes > 1 ? 's' : ''} · ${esc(k.txt)}</text>` : `<text x="${x + w / 2}" y="${y + h / 2 + 5}" text-anchor="middle" font-size="12" fill="var(--faint)">vazio</text>`);
+        t = `<text x="${x + 6}" y="${y + 14}" font-size="${ponta ? 13 : 11}" font-weight="700" fill="${cor}" opacity=".85">${esc(rotulo)}</text>`;
+        if (!ponta) {
+          if (nome) t += `<text x="${x + w - 6}" y="${y + 13}" text-anchor="end" font-size="10" fill="${cor}" opacity=".9">${esc(nome.length > 22 ? nome.slice(0, 21) + '…' : nome)}</text>`;
+          t += c ? `<text x="${x + w / 2}" y="${y + h / 2 + 1}" text-anchor="middle" font-size="14" font-weight="700" fill="${cor}">${esc(c.pior || '')}</text>
+            <text x="${x + w / 2}" y="${y + h - 6}" text-anchor="middle" font-size="10.5" fill="${cor}">${c.lotes} lote${c.lotes > 1 ? 's' : ''} · ${esc(k.txt)}</text>`
+            : `<text x="${x + w / 2}" y="${y + h / 2 + 5}" text-anchor="middle" font-size="12" fill="var(--faint)">vazio</text>`;
+        }
       }
       return `<g class="mp-cel${c ? '' : ' vazia'}${sel ? ' sel' : ''}"${chave && c ? ` data-chave="${esc(chave)}" tabindex="0" role="button" aria-label="${esc(enderecoDe(id, chave))}"` : ''}><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3" ${estilo}/>${t}</g>`;
     };
-    let s = '';
-    for (let i = 0; i < 5; i++) {
-      const x = ox + D.ponta_p + i * D.modulo_c;
-      s += cel(`B-${i + 1}`, x, yB, D.modulo_c, D.modulo_l, `B${i + 1}`) + cel(`A-${i + 1}`, x, yA, D.modulo_c, D.modulo_l, `A${i + 1}`);
+    if (gm.area) {   // sacaria: área livre; pallets cadastrados viram módulos
+      const cf = cfgG(id), geral = d ? d.celulas.find(z => z.chave === 'geral') : null, kg = calor(geral, true);
+      let s = `<g class="mp-cel${geral ? '' : ' vazia'}${M.shelf && M.shelf.g === id && M.shelf.chave === 'geral' ? ' sel' : ''}"${geral ? ' data-chave="geral" tabindex="0" role="button"' : ''}><rect x="${ox}" y="${oy}" width="${gm.L}" height="${gm.T}" rx="6" ${geral && !kg.vazio ? `style="fill:${kg.bg}"` : ''}/>${texto ? `<text x="${ox + 10}" y="${oy + 20}" font-size="13" font-weight="700" fill="var(--faint)">Sacaria${geral ? ' · sem pallet definido: ' + geral.lotes + ' lotes' : ''}</text>` : ''}</g>`;
+      for (const p of cf.pallets || []) s += cel(`P${p.id}`, ox + p.x, oy + p.y, p.c, p.l, `P${p.id}`, p.nome, false);
+      return s;
     }
-    const xDir = ox + D.ponta_p + 5 * D.modulo_c;
-    const pe = celulaPonta(d, p.esq), pd = celulaPonta(d, p.dir);
-    s += cel(pe && pe.chave, ox, yPonta, D.ponta_p, D.ponta_c, p.esq) + cel(pd && pd.chave, xDir, yPonta, D.ponta_p, D.ponta_c, p.dir);
+    const { D, n, T } = gm, lados = ladosG(id), pt = pontasDe(id), nomes = cfgG(id).nomes || {};
+    const yBase = oy + (T - lados.length * D.modulo_l) / 2, yPonta = oy + (T - D.ponta_c) / 2;
+    let s = '';
+    for (let m = 1; m <= n; m++) {
+      const x = ox + D.ponta_p + colunaDoModulo(id, m) * D.modulo_c;
+      lados.forEach((lado, k) => { s += cel(`${lado}-${m}`, x, yBase + k * D.modulo_l, D.modulo_c, D.modulo_l, String(m), nomes[`${lado}-${m}`], false); });
+    }
+    const xDir = ox + D.ponta_p + n * D.modulo_c;
+    const pe = celulaPonta(d, pt.esq), pd = celulaPonta(d, pt.dir);
+    s += cel(pe && pe.chave, ox, yPonta, D.ponta_p, D.ponta_c, pt.esq, '', true) + cel(pd && pd.chave, xDir, yPonta, D.ponta_p, D.ponta_c, pt.dir, '', true);
     return s;
   }
 
   // desenho pequeno da planta (gira 90° nas gôndolas verticais)
   function svgPlanta(g, d) {
-    const { L, T } = geom(), vert = g.rot === 90;
+    const { L, T } = geomG(g.id), vert = g.rot === 90;
     return `<svg viewBox="0 0 ${vert ? T : L} ${vert ? L : T}" width="100%" height="100%" aria-hidden="true">${vert ? `<g transform="translate(${T} 0) rotate(90)">` : '<g>'}${formas(g.id, d, { texto: false })}</g></svg>`;
   }
 
   // visão aérea ampliada (ao clicar na gôndola): nomes e responsáveis de cada lado, módulos clicáveis
   function svgDetalhe(id) {
-    const { D, L, T } = geom(), d = M.data.gondolas.find(g => g.id === id), p = pontasDe(id);
-    const mx = 12, my = 62, W = L + mx * 2, H = T + my * 2;
+    const gm = geomG(id), d = M.data.gondolas.find(g => g.id === id), p = pontasDe(id);
+    const mx = 12, my = 62, W = gm.L + mx * 2, H = gm.T + my * 2;
     const rot = (lado, x, y, anchor) => {
       const s = setor(id, lado);
       return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="15" font-weight="700" fill="var(--ink)">${esc(NOME_LADO[lado])}${s.nome ? ' · ' + esc(s.nome) : ''}</text>` +
@@ -121,13 +144,14 @@ const Mapa = (() => {
     };
     const ponta = (lado, x, anchor) => {
       const s = setor(id, lado);
-      return `<text x="${x}" y="${my + T + 24}" text-anchor="${anchor}" font-size="13" font-weight="700" fill="var(--ink)">${esc(lado)}${s.nome ? ' · ' + esc(s.nome) : ''}</text>` +
-        (s.resp.length ? `<text x="${x}" y="${my + T + 40}" text-anchor="${anchor}" font-size="11.5" fill="var(--muted)">${esc(respTxt(s))}</text>` : '');
+      return `<text x="${x}" y="${my + gm.T + 24}" text-anchor="${anchor}" font-size="13" font-weight="700" fill="var(--ink)">${esc(lado)}${s.nome ? ' · ' + esc(s.nome) : ''}</text>` +
+        (s.resp.length ? `<text x="${x}" y="${my + gm.T + 40}" text-anchor="${anchor}" font-size="11.5" fill="var(--muted)">${esc(respTxt(s))}</text>` : '');
     };
+    const lados = gm.area ? [] : ladosG(id);
     return `<svg class="mp-det" viewBox="0 0 ${W} ${H}" role="group" aria-label="Gôndola ${id} vista de cima">
       ${formas(id, d, { texto: true, ox: mx, oy: my })}
-      ${rot('B', W / 2, my - 30, 'middle')}${rot('A', W / 2, my + T + 24, 'middle')}
-      ${ponta(p.esq, mx, 'start')}${ponta(p.dir, W - mx, 'end')}
+      ${gm.area ? rot('P', W / 2, my - 30, 'middle') : (lados.includes('B') ? rot('B', W / 2, my - 30, 'middle') : '') + (lados.includes('A') ? rot('A', W / 2, my + gm.T + 24, 'middle') : '')}
+      ${gm.area ? '' : ponta(p.esq, mx, 'start') + ponta(p.dir, W - mx, 'end')}
     </svg>`;
   }
 
@@ -156,7 +180,7 @@ const Mapa = (() => {
     const L = layoutAtual();
     const stage = $('#stage');
     if (!stage) return;
-    const grade = M.vista === 'grade' && !M.edit;
+    const grade = M.vista === 'grade' && !M.edit && !M.editG;
     stage.classList.toggle('stage-bare', grade);
     if (grade) { stage.style.height = 'auto'; stage.style.overflowX = ''; return desenhaGrade(stage); }
     const w = stage.clientWidth || 800;
@@ -184,7 +208,7 @@ const Mapa = (() => {
     const tip = $('#tip');
     $$('#canvas .gon').forEach(el => {
       const id = +el.dataset.g;
-      el.addEventListener('click', () => { M.selSeta = null; M.sel = id; if (!M.edit) M.shelf = null; desenhaPalco(); desenhaDetalhe(); desenhaLateral(); if (!M.edit) rolaParaDetalhe(); });
+      el.addEventListener('click', () => { M.selSeta = null; M.sel = id; if (!M.edit) M.shelf = null; desenhaPalco(); desenhaDetalhe(); desenhaLateral(); if (!M.edit && !M.editG) rolaParaDetalhe(); });
       el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } });
       el.addEventListener('mousemove', e => {
         if (M.edit) return;
@@ -206,7 +230,7 @@ const Mapa = (() => {
       const rz = e.target.dataset.rz;
       if (M.sel !== id || M.selSeta !== null) { M.sel = id; M.selSeta = null; desenhaLateral(); }
       const x0 = e.clientX, y0 = e.clientY, gx = g.x, gy = g.y, gw = g.w, gh = g.h;
-      const { L, T } = geom(), vert = g.rot === 90;
+      const { L, T } = geomG(id), vert = g.rot === 90;
       el.setPointerCapture(e.pointerId);
       const mover = ev => {
         const dx = (ev.clientX - x0) / s, dy = (ev.clientY - y0) / s;
@@ -240,10 +264,10 @@ const Mapa = (() => {
   function desenhaDetalhe() {
     const el = $('#detalhe');
     if (!el) return;
-    if (M.edit || M.sel === null) { el.innerHTML = ''; el.hidden = true; return; }
-    const D = dim();
+    if (M.edit || M.editG || M.sel === null) { el.innerHTML = ''; el.hidden = true; return; }
+    const gm = geomG(M.sel);
     el.hidden = false;
-    el.innerHTML = `<div class="card reveal"><div class="head"><div><h2>Gôndola ${M.sel} · vista de cima</h2><div class="sub">${5 * D.modulo_c / 100} m de comprimento · ${2 * D.modulo_l} cm de largura · toque num módulo para ver os lotes</div></div></div>
+    el.innerHTML = `<div class="card reveal"><div class="head"><div><h2>Gôndola ${M.sel} · vista de cima</h2><div class="sub">${(gm.L / 100).toLocaleString('pt-BR')} m de comprimento · ${gm.T} cm de largura · toque num módulo para ver os lotes</div></div></div>
       <div class="det-scroll">${svgDetalhe(M.sel)}</div></div>`;
     $$('.mp-cel[data-chave]', el).forEach(c => {
       const abre = () => { M.shelf = { g: M.sel, chave: c.dataset.chave }; desenhaDetalhe(); desenhaLateral(); if (innerWidth < 1180) { const l = $('#lateral'); if (l) setTimeout(() => l.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); } };
@@ -255,7 +279,7 @@ const Mapa = (() => {
   // ---------- painel lateral ----------
   function lateralGondola() {
     const g = M.data.gondolas.find(x => x.id === M.sel) || { id: M.sel, lotes: 0, qtd: 0, valor: 0, risco: 0, celulas: [], vazia: true };
-    const lados = ['B', 'A', pontasDe(g.id).esq, pontasDe(g.id).dir];
+    const lados = SACARIA(g.id) ? ['P'] : [...ladosG(g.id), pontasDe(g.id).esq, pontasDe(g.id).dir];
     const resumoLado = lado => {
       const cs = g.celulas.filter(c => c.lado === lado), s = setor(g.id, lado);
       const lotes = cs.reduce((n, c) => n + c.lotes, 0), risco = cs.reduce((n, c) => n + c.risco, 0), venc = cs.reduce((n, c) => n + c.vencidos, 0);
@@ -287,7 +311,8 @@ const Mapa = (() => {
       <div class="grid" style="gap:14px">
         <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f">Largura da planta</label><input id="eLarg" type="number" min="400" max="4000" step="50" value="${L.largura}"></div>
           <div><label class="f">Altura da planta</label><input id="eAlt" type="number" min="300" max="4000" step="50" value="${L.altura}"></div></div>
-        <div><button id="eProp">${ico('refresh')} Aplicar proporção real</button><div class="xs muted" style="margin-top:6px">Ajusta cada gôndola às medidas reais (Configurações) e deixa a 9 e a 10 na vertical.</div></div>
+        <div><label class="f">Medidas padrão das prateleiras (cm)</label><div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">${CAMPOS_DIM.map(([k, r]) => `<div><label class="xs muted" for="ed_${k}">${r}</label><input id="ed_${k}" data-edim="${k}" type="number" min="10" max="300" value="${dim()[k]}"></div>`).join('')}</div></div>
+        <div><button id="eProp">${ico('refresh')} Aplicar proporção real</button><div class="xs muted" style="margin-top:6px">Ajusta cada gôndola às medidas reais e deixa a 9 e a 10 na vertical.</div></div>
         <div><label class="f">Planta da loja (imagem de fundo)</label>
           <div class="editbar"><label class="btn sm" style="cursor:pointer">${ico('image')} Enviar imagem<input id="eFundo" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>
             ${L.fundo ? `<button class="sm danger" id="eSemFundo">Remover</button>` : ''}</div>
@@ -301,9 +326,82 @@ const Mapa = (() => {
       </div></div>`;
   }
 
+  // ---------- editar gôndolas (lados, módulos, medidas, nomes dos módulos; sacaria = área com pallets) ----------
+  const CAMPOS_DIM = [['modulo_c', 'Módulo: comprimento'], ['modulo_l', 'Módulo: profundidade'], ['ponta_c', 'Ponta: largura'], ['ponta_p', 'Ponta: profundidade']];
+
+  function lateralEdicaoG() {
+    const ids = [...new Set([...M.data.layout.gondolas.map(g => g.id), ...M.data.gondolas.map(g => g.id)])].sort((a, b) => a - b);
+    const id = M.sel, c = id !== null ? (M.draftG[id] = M.draftG[id] || {}) : null;
+    let corpo = '<p class="small muted">Clique numa gôndola do mapa ou escolha na lista.</p>';
+    if (id !== null && SACARIA(id)) {
+      c.pallets = c.pallets || [];
+      corpo = `<div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f">Comprimento da área (cm)</label><input id="gAreaC" type="number" min="100" max="3000" value="${c.c ?? 600}"></div>
+          <div><label class="f">Largura da área (cm)</label><input id="gAreaL" type="number" min="100" max="3000" value="${c.l ?? 400}"></div></div>
+        <div><label class="f">Pallets (módulos da sacaria)</label><div class="xs muted" style="margin-bottom:8px">Endereço do pallet: ${id}-P1, ${id}-P2… Posição e tamanho em cm, a partir do canto superior esquerdo da área.</div>
+          ${c.pallets.map((p, i) => `<div class="pal" data-i="${i}"><b>P${p.id}</b><input data-k="nome" placeholder="Nome" maxlength="40" value="${esc(p.nome || '')}" aria-label="Nome do pallet ${p.id}">
+            ${['x', 'y', 'c', 'l'].map(k => `<label class="xs muted">${{ x: 'X', y: 'Y', c: 'Comp.', l: 'Larg.' }[k]}<input data-k="${k}" type="number" min="0" max="3000" value="${p[k]}"></label>`).join('')}
+            <button class="sm danger" data-rem="${i}" aria-label="Remover pallet ${p.id}">${ico('minus')}</button></div>`).join('')}
+          <button class="sm" id="gAddPal">${ico('plus')} Adicionar pallet</button></div>`;
+    } else if (id !== null) {
+      const D = dimG(id), lados = ladosG(id), n = nMod(id), nomes = c.nomes || {};
+      corpo = `<div><label class="f">Lados com prateleira</label><div class="seg" id="gLados"><button data-l="AB" aria-pressed="${lados.length === 2}">A e B</button><button data-l="B" aria-pressed="${lados.length === 1 && lados[0] === 'B'}">Só B (cima)</button><button data-l="A" aria-pressed="${lados.length === 1 && lados[0] === 'A'}">Só A (baixo)</button></div></div>
+        <div><label class="f" for="gMod">Módulos por lado</label><input id="gMod" type="number" min="1" max="${U_NIVEIS}" value="${n}" style="max-width:120px"></div>
+        <div><label class="f">Medidas desta gôndola (cm) <span class="muted">— vazio usa o padrão da loja</span></label>
+          <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">${CAMPOS_DIM.map(([k, r]) => `<div><label class="xs muted" for="gd_${k}">${r}</label><input id="gd_${k}" data-dim="${k}" type="number" min="10" max="300" placeholder="${dim()[k]}" value="${(c.dim || {})[k] ?? ''}"></div>`).join('')}</div></div>
+        <div><label class="f">Nome de cada módulo <span class="muted">(opcional, o módulo 1 fica junto da Frente)</span></label>
+          ${lados.map(l => `<div class="xs muted" style="margin:8px 0 4px">${NOME_LADO[l]}</div><div class="nomes-mod">${Array.from({ length: n }, (_, i) => `<input data-nome="${l}-${i + 1}" placeholder="${i + 1}" maxlength="40" value="${esc(nomes[`${l}-${i + 1}`] || '')}" aria-label="Nome do módulo ${i + 1} do ${NOME_LADO[l]}">`).join('')}</div>`).join('')}</div>`;
+    }
+    return `<div class="card drawer"><div class="head"><div><h2>Editar gôndolas</h2><div class="sub">Lados, módulos, medidas e nomes. O mapa muda enquanto você edita.</div></div></div>
+      <div class="grid" style="gap:14px">
+        <div><label class="f" for="gSel">Gôndola</label><select id="gSel"><option value="">Escolha…</option>${ids.map(i => `<option value="${i}" ${i === id ? 'selected' : ''}>${i === 19 ? '19 · Sacaria de gatos' : 'Gôndola ' + i}</option>`).join('')}</select></div>
+        ${corpo}
+        <div class="editbar" style="justify-content:flex-end"><button id="gCancela">Cancelar</button><button class="primary" id="gSalva">${ico('check')} Salvar gôndolas</button></div>
+      </div></div>`;
+  }
+
+  function ligaEdicaoG() {
+    const id = M.sel, c = id !== null ? M.draftG[id] : null;
+    const redesenha = () => desenhaPalco();
+    $('#gSel').addEventListener('change', e => { M.sel = e.target.value ? +e.target.value : null; desenhaPalco(); desenhaLateral(); });
+    $('#gCancela').addEventListener('click', () => { M.editG = false; M.draftG = null; M.sel = null; montaTudo(); });
+    $('#gSalva').addEventListener('click', async () => {
+      try { M.data.gondolas_cfg = await api('/api/gondolas', { method: 'PUT', body: M.draftG }); M.editG = false; M.draftG = null; toast('Gôndolas salvas', 'ok'); montaTudo(); }
+      catch (er) { toast(er.message, 'bad', 5000); }
+    });
+    if (id === null) return;
+    if (SACARIA(id)) {
+      $('#gAreaC').addEventListener('change', e => { c.c = +e.target.value; redesenha(); });
+      $('#gAreaL').addEventListener('change', e => { c.l = +e.target.value; redesenha(); });
+      $('#gAddPal').addEventListener('click', () => {
+        const usados = new Set(c.pallets.map(p => p.id)); let n = 1; while (usados.has(n)) n++;
+        c.pallets.push({ id: n, x: 10 + (c.pallets.length % 5) * 130, y: 10 + Math.floor(c.pallets.length / 5) * 110, c: 120, l: 100, nome: '' });
+        desenhaPalco(); desenhaLateral();
+      });
+      $$('.pal').forEach(row => {
+        const p = c.pallets[+row.dataset.i];
+        $$('input', row).forEach(inp => inp.addEventListener('change', () => { p[inp.dataset.k] = inp.dataset.k === 'nome' ? inp.value : +inp.value; redesenha(); }));
+        $('[data-rem]', row).addEventListener('click', () => { c.pallets.splice(+row.dataset.i, 1); desenhaPalco(); desenhaLateral(); });
+      });
+      return;
+    }
+    $$('#gLados button').forEach(b => b.addEventListener('click', () => { c.lados = b.dataset.l; c.nomes = Object.fromEntries(Object.entries(c.nomes || {}).filter(([k]) => c.lados.includes(k[0]))); desenhaPalco(); desenhaLateral(); }));
+    $('#gMod').addEventListener('change', e => {
+      c.modulos = Math.max(1, Math.min(U_NIVEIS, +e.target.value || 5));
+      c.nomes = Object.fromEntries(Object.entries(c.nomes || {}).filter(([k]) => +k.split('-')[1] <= c.modulos));
+      desenhaPalco(); desenhaLateral();
+    });
+    $$('[data-dim]').forEach(inp => inp.addEventListener('change', () => {
+      c.dim = c.dim || {};
+      if (inp.value === '') delete c.dim[inp.dataset.dim]; else c.dim[inp.dataset.dim] = +inp.value;
+      desenhaPalco();
+    }));
+    $$('[data-nome]').forEach(inp => inp.addEventListener('change', () => { c.nomes = c.nomes || {}; if (inp.value.trim()) c.nomes[inp.dataset.nome] = inp.value.trim(); else delete c.nomes[inp.dataset.nome]; }));
+  }
+
   function desenhaLateral() {
     const el = $('#lateral');
     if (!el) return;
+    if (M.editG) { el.innerHTML = lateralEdicaoG(); ligaEdicaoG(); return; }
     if (M.edit) { el.innerHTML = lateralEdicao(); ligaEdicao(); return; }
     if (M.sel === null) {
       const top = [...M.data.gondolas].sort((a, b) => b.risco - a.risco).slice(0, 6);
@@ -325,9 +423,10 @@ const Mapa = (() => {
     if (!L.setas) L.setas = [];
     $('#eLarg').addEventListener('change', e => { L.largura = +e.target.value; desenhaPalco(); });
     $('#eAlt').addEventListener('change', e => { L.altura = +e.target.value; desenhaPalco(); });
+    $$('[data-edim]').forEach(inp => inp.addEventListener('change', () => { M.draftDim[inp.dataset.edim] = +inp.value; desenhaPalco(); }));
     $('#eProp').addEventListener('click', () => {
-      const { L: comp, T } = geom();
       L.gondolas.forEach(g => {
+        const { L: comp, T } = geomG(g.id);
         const len = Math.max(g.w, g.h, 60), curto = Math.round(len * T / comp * 10) / 10;
         g.rot = PE_PD(g.id) ? 90 : 0;
         g.w = g.rot === 90 ? curto : len; g.h = g.rot === 90 ? len : curto;
@@ -343,16 +442,18 @@ const Mapa = (() => {
     const gi = $('#eGira'); if (gi) gi.addEventListener('click', () => { const g = L.gondolas.find(x => x.id === M.sel); [g.w, g.h] = [g.h, g.w]; g.rot = g.rot ? 0 : 90; desenhaPalco(); });
     const rm = $('#eRemove'); if (rm) rm.addEventListener('click', () => { L.gondolas = L.gondolas.filter(x => x.id !== M.sel); M.sel = null; desenhaPalco(); desenhaLateral(); });
     $$('[data-add]').forEach(b => b.addEventListener('click', () => {
-      const id = +b.dataset.add, { L: comp, T } = geom(), vert = PE_PD(id), len = 200, curto = Math.round(len * T / comp * 10) / 10;
+      const id = +b.dataset.add, { L: comp, T } = geomG(id), vert = PE_PD(id), len = 200, curto = Math.round(len * T / comp * 10) / 10;
       L.gondolas.push({ id, x: 60 + (id % 5) * 40, y: 60, w: vert ? curto : len, h: vert ? len : curto, rot: vert ? 90 : 0 }); M.sel = id; M.selSeta = null; desenhaPalco(); desenhaLateral();
     }));
     $('#eNovaSeta').addEventListener('click', () => { L.setas.push({ x: Math.round(L.largura / 2 / 5) * 5, y: Math.round(L.altura / 2 / 5) * 5, c: 100, rot: 0 }); M.selSeta = L.setas.length - 1; M.sel = null; desenhaPalco(); desenhaLateral(); });
     const gs = $('#eGiraSeta'); if (gs) gs.addEventListener('click', () => { const a = L.setas[M.selSeta]; a.rot = (a.rot + 45) % 360; desenhaPalco(); });
     const rs = $('#eRemSeta'); if (rs) rs.addEventListener('click', () => { L.setas.splice(M.selSeta, 1); M.selSeta = null; desenhaPalco(); desenhaLateral(); });
     const sc = $('#eSetaC'); if (sc) sc.addEventListener('input', e => { L.setas[M.selSeta].c = +e.target.value; desenhaPalco(); });
-    $('#eCancela').addEventListener('click', () => { M.edit = false; M.draft = null; M.sel = null; M.selSeta = null; montaTudo(); });
+    $('#eCancela').addEventListener('click', () => { M.edit = false; M.draft = null; M.draftDim = null; M.sel = null; M.selSeta = null; montaTudo(); });
     $('#eSalva').addEventListener('click', async () => {
-      try { M.data.layout = await api('/api/layout', { method: 'PUT', body: M.draft }); M.edit = false; M.draft = null; M.selSeta = null; toast('Planta salva', 'ok'); montaTudo(); }
+      try {
+        M.data.dimensoes = await api('/api/dimensoes', { method: 'PUT', body: M.draftDim });
+        M.data.layout = await api('/api/layout', { method: 'PUT', body: M.draft }); M.edit = false; M.draft = null; M.draftDim = null; M.selSeta = null; toast('Planta salva', 'ok'); montaTudo(); }
       catch (er) { toast(er.message, 'bad', 5000); }
     });
   }
@@ -391,7 +492,7 @@ const Mapa = (() => {
     v.innerHTML = `
       <div class="editbar reveal" style="margin-bottom:16px;justify-content:space-between">
         <div class="seg" role="group" aria-label="O que mostrar no mapa">${Object.entries(METRICAS).map(([k, m]) => `<button data-metric="${k}" aria-pressed="${M.metric === k}" title="${esc(m.desc)}">${m.nome}</button>`).join('')}</div>
-        <div class="editbar">${legenda()}${!M.edit ? `<div class="seg" role="group" aria-label="Visualização"><button data-vista="grade" aria-pressed="${M.vista === 'grade'}">Grade</button><button data-vista="planta" aria-pressed="${M.vista === 'planta'}">Planta</button></div>` : ''}${M.ctx.admin && !M.edit ? `<button id="editar">${ico('edit')} Editar planta</button>` : ''}</div>
+        <div class="editbar">${legenda()}${!M.edit && !M.editG ? `<div class="seg" role="group" aria-label="Visualização"><button data-vista="grade" aria-pressed="${M.vista === 'grade'}">Grade</button><button data-vista="planta" aria-pressed="${M.vista === 'planta'}">Planta</button></div>` : ''}${M.ctx.admin && !M.edit && !M.editG ? `<button id="editar">${ico('edit')} Editar planta</button><button id="editarG">${ico('edit')} Editar gôndolas</button>` : ''}</div>
       </div>
       ${L.provisorio && !M.edit ? `<div class="callout reveal" style="--i:1;margin-bottom:16px">${ico('info')}<div><b>Planta provisória.</b> As gôndolas estão em grade só para você já enxergar os dados. ${M.ctx.admin ? 'Clique em <b>Editar planta</b> para arrastar cada gôndola até a posição real, aplicar a proporção real, desenhar as setas de fluxo e enviar a imagem do layout da loja como fundo.' : 'Peça a um administrador para montar a planta real.'}</div></div>` : ''}
       <div id="orfas" style="margin-bottom:16px"></div>
@@ -401,7 +502,9 @@ const Mapa = (() => {
     $$('[data-metric]', v).forEach(b => b.addEventListener('click', () => { M.metric = b.dataset.metric; lsSet('mapaMetrica', M.metric); montaTudo(); }));
     $$('[data-vista]', v).forEach(b => b.addEventListener('click', () => { M.vista = b.dataset.vista; lsSet('mapaVista', M.vista); montaTudo(); }));
     const ed = $('#editar', v);
-    if (ed) ed.addEventListener('click', () => { M.edit = true; M.draft = JSON.parse(JSON.stringify(M.data.layout)); M.draft.setas = M.draft.setas || []; M.sel = null; M.selSeta = null; M.shelf = null; montaTudo(); });
+    const edg = $('#editarG', v);
+    if (edg) edg.addEventListener('click', () => { M.editG = true; M.draftG = JSON.parse(JSON.stringify(M.data.gondolas_cfg || {})); M.sel = null; M.shelf = null; montaTudo(); });
+    if (ed) ed.addEventListener('click', () => { M.edit = true; M.draftDim = { ...dim() }; M.draft = JSON.parse(JSON.stringify(M.data.layout)); M.draft.setas = M.draft.setas || []; M.sel = null; M.selSeta = null; M.shelf = null; montaTudo(); });
     desenhaPalco(); desenhaDetalhe(); desenhaLateral();
     if (M.ro) M.ro.disconnect();
     M.ro = new ResizeObserver(() => { const st = $('#stage'); if (!st || !st.clientWidth || st.classList.contains('stage-bare')) return; const L2 = layoutAtual(), k = escala(st.clientWidth, L2), c = $('#canvas'); if (c) { c.style.transform = `scale(${k})`; st.style.height = L2.altura * k + 'px'; st.style.overflowX = k * L2.largura > st.clientWidth + 1 ? 'auto' : 'hidden'; } });
@@ -409,7 +512,7 @@ const Mapa = (() => {
   }
 
   async function render(view, ctx) {
-    M.view = view; M.ctx = ctx; M.metric = lsGet('mapaMetrica', 'risco'); M.vista = lsGet('mapaVista', innerWidth < 760 ? 'grade' : 'planta'); M.edit = false; M.draft = null; M.selSeta = null;
+    M.view = view; M.ctx = ctx; M.metric = lsGet('mapaMetrica', 'risco'); M.vista = lsGet('mapaVista', innerWidth < 760 ? 'grade' : 'planta'); M.edit = false; M.draft = null; M.selSeta = null; M.editG = false; M.draftG = null; M.draftDim = null;
     view.innerHTML = `<div class="skeleton" style="height:480px;border-radius:18px"></div>`;
     const [data, cfg] = await Promise.all([api('/api/mapa'), api('/api/config')]);
     data.faixas = cfg.faixas;

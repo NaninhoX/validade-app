@@ -185,13 +185,13 @@ const Coletor = (() => {
   }
 
   // ---------- endereço ----------
-  const partes = v => { const m = String(v || '').trim().toUpperCase().match(/^(\d{1,2})(?:-(A|B|F|C|PE|PD))?(?:-(\d))?$/); return m ? { g: m[1], lado: m[2] || null, nivel: m[3] ? +m[3] : null } : null; };
+  const partes = v => { const m = String(v || '').trim().toUpperCase().match(/^(\d{1,2})(?:-(A|B|F|C|PE|PD|P))?(?:-(\d{1,2}))?$/); return m ? { g: m[1], lado: m[2] || null, nivel: m[3] ? +m[3] : null } : null; };
   function atualizaEnd() {
     const v = $('#end').value, p = parseEndereco(v), q = partes(v);
     $('#endDesc').innerHTML = !v.trim() ? 'Gôndola-lado-prateleira. Ex.: 1-B-3 (lado B, prateleira 3) · 1-F ou 1-C = ponta'
       : p.valido ? `<span style="color:var(--good)">✓</span> ${esc(descEndereco(v))}` : q ? `Falta o lado (${ladosDe(q.g).join(', ')}) e a prateleira (1 a 5)` : '<span style="color:var(--bad)">Endereço fora do padrão</span>';
     const linha = (rot, itens) => `<div class="chips" style="margin:0;width:100%;align-items:center"><span class="small muted" style="width:72px">${rot}</span>${itens}</div>`;
-    $('#endChips').innerHTML =
+    $('#endChips').innerHTML = q && +q.g === 19 ? '<div class="xs muted">Sacaria: use 19 ou o pallet, ex.: 19-P1</div>' :
       linha('Lado', ladosDe(q?.g).map(l => `<button class="chip sq" data-lado="${l}" aria-pressed="${q?.lado === l}" title="${LADO_TXT[l]}">${l}</button>`).join('')) +
       linha('Prateleira', [1, 2, 3, 4, 5].map(n => `<button class="chip sq" data-nivel="${n}" aria-pressed="${q?.nivel === n}">${n}</button>`).join(''));
     lsSet('ultimoEnd', v);
