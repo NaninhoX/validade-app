@@ -264,17 +264,39 @@ test('painel da ronda: conta conferidos, corrigidos e não achei por dia', async
   assert.equal(hoje.divergencia, 66.7);
 });
 
-test('responsáveis por gôndola: valida usuários e aparece no mapa e na ronda', async () => {
+test('setores: nome e responsáveis por lado, validados, e aparecem no mapa e na ronda', async () => {
   const db = await novoDb();
   await A.salvarUsuario(db, { nome: 'DAVI', pin: '123456', papel: 'operador' });
   await A.salvarUsuario(db, { nome: 'DENI', pin: '123456', papel: 'operador' });
-  const r = await S.setResponsaveis(db, { 3: ['davi', 'DENI', 'DAVI'], 5: [] });
-  assert.deepEqual(r, { 3: ['DAVI', 'DENI'] });
-  await assert.rejects(S.setResponsaveis(db, { 3: ['FULANO'] }), /não existe/);
-  await assert.rejects(S.setResponsaveis(db, { 99: ['DAVI'] }), /inválida/);
+  const r = await S.setSetores(db, { 3: { A: { nome: ' Higiene ', resp: ['davi', 'DENI', 'DAVI'] }, B: { nome: '', resp: [] } }, 9: { PE: { nome: 'Entrada', resp: ['DENI'] } } });
+  assert.deepEqual(r, { 3: { A: { nome: 'Higiene', resp: ['DAVI', 'DENI'] } }, 9: { PE: { nome: 'Entrada', resp: ['DENI'] } } });
+  await assert.rejects(S.setSetores(db, { 3: { A: { resp: ['FULANO'] } } }), /não existe/);
+  await assert.rejects(S.setSetores(db, { 3: { PE: { nome: 'x' } } }), /lado PE não existe/);   // PE/PD só nas gôndolas 9 e 10
+  await assert.rejects(S.setSetores(db, { 9: { F: { nome: 'x' } } }), /lado F não existe/);
+  await assert.rejects(S.setSetores(db, { 99: { A: { nome: 'x' } } }), /inválida/);
   await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base });
-  assert.deepEqual((await S.mapa(db)).responsaveis, { 3: ['DAVI', 'DENI'] });
-  assert.deepEqual((await S.ronda(db, { n: 5 })).responsaveis[3], ['DAVI', 'DENI']);
+  assert.equal((await S.mapa(db)).setores[3].A.nome, 'Higiene');
+  assert.equal((await S.ronda(db, { n: 5 })).setores[3].A.resp[1], 'DENI');
+});
+
+test('endereços das gôndolas 9 e 10 usam PE/PD; nas demais, F/C', () => {
+  assert.equal(U.parseEndereco('9-PE').valido, true);
+  assert.equal(U.parseEndereco('10-PD-2').valido, true);
+  assert.equal(U.parseEndereco('9-F').valido, false);
+  assert.equal(U.parseEndereco('3-PE').valido, false);
+  assert.equal(U.parseEndereco('3-C').valido, true);
+  assert.equal(U.parseEndereco('9-A-3').valido, true);
+  assert.deepEqual(U.lados(9), ['A', 'B', 'PE', 'PD']);
+});
+
+test('medidas editáveis e setas de fluxo na planta', async () => {
+  const db = await novoDb();
+  assert.deepEqual(await S.getDimensoes(db), { modulo_c: 140, modulo_l: 40, ponta_c: 100, ponta_p: 40 });
+  await S.setDimensoes(db, { modulo_c: 150, modulo_l: 45, ponta_c: 95, ponta_p: 40 });
+  assert.equal((await S.getDimensoes(db)).modulo_c, 150);
+  await assert.rejects(S.setDimensoes(db, { modulo_c: 10, modulo_l: 45, ponta_c: 95, ponta_p: 40 }), /entre 40 e 300/);
+  const l = await S.setLayout(db, { ...(await S.getLayout(db)), setas: [{ x: 100, y: 200, c: 90, rot: 450 }] });
+  assert.deepEqual(l.setas, [{ id: 1, x: 100, y: 200, c: 90, rot: 90 }]);
 });
 
 test('contagem grava o preço de produto que ainda não tinha', async () => {
@@ -296,12 +318,13 @@ test('baixa: RMA substitui Vencido e RMA Fornecedor', async () => {
   await assert.rejects(S.leitura(db, { tipo: 'BAIXA', ...base, validade: mais(-2), qtd: 1, motivo: 'Vencido' }), /motivo/);
 });
 
-test('ronda: só as minhas gôndolas', async () => {
+test('ronda: só os meus setores (gôndola-lado)', async () => {
   const db = await novoDb();
   await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, endereco: '3-A-1', validade: mais(10) });
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, lote: 'B', endereco: '3-B-1', validade: mais(10) });
   await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, endereco: '7-B-2', validade: mais(10) });
-  assert.deepEqual((await S.ronda(db, { n: 5, gondolas: ['7'] })).enderecos.map(e => e.endereco), ['7-B-2']);
-  assert.equal((await S.ronda(db, { n: 5, gondolas: [] })).enderecos.length, 2);
+  assert.deepEqual((await S.ronda(db, { n: 5, setores: ['3-B', '7-B'] })).enderecos.map(e => e.endereco), ['3-B-1', '7-B-2']);
+  assert.equal((await S.ronda(db, { n: 5, setores: [] })).enderecos.length, 3);
 });
 
 test('recebimento avisa lote com validade curta; o mínimo é configurável', async () => {
@@ -317,14 +340,15 @@ test('recebimento avisa lote com validade curta; o mínimo é configurável', as
   await assert.rejects(S.setValidadeMinima(db, 400), /0 a 365/);
 });
 
-test('placar por responsável e produtos em estoque sem preço', async () => {
+test('placar por responsável conta só os lados dele; produtos em estoque sem preço', async () => {
   const db = await novoDb();
   await A.salvarUsuario(db, { nome: 'DAVI', pin: '123456', papel: 'operador' });
-  await S.setResponsaveis(db, { 3: ['DAVI'], 9: ['DAVI'] });
+  await S.setSetores(db, { 3: { A: { nome: 'Rações', resp: ['DAVI'] } }, 9: { PE: { resp: ['DAVI'] } } });
   const v = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, endereco: '3-A-1', validade: mais(-1) });
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 5, ...base, lote: 'OUTRO', endereco: '3-B-1', validade: mais(-1) });   // lado B não é dele
   await S.leitura(db, { tipo: 'CONTAGEM', lote_id: v.lote.id, qtd: 2, motivo: 'Ronda: corrigido', operador: 'DAVI' });
   const [p] = await S.placar(db);
-  assert.deepEqual([p.nome, p.gondolas, p.vencidos, p.lotes, p.ronda7_lotes, p.ronda7_divergencia], ['DAVI', [3, 9], 1, 1, 1, 100]);
+  assert.deepEqual([p.nome, p.setores, p.vencidos, p.lotes, p.ronda7_lotes, p.ronda7_divergencia], ['DAVI', ['3-A', '9-PE'], 1, 1, 1, 100]);
   await S.upsertProduto(db, { ean: '7891000000031', nome: 'SEM PRECO' });
   await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 1, ...base, ean: '7891000000031', lote: 'Z', validade: mais(200) });
   assert.equal((await S.resumo(db)).qualidade.produtos_sem_preco, 1);

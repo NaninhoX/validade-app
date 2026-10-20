@@ -134,13 +134,14 @@ function parseEndereco(e) {
   e = String(e || '').trim().toUpperCase().replace(/\s+/g, '').replace(/[–—_.\/]/g, '-');
   let m;
   if (!e) return { valido: false, texto: '' };
-  const ok = (g, l, n) => ({ valido: g >= 1 && g <= 40 && (n === null || (n >= 1 && n <= 5)), gondola: g, lado: l, nivel: n });
-  if ((m = e.match(/^(\d{1,2})-([FC])$/))) return ok(+m[1], m[2], null);
-  if ((m = e.match(/^(\d{1,2})-([FC])-(\d)$/))) return ok(+m[1], m[2], +m[3]);
+  const ok = (g, l, n) => ({ valido: g >= 1 && g <= 40 && (n === null || (n >= 1 && n <= 5)) && (/^[AB]$/.test(l) || (g === 9 || g === 10 ? /^P[ED]$/ : /^[FC]$/).test(l)), gondola: g, lado: l, nivel: n });
+  if ((m = e.match(/^(\d{1,2})-(F|C|PE|PD)$/))) return ok(+m[1], m[2], null);
+  if ((m = e.match(/^(\d{1,2})-(F|C|PE|PD)-(\d)$/))) return ok(+m[1], m[2], +m[3]);
   if ((m = e.match(/^(\d{1,2})-([AB])-(\d)$/))) return ok(+m[1], m[2], +m[3]);
   return { valido: false, texto: e };
 }
-const LADO_TXT = { A: 'lado A (esquerda)', B: 'lado B (direita)', F: 'ponta da frente', C: 'ponta das costas' };
+const LADO_TXT = { A: 'lado A', B: 'lado B', F: 'ponta da frente', C: 'ponta das costas', PE: 'ponta esquerda', PD: 'ponta direita' };
+const ladosDe = g => (+g === 9 || +g === 10 ? ['A', 'B', 'PE', 'PD'] : ['A', 'B', 'F', 'C']);
 function descEndereco(e) {
   const p = parseEndereco(e);
   if (!p.gondola) return '';

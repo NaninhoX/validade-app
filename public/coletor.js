@@ -52,7 +52,7 @@ const Coletor = (() => {
   let modo = 'entrada', tipoEntrada = 'RECEBIMENTO', produtoAtual = null;
   let rondaItens = [], rondaFeitos = new Set(), bipados = new Set(), rondaEnd = '', rondaTs = 0, rondaChave = '';
   let turno = lsGet('turno', null), emTurno = -1;      // ronda do dia (guardada no aparelho até o fim do dia)
-  let VALMIN = 0, MINHAS = [];       // validade mínima no recebimento; gôndolas sob responsabilidade de quem está logado
+  let VALMIN = 0, MINHAS = [];       // validade mínima no recebimento; setores (gôndola-lado) sob responsabilidade de quem está logado
   let CFG = null, ultimo = null, ultimoLote = null, ultimoTally = null, undoTimer, ac;
   const enter = {};
 
@@ -185,14 +185,14 @@ const Coletor = (() => {
   }
 
   // ---------- endereço ----------
-  const partes = v => { const m = String(v || '').trim().toUpperCase().match(/^(\d{1,2})(?:-([ABFC]))?(?:-(\d))?$/); return m ? { g: m[1], lado: m[2] || null, nivel: m[3] ? +m[3] : null } : null; };
+  const partes = v => { const m = String(v || '').trim().toUpperCase().match(/^(\d{1,2})(?:-(A|B|F|C|PE|PD))?(?:-(\d))?$/); return m ? { g: m[1], lado: m[2] || null, nivel: m[3] ? +m[3] : null } : null; };
   function atualizaEnd() {
     const v = $('#end').value, p = parseEndereco(v), q = partes(v);
     $('#endDesc').innerHTML = !v.trim() ? 'Gôndola-lado-prateleira. Ex.: 1-B-3 (lado B, prateleira 3) · 1-F ou 1-C = ponta'
-      : p.valido ? `<span style="color:var(--good)">✓</span> ${esc(descEndereco(v))}` : q ? 'Falta o lado (A, B, F ou C) e a prateleira (1 a 5)' : '<span style="color:var(--bad)">Endereço fora do padrão</span>';
+      : p.valido ? `<span style="color:var(--good)">✓</span> ${esc(descEndereco(v))}` : q ? `Falta o lado (${ladosDe(q.g).join(', ')}) e a prateleira (1 a 5)` : '<span style="color:var(--bad)">Endereço fora do padrão</span>';
     const linha = (rot, itens) => `<div class="chips" style="margin:0;width:100%;align-items:center"><span class="small muted" style="width:72px">${rot}</span>${itens}</div>`;
     $('#endChips').innerHTML =
-      linha('Lado', ['A', 'B', 'F', 'C'].map(l => `<button class="chip sq" data-lado="${l}" aria-pressed="${q?.lado === l}" title="${LADO_TXT[l]}">${l}</button>`).join('')) +
+      linha('Lado', ladosDe(q?.g).map(l => `<button class="chip sq" data-lado="${l}" aria-pressed="${q?.lado === l}" title="${LADO_TXT[l]}">${l}</button>`).join('')) +
       linha('Prateleira', [1, 2, 3, 4, 5].map(n => `<button class="chip sq" data-nivel="${n}" aria-pressed="${q?.nivel === n}">${n}</button>`).join(''));
     lsSet('ultimoEnd', v);
   }
@@ -288,9 +288,9 @@ const Coletor = (() => {
     const b = $('#rGerar'); if (b) b.disabled = true;
     try {
       const minhas = MINHAS.length && lsGet('rondaMinhas', true);
-      const r = await api('/api/ronda?n=' + n + (minhas ? '&gondolas=' + MINHAS.join(',') : ''));
+      const r = await api('/api/ronda?n=' + n + (minhas ? '&setores=' + MINHAS.join(',') : ''));
       if (!r.enderecos.length) { toast('Nada para conferir hoje — todos os endereços já foram vistos', 'ok', 4000); return; }
-      turno = { dia: hojeLocal(), n: r.enderecos.length, criado: Date.now(), fim: null, cobertura: r.cobertura, resp: r.responsaveis || {}, minhas: !!minhas,
+      turno = { dia: hojeLocal(), n: r.enderecos.length, criado: Date.now(), fim: null, cobertura: r.cobertura, setores: r.setores || {}, minhas: !!minhas,
         itens: r.enderecos.map(e => ({ e: e.endereco, g: e.gondola, lotes: e.lotes, venc: e.vencidos, urg: e.urgentes, etq: e.etiquetar, dias: e.dias_sem, ok: e.valido, feito: false, pulou: false })),
         tally: novoTally() };
       salvaTurno(); emTurno = -1; desenhaDia();
@@ -300,13 +300,13 @@ const Coletor = (() => {
 
   async function carregaMinhas() {
     try {
-      const r = await api('/api/responsaveis');
-      MINHAS = Object.keys(r).filter(g => r[g].includes(nome())).map(Number).sort((a, b) => a - b);
+      const r = await api('/api/setores');
+      MINHAS = Object.entries(r).flatMap(([g, lados]) => Object.entries(lados).filter(([, s]) => s.resp.includes(nome())).map(([l]) => `${g}-${l}`));
     } catch { /* sem rede: segue sem filtro */ }
     const box = $('#rFiltro'); if (!box) return;
     const so = lsGet('rondaMinhas', true);
-    box.innerHTML = MINHAS.length ? `<div class="f" style="margin-top:14px">Quais gôndolas?</div><div class="chips" style="margin-top:6px">
-      <button class="chip" data-minhas="1" aria-pressed="${so}">Só as minhas (${MINHAS.join(', ')})</button><button class="chip" data-minhas="0" aria-pressed="${!so}">Todas</button></div>` : '';
+    box.innerHTML = MINHAS.length ? `<div class="f" style="margin-top:14px">Quais setores?</div><div class="chips" style="margin-top:6px">
+      <button class="chip" data-minhas="1" aria-pressed="${so}">Só os meus (${MINHAS.join(', ')})</button><button class="chip" data-minhas="0" aria-pressed="${!so}">Todas</button></div>` : '';
   }
 
   async function painelSemana() {
@@ -328,6 +328,12 @@ const Coletor = (() => {
     c.push(`<span class="rc">${t.dias === null ? 'nunca conferido' : 'conferido há ' + t.dias + ' d'}</span>`);
     if (!t.ok) c.push('<span class="rc warn">fora do padrão</span>');
     return c.join('');
+  }
+
+  // nome e responsáveis do setor (lado) deste endereço
+  function setorTxt(t) {
+    const p = parseEndereco(t.e), s = ((turno.setores || {})[p.gondola] || {})[p.lado];
+    return s ? ' · ' + esc([s.nome, s.resp.map(n => n.charAt(0) + n.slice(1).toLowerCase()).join(', ')].filter(Boolean).join(' — ')) : '';
   }
 
   function desenhaDia() {
@@ -352,10 +358,10 @@ const Coletor = (() => {
     const prox = turno.itens.findIndex(i => !i.feito && !i.pulou);
     let g = null;
     const cartoes = turno.itens.map((t, k) => {
-      const cab = t.g !== g ? `<div class="rd-g">${t.g >= 99 ? 'Sem gôndola' : 'Gôndola ' + t.g}${(turno.resp || {})[t.g] ? ' · ' + esc(turno.resp[t.g].join(', ')) : ''}</div>` : '';
+      const cab = t.g !== g ? `<div class="rd-g">${t.g >= 99 ? 'Sem gôndola' : 'Gôndola ' + t.g}</div>` : '';
       g = t.g;
       return cab + `<button class="alvo ${t.feito ? 'feito' : ''} ${k === prox ? 'prox' : ''}" data-i="${k}" id="al-${k}">
-        <span class="aend">${esc(t.e)}</span><span class="adesc">${esc(descEndereco(t.e)) || ''}${t.pulou && !t.feito ? ' · pulado' : ''}</span>
+        <span class="aend">${esc(t.e)}</span><span class="adesc">${esc(descEndereco(t.e)) || ''}${setorTxt(t)}${t.pulou && !t.feito ? ' · pulado' : ''}</span>
         <span class="achips">${t.feito ? '<span class="rc ok">conferido</span>' : chipsEnd(t)}</span>
         <span class="ach">${t.feito ? ico('check') : ico('chevron')}</span></button>`;
     }).join('');

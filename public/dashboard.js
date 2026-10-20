@@ -151,7 +151,7 @@ PAGINAS.geral = async () => {
       ${(() => { const m = Math.max(1, ...res.marcas.map(x => x.perda)); return res.marcas.slice(0, 7).map(x => `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${esc(x.marca)}</span><b class="num">${brl(x.perda)}</b></div><div class="meter" style="margin-top:6px"><i style="width:${x.perda / m * 100}%"></i></div></div>`).join(''); })()}</div>
     ${placar.length ? `<div class="card reveal" style="--i:9"><div class="head"><div><h2>Responsáveis</h2><div class="sub">Só administradores veem · ronda dos últimos 7 dias</div></div><a href="#/config" class="small">Editar →</a></div>
       ${placar.map(p => `<div class="row" style="grid-template-columns:auto minmax(0,1fr) auto"><div class="avatar" style="width:34px;height:34px">${esc(p.nome.slice(0, 1))}</div>
-        <div style="min-width:0"><div class="pname">${esc((n => n.charAt(0) + n.slice(1).toLowerCase())(p.nome))} <span class="xs muted">gôndola${p.gondolas.length > 1 ? 's' : ''} ${p.gondolas.join(', ')}</span></div>
+        <div style="min-width:0"><div class="pname">${esc((n => n.charAt(0) + n.slice(1).toLowerCase())(p.nome))} <span class="xs muted">setor${p.setores.length > 1 ? 'es' : ''} ${p.setores.join(', ')}</span></div>
         <div class="xs muted">${p.vencidos ? `<b style="color:var(--bad)">${p.vencidos} vencido${p.vencidos > 1 ? 's' : ''}</b> · ` : ''}${p.nunca_contadas ? p.nunca_contadas + ' nunca contada' + (p.nunca_contadas > 1 ? 's' : '') : p.pior_dias_sem_ronda !== null ? 'pior: ronda há ' + p.pior_dias_sem_ronda + ' d' : 'sem estoque'} · ${p.ronda7_lotes ? `${p.ronda7_lotes} conferidos, ${String(p.ronda7_divergencia).replace('.', ',')}% não bateram` : 'sem ronda na semana'}</div></div>
         <b class="num">${brlK(p.risco)}</b></div>`).join('')}</div>` : ''}
     <div class="card reveal" style="--i:10"><div class="head"><h2>Qualidade dos dados</h2></div>
@@ -282,14 +282,22 @@ PAGINAS.mov.ligar = () => view.addEventListener('click', async e => {
 
 // ---------- configurações ----------
 PAGINAS.config = async () => {
-  const [cfg, users, layout, resp] = await Promise.all([api('/api/config'), S.admin ? api('/api/usuarios').catch(() => null) : null,
-    S.admin ? api('/api/layout').catch(() => null) : null, S.admin ? api('/api/responsaveis').catch(() => ({})) : null]);
+  const [cfg, users, layout, setores, dims] = await Promise.all([api('/api/config'), S.admin ? api('/api/usuarios').catch(() => null) : null,
+    S.admin ? api('/api/layout').catch(() => null) : null, S.admin ? api('/api/setores').catch(() => ({})) : null, S.admin ? api('/api/dimensoes').catch(() => null) : null]);
   S.cfg = cfg;
   const ativos = (users || []).filter(u => u.ativo).map(u => u.nome);
-  const gIds = [...new Set([...(layout ? layout.gondolas.map(g => g.id) : []), ...Object.keys(resp || {}).map(Number)])].sort((a, b) => a - b);
-  const cartaoResp = !S.admin || !users ? '' : `<div class="card reveal" style="--i:3"><div class="head"><div><h2>Responsáveis por gôndola</h2><div class="sub">Toque nos nomes. Eles aparecem no mapa da loja.</div></div></div>
-      <div id="respG">${gIds.map(id => `<div class="resp-row" data-g="${id}"><b>${id}</b><div class="chips" style="margin:0">${ativos.map(n => `<button class="chip" data-n="${esc(n)}" aria-pressed="${((resp || {})[id] || []).includes(n)}">${esc(n.charAt(0) + n.slice(1).toLowerCase())}</button>`).join('')}</div></div>`).join('') || '<p class="muted">Nenhuma gôndola na planta.</p>'}</div>
-      <div style="margin-top:14px"><button class="primary" id="salvaResp">${ico('check')} Salvar responsáveis</button></div></div>`;
+  const gIds = [...new Set([...Array.from({ length: 18 }, (_, i) => i + 1), ...(layout ? layout.gondolas.map(g => g.id) : []), ...Object.keys(setores || {}).map(Number)])].sort((a, b) => a - b);
+  const ladosDe2 = g => (g === 9 || g === 10 ? ['A', 'B', 'PE', 'PD'] : ['A', 'B', 'F', 'C']);
+  const NOME_LADO2 = { A: 'Lado A', B: 'Lado B', F: 'Frente', C: 'Costas', PE: 'Ponta esquerda', PD: 'Ponta direita' };
+  const cartaoResp = !S.admin || !users ? '' : `<div class="card reveal" style="--i:3"><div class="head"><div><h2>Setores das gôndolas</h2><div class="sub">Dê um nome a cada lado (ex.: “Higiene”) e escolha quem cuida dele. Os nomes aparecem no mapa e na ronda.</div></div></div>
+      <div id="setoresG">${gIds.map(id => { const s = (setores || {})[id] || {}; const resumo = ladosDe2(id).map(l => (s[l] && (s[l].nome || s[l].resp.length)) ? `${l}: ${esc(s[l].nome || s[l].resp.map(n => n.charAt(0) + n.slice(1).toLowerCase()).join(', '))}` : '').filter(Boolean).join(' · ');
+        return `<details class="setor-g" data-g="${id}"><summary><b>${id}</b><span class="xs muted">${resumo || 'sem setores definidos'}</span></summary>
+        ${ladosDe2(id).map(l => `<div class="setor-l" data-lado="${l}"><label class="f">${NOME_LADO2[l]}</label><input type="text" maxlength="40" placeholder="Nome do setor (opcional)" value="${esc((s[l] && s[l].nome) || '')}" aria-label="Nome do ${NOME_LADO2[l]} da gôndola ${id}">
+          <div class="chips" style="margin:8px 0 0">${ativos.map(n => `<button class="chip" data-n="${esc(n)}" aria-pressed="${!!(s[l] && s[l].resp.includes(n))}">${esc(n.charAt(0) + n.slice(1).toLowerCase())}</button>`).join('')}</div></div>`).join('')}</details>`; }).join('')}</div>
+      <div style="margin-top:14px"><button class="primary" id="salvaSetores">${ico('check')} Salvar setores</button></div></div>
+    <div class="card reveal" style="--i:4"><div class="head"><div><h2>Medidas das prateleiras</h2><div class="sub">Em centímetros. Usadas para desenhar as gôndolas em escala no mapa — ajuste quando medir.</div></div></div>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px">${[['modulo_c', 'Módulo: comprimento'], ['modulo_l', 'Módulo: profundidade (cada lado)'], ['ponta_c', 'Ponta: largura'], ['ponta_p', 'Ponta: profundidade']].map(([k, r]) => `<div><label class="f" for="dm_${k}">${r}</label><input id="dm_${k}" type="number" min="10" max="300" value="${(dims || {})[k] ?? ''}"></div>`).join('')}</div>
+      <div style="margin-top:14px"><button class="primary" id="salvaDim">${ico('check')} Salvar medidas</button></div></div>`;
   return `<div class="grid cols-2" style="align-items:start">
     <div class="grid">
       <div class="card reveal"><div class="head"><div><h2>Regras de desconto</h2><div class="sub">Uma regra só para o painel, o mapa e o coletor</div></div></div>
@@ -313,13 +321,22 @@ PAGINAS.config = async () => {
   </div>`;
 };
 PAGINAS.config.ligar = () => {
-  const rg = $('#respG');
-  if (rg) rg.addEventListener('click', e => { const b = e.target.closest('button[data-n]'); if (b) b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); });
-  const sr = $('#salvaResp');
-  if (sr) sr.addEventListener('click', async () => {
+  const sg = $('#setoresG');
+  if (sg) sg.addEventListener('click', e => { const b = e.target.closest('button[data-n]'); if (b) b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); });
+  const ss = $('#salvaSetores');
+  if (ss) ss.addEventListener('click', async () => {
     const r = {};
-    $$('#respG .resp-row').forEach(row => { const l = $$('button[aria-pressed=true]', row).map(b => b.dataset.n); if (l.length) r[row.dataset.g] = l; });
-    try { await api('/api/responsaveis', { method: 'PUT', body: r }); toast('Responsáveis salvos', 'ok'); } catch (e) { toast(e.message, 'bad', 5000); }
+    $$('#setoresG .setor-g').forEach(g => $$('.setor-l', g).forEach(l => {
+      const nome = $('input', l).value.trim(), resp = $$('button[aria-pressed=true]', l).map(b => b.dataset.n);
+      if (nome || resp.length) (r[g.dataset.g] = r[g.dataset.g] || {})[l.dataset.lado] = { nome, resp };
+    }));
+    try { await api('/api/setores', { method: 'PUT', body: r }); toast('Setores salvos', 'ok'); } catch (e) { toast(e.message, 'bad', 5000); }
+  });
+  const sd = $('#salvaDim');
+  if (sd) sd.addEventListener('click', async () => {
+    const d = {};
+    for (const k of ['modulo_c', 'modulo_l', 'ponta_c', 'ponta_p']) d[k] = Number($('#dm_' + k).value);
+    try { await api('/api/dimensoes', { method: 'PUT', body: d }); toast('Medidas salvas — o mapa já usa as novas', 'ok'); } catch (e) { toast(e.message, 'bad', 5000); }
   });
   const sf = $('#salvaFaixas');
   if (sf) sf.addEventListener('click', async () => {
