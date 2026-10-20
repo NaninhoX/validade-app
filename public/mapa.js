@@ -284,7 +284,8 @@ const Mapa = (() => {
     if (!M.cam) enquadra(false);
     const kDet = (M.camAlvo || M.cam).k;
     M.detKey = chaveDetalhe(kDet);
-    stage.innerHTML = `<div class="canvas" id="canvas" style="width:${L.largura}px;height:${L.altura}px">
+    const entra = M.anim; M.anim = false;
+    stage.innerHTML = `<div class="canvas${entra ? ' entra' : ''}" id="canvas" style="width:${L.largura}px;height:${L.altura}px">
       ${L.fundo ? `<div class="bg" style="background-image:url('${esc(L.fundo)}');opacity:${L.fundo_opacidade}"></div>` : ''}
       <div class="grid-bg"></div>
       ${L.gondolas.map((g, i) => {
@@ -444,7 +445,7 @@ const Mapa = (() => {
   function desenhaFrente() {
     const el = $('#frente');
     if (!el) return;
-    if (M.edit || M.editG || M.sel === null || SACARIA(M.sel) || M.vista === 'grade' && innerWidth < 700) { el.hidden = true; el.innerHTML = ''; return; }
+    if (M.edit || M.editG || M.sel === null || SACARIA(M.sel) || M.vista === 'grade' && innerWidth < 700) { el.hidden = true; el.innerHTML = ''; M.frenteKey = null; return; }
     const id = M.sel, d = M.data.gondolas.find(g => g.id === id), lado = ladoFrente(), n = nMod(id), p = pontasDe(id), s = setor(id, lado);
     // Quem olha o lado B está "em cima" do desenho, olhando para baixo: a esquerda dele é o lado direito do desenho. No lado A é o contrário.
     const ordem = Array.from({ length: n }, (_, i) => i + 1).sort((a, b) => (lado === 'B' ? colunaDoModulo(id, b) - colunaDoModulo(id, a) : colunaDoModulo(id, a) - colunaDoModulo(id, b)));
@@ -474,6 +475,7 @@ const Mapa = (() => {
         <div class="fr-h"><b>${m}</b><span>${esc(nome || '')}</span></div>${corpo}</button>`;
     };
     el.hidden = false;
+    const chaveF = id + '|' + lado; el.classList.toggle('entra', chaveF !== M.frenteKey); M.frenteKey = chaveF;
     el.innerHTML = `<div class="card reveal"><div class="head"><div><h2>${esc(rotuloG(id))} · ${esc(NOME_LADO[lado])} visto de frente</h2>
         <div class="sub">${s.nome ? esc(s.nome) + ' · ' : ''}${s.resp.length ? esc(respTxt(s)) + ' · ' : ''}como quem está no corredor olhando as prateleiras: esquerda e direita são as suas</div></div>
         ${ladosG(id).length > 1 ? `<div class="seg" id="frLado" role="group" aria-label="Lado visto">${ladosG(id).map(l => `<button data-lado="${l}" aria-pressed="${l === lado}">${esc(NOME_LADO[l])}</button>`).join('')}</div>` : ''}</div>
@@ -783,7 +785,7 @@ const Mapa = (() => {
   }
 
   async function render(view, ctx) {
-    M.view = view; M.ctx = ctx; M.cam = null; M.metric = lsGet('mapaMetrica', 'risco'); M.vista = lsGet('mapaVista', innerWidth < 760 ? 'grade' : 'planta'); M.edit = false; M.draft = null; M.selCam = null; M.selPt = null; M.editG = false; M.draftG = null; M.draftDim = null;
+    M.view = view; M.ctx = ctx; M.cam = null; M.anim = true; M.frenteKey = null; M.metric = lsGet('mapaMetrica', 'risco'); M.vista = lsGet('mapaVista', innerWidth < 760 ? 'grade' : 'planta'); M.edit = false; M.draft = null; M.selCam = null; M.selPt = null; M.editG = false; M.draftG = null; M.draftDim = null;
     view.innerHTML = `<div class="skeleton" style="height:480px;border-radius:18px"></div>`;
     const [data, cfg] = await Promise.all([api('/api/mapa'), api('/api/config')]);
     data.faixas = cfg.faixas; setAreas(data.areas);

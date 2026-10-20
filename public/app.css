@@ -1,30 +1,35 @@
+@font-face { font-family: Roboto; font-weight: 400; font-style: normal; font-display: swap; src: url(vendor/fonts/roboto-latin-400-normal.woff2) format('woff2'); }
+@font-face { font-family: Roboto; font-weight: 500; font-style: normal; font-display: swap; src: url(vendor/fonts/roboto-latin-500-normal.woff2) format('woff2'); }
+@font-face { font-family: Roboto; font-weight: 700; font-style: normal; font-display: swap; src: url(vendor/fonts/roboto-latin-700-normal.woff2) format('woff2'); }
 /* Design system — claro/escuro automático. Superfícies limpas, tipografia do sistema, movimento sutil. */
 :root {
-  --bg: #f5f5f7; --surface: #ffffff; --surface-2: #fafafc; --raised: #ffffff;
-  --ink: #1d1d1f; --ink-2: #424245; --muted: #6e6e73; --faint: #a1a1a6;
-  --line: rgba(0, 0, 0, .08); --line-2: rgba(0, 0, 0, .14);
-  --accent: #0a6cff; --accent-ink: #fff; --accent-soft: rgba(10, 108, 255, .1);
-  --good: #1f9d55; --warn: #d97706; --bad: #e11d48;
-  --glass: rgba(245, 245, 247, .72);
+  --bg: #f1f4f7; --surface: #ffffff; --surface-2: #f7f9fc; --raised: #ffffff;
+  --ink: #0f2340; --ink-2: #364a68; --muted: #627590; --faint: #9aa8bb;
+  --line: rgba(1, 58, 123, .10); --line-2: rgba(1, 58, 123, .18);
+  --accent: #013a7b; --accent-ink: #fff; --accent-soft: rgba(1, 58, 123, .09);   /* azul American Pet */
+  --brand-red: #cb1b36; --brand-green: #3d9c02; --brand-sky: #dee9f5;
+  --good: #3d9c02; --warn: #d97706; --bad: #cb1b36;
+  --glass: rgba(241, 244, 247, .78);
   --shadow-1: 0 1px 2px rgba(0, 0, 0, .04), 0 2px 8px rgba(0, 0, 0, .04);
   --shadow-2: 0 4px 12px rgba(0, 0, 0, .06), 0 16px 40px rgba(0, 0, 0, .08);
-  --heat-empty: #e8e8ed;
+  --heat-empty: #e4eaf2;
   --r-sm: 8px; --r: 12px; --r-lg: 18px;
   --ease: cubic-bezier(.2, .8, .2, 1);
-  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "SF Pro Text", Roboto, "Helvetica Neue", sans-serif;
-  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "SF Pro Display", Roboto, sans-serif;
+  --font: Roboto, "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-display: Roboto, "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b0b0d; --surface: #151517; --surface-2: #1c1c1f; --raised: #1f1f23;
-    --ink: #f5f5f7; --ink-2: #d2d2d7; --muted: #98989d; --faint: #636366;
-    --line: rgba(255, 255, 255, .09); --line-2: rgba(255, 255, 255, .16);
-    --accent: #4c9aff; --accent-ink: #04122b; --accent-soft: rgba(76, 154, 255, .16);
-    --good: #34c77b; --warn: #fbbf24; --bad: #fb7185;
-    --glass: rgba(11, 11, 13, .72);
+    --bg: #07111f; --surface: #0d1b2f; --surface-2: #122440; --raised: #142846;
+    --ink: #eef3fa; --ink-2: #cbd6e6; --muted: #93a3ba; --faint: #5d6f89;
+    --line: rgba(160, 190, 235, .11); --line-2: rgba(160, 190, 235, .2);
+    --accent: #5a9bf0; --accent-ink: #04152e; --accent-soft: rgba(90, 155, 240, .17);
+    --brand-sky: #16294a;
+    --good: #6cc43a; --warn: #fbbf24; --bad: #ff6b81;
+    --glass: rgba(7, 17, 31, .78);
     --shadow-1: none; --shadow-2: 0 16px 48px rgba(0, 0, 0, .55);
-    --heat-empty: #232326;
+    --heat-empty: #16263f;
   }
 }
 * { box-sizing: border-box; }
@@ -76,7 +81,7 @@ label.f { display: block; font-size: 12px; font-weight: 560; color: var(--muted)
 .app { display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: 100vh; }
 .side { position: sticky; top: 0; height: 100vh; padding: 20px 14px; display: flex; flex-direction: column; gap: 6px; border-right: 1px solid var(--line); background: var(--surface); }
 .brand { display: flex; align-items: center; gap: 11px; padding: 6px 10px 18px; }
-.brand .logo { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(145deg, #4c9aff, #0a6cff 55%, #004cc4); display: grid; place-items: center; color: #fff; box-shadow: 0 4px 12px rgba(10, 108, 255, .35); }
+.brand .logo { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(145deg, #2f6fc4, #013a7b 60%, #012a5c); display: grid; place-items: center; color: #fff; box-shadow: 0 4px 12px rgba(1, 58, 123, .35); }
 .brand b { display: block; font: 650 15px var(--font-display); letter-spacing: -.02em; }
 .brand span { font-size: 12px; color: var(--muted); }
 .nav { position: relative; display: flex; align-items: center; gap: 12px; padding: 0 12px; min-height: 40px; border-radius: 10px; color: var(--ink-2); font-weight: 520; transition: background .15s, color .15s; }
@@ -432,3 +437,53 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0
 .fr-ponta b { font: 700 18px var(--font-display); }
 .fr-ponta span { font-size: 12px; font-weight: 700; }
 @media (max-width: 899px) { .frente { margin-bottom: 70px; } }
+
+/* ---------- identidade American Pet ---------- */
+body { font-weight: 400; }
+h1, h2, h3, .kpi .val, .brand b { font-weight: 700; }
+h2 { color: var(--ink); }
+.nav.active, .nav[aria-current=page] { color: var(--accent); }
+button.primary, .btn.primary { background: var(--accent); }
+.pill { border-radius: 999px; }
+.callout { border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
+.kpi .glow { opacity: .5; }
+
+/* ---------- movimento ---------- */
+:root { --ease-out: cubic-bezier(.16, 1, .3, 1); --ease-spring: cubic-bezier(.34, 1.56, .64, 1); }
+button, .btn, .chip, .seg button, .nav, .row.click, .alvo, .gt, .fr-mod, .card.kpi { transition: transform .22s var(--ease-out), box-shadow .22s var(--ease-out), background-color .2s, border-color .2s, color .2s, filter .2s; }
+.card.kpi:hover, .row.click:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.alvo:hover, .gt:hover { transform: translateY(-2px); }
+.nav .ic { transition: transform .25s var(--ease-spring); }
+.nav:hover .ic { transform: translateX(3px) scale(1.08); }
+.nav.active .ic { transform: scale(1.08); }
+button.primary:active, .btn.primary:active { transform: scale(.96); }
+.sheet-item, .sheet { transition: transform .3s var(--ease-out), opacity .25s; }
+
+/* mapa: gôndolas entram em onda, seleção pulsa, selos de vencidos respiram */
+@keyframes gonEntra { from { opacity: 0; transform: translateY(10px) scale(.92); } to { opacity: 1; transform: none; } }
+.canvas.entra .gon { animation: gonEntra .7s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 45ms); }
+.canvas.entra .grid-bg { animation: fade .8s both; }
+@keyframes anel { 0% { outline-color: transparent; outline-offset: calc(16px * var(--inv, 1)); } 100% { outline-color: var(--accent); outline-offset: calc(3px * var(--inv, 1)); } }
+.gon.sel { animation: anel .55s var(--ease-out) both; }
+@keyframes halo { 0%, 100% { box-shadow: 0 0 0 0 rgba(203, 27, 54, .55); } 60% { box-shadow: 0 0 0 7px rgba(203, 27, 54, 0); } }
+.gon .tag { animation: halo 2.6s ease-in-out infinite; }
+.gon svg { transition: filter .25s; }
+.mp-cel rect { transition: fill .6s var(--ease-out), stroke .2s; }
+@keyframes cam-entra { from { stroke-dashoffset: 400; opacity: 0; } to { opacity: .9; } }
+.stage .fluxo:not(.edit) .cam-linha { animation: fluir 1.4s linear infinite, cam-entra .9s var(--ease-out) both; }
+
+/* vista de frente: módulos sobem em sequência quando muda a gôndola ou o lado */
+@keyframes frEntra { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+.frente.entra .fr-mod, .frente.entra .fr-ponta { animation: frEntra .55s var(--ease-out) both; }
+.frente.entra .fr-ponta:first-child { animation-delay: 0s; }
+.frente.entra .fr-mod:nth-child(2) { animation-delay: .05s; } .frente.entra .fr-mod:nth-child(3) { animation-delay: .1s; } .frente.entra .fr-mod:nth-child(4) { animation-delay: .15s; }
+.frente.entra .fr-mod:nth-child(5) { animation-delay: .2s; } .frente.entra .fr-mod:nth-child(6) { animation-delay: .25s; } .frente.entra .fr-mod:nth-child(7) { animation-delay: .3s; }
+.frente.entra .fr-ponta:last-child { animation-delay: .3s; }
+.fr-bar i { transform-origin: left; animation: barra .7s var(--ease-out) both; }
+@keyframes barra { from { transform: scaleX(0); } to { transform: none; } }
+
+/* respeita quem prefere menos movimento */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+  .cam-linha { animation: none !important; }
+}

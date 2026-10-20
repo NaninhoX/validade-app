@@ -264,7 +264,7 @@ async function acaoLote(e) {
 
 // ---------- movimentações ----------
 const TIPO_TXT = { IMPORT: 'Carga inicial', RECEBIMENTO: 'Recebimento', CONTAGEM: 'Contagem', AJUSTE: 'Ajuste', BAIXA: 'Baixa', ETIQUETA: 'Etiqueta de desconto', TRANSF_SAIDA: 'Transferência (saída)', TRANSF_ENTRADA: 'Transferência (entrada)' };
-const TIPO_COR = { IMPORT: '#8e8e93', RECEBIMENTO: '#22c55e', CONTAGEM: '#0a6cff', AJUSTE: '#f59e0b', BAIXA: '#e11d48', ETIQUETA: '#14b8a6', TRANSF_SAIDA: '#8b5cf6', TRANSF_ENTRADA: '#8b5cf6' };
+const TIPO_COR = { IMPORT: '#8e8e93', RECEBIMENTO: '#22c55e', CONTAGEM: '#2f7de1', AJUSTE: '#f59e0b', BAIXA: '#e11d48', ETIQUETA: '#14b8a6', TRANSF_SAIDA: '#8b5cf6', TRANSF_ENTRADA: '#8b5cf6' };
 PAGINAS.mov = async () => {
   const ev = await api('/api/eventos?limite=300');
   return `<div class="card reveal"><div class="tl">${ev.map((e, i) => `<div class="ev" style="--c:${TIPO_COR[e.tipo] || '#8e8e93'};${e.desfeito ? 'opacity:.45' : ''};${i < 12 ? `animation:rise .4s var(--ease) both;animation-delay:${i * 35}ms` : ''}">

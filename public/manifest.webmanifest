@@ -3,8 +3,8 @@
   "short_name": "Validade",
   "start_url": "/#/coletor",
   "display": "standalone",
-  "background_color": "#f5f6f8",
-  "theme_color": "#2563eb",
+  "background_color": "#f1f4f7",
+  "theme_color": "#013a7b",
   "icons": [
     {
       "src": "icon.svg",
