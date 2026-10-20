@@ -244,7 +244,7 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0
 .sheet { position: fixed; z-index: 45; left: 12px; right: 12px; bottom: calc(78px + env(safe-area-inset-bottom)); background: var(--raised); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-2); padding: 6px; animation: dlgin .28s var(--ease); max-width: 420px; margin: 0 auto; }
 .sheet-item { display: flex; align-items: center; justify-content: flex-start; gap: 14px; width: 100%; min-height: 52px; padding: 0 14px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font-size: 16px; font-weight: 560; text-align: left; }
 .sheet-item:hover, .sheet-item[aria-current=page] { background: var(--accent-soft); color: var(--accent); }
-.filters { display: grid; grid-template-columns: minmax(220px, 1.6fr) repeat(2, minmax(150px, .7fr)); gap: 10px; }
+.filters { display: grid; grid-template-columns: minmax(220px, 1.6fr) repeat(3, minmax(140px, .7fr)); gap: 10px; }
 .seg.scrollx { display: flex; max-width: 100%; overflow-x: auto; justify-self: stretch; }
 .seg.scrollx button { flex: none; }
 .addr { max-width: 100%; }
@@ -287,7 +287,7 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0
 @media (min-width: 901px) { .nav.mais, #voltar, .sheet, .sheet-back { display: none !important; } }
 @media (max-width: 700px) {
   .filters { grid-template-columns: 1fr 1fr; }
-  .filters .search { grid-column: 1 / -1; }
+  .filters .search, .filters #fpreco { grid-column: 1 / -1; }
   .faces { grid-template-columns: minmax(0, 1fr); }
   .legendbar .ramp { width: 110px; }
   .card { padding: 16px; }

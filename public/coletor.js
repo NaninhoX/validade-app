@@ -52,6 +52,7 @@ const Coletor = (() => {
   let modo = 'entrada', tipoEntrada = 'RECEBIMENTO', produtoAtual = null;
   let rondaItens = [], rondaFeitos = new Set(), bipados = new Set(), rondaEnd = '', rondaTs = 0, rondaChave = '';
   let turno = lsGet('turno', null), emTurno = -1;      // ronda do dia (guardada no aparelho até o fim do dia)
+  let VALMIN = 0, MINHAS = [];       // validade mínima no recebimento; gôndolas sob responsabilidade de quem está logado
   let CFG = null, ultimo = null, ultimoLote = null, ultimoTally = null, undoTimer, ac;
   const enter = {};
 
@@ -231,7 +232,8 @@ const Coletor = (() => {
     if (!iso) { el.innerHTML = '<span style="color:var(--bad)">data inválida</span>'; return null; }
     const d = diasAte(iso);
     const cor = d <= 0 ? 'var(--bad)' : d <= 30 ? '#f97316' : d <= 90 ? 'var(--warn)' : 'var(--good)';
-    el.innerHTML = `<b style="color:${cor}">${brData(iso)}</b> · ${d < 0 ? 'vencido há ' + (-d) + ' dias' : d === 0 ? 'vence hoje' : 'em ' + d + ' dias'}`;
+    el.innerHTML = `<b style="color:${cor}">${brData(iso)}</b> · ${d < 0 ? 'vencido há ' + (-d) + ' dias' : d === 0 ? 'vence hoje' : 'em ' + d + ' dias'}`
+      + (tipoEntrada === 'RECEBIMENTO' && VALMIN && d > 0 && d < VALMIN ? ` · <span style="color:var(--warn)">abaixo do mínimo de ${VALMIN} dias para receber — confira com o CD</span>` : '');
     return iso;
   }
 
@@ -285,14 +287,26 @@ const Coletor = (() => {
     const n = +lsGet('rondaN', 10);
     const b = $('#rGerar'); if (b) b.disabled = true;
     try {
-      const r = await api('/api/ronda?n=' + n);
+      const minhas = MINHAS.length && lsGet('rondaMinhas', true);
+      const r = await api('/api/ronda?n=' + n + (minhas ? '&gondolas=' + MINHAS.join(',') : ''));
       if (!r.enderecos.length) { toast('Nada para conferir hoje — todos os endereços já foram vistos', 'ok', 4000); return; }
-      turno = { dia: hojeLocal(), n: r.enderecos.length, criado: Date.now(), fim: null, cobertura: r.cobertura, resp: r.responsaveis || {},
+      turno = { dia: hojeLocal(), n: r.enderecos.length, criado: Date.now(), fim: null, cobertura: r.cobertura, resp: r.responsaveis || {}, minhas: !!minhas,
         itens: r.enderecos.map(e => ({ e: e.endereco, g: e.gondola, lotes: e.lotes, venc: e.vencidos, urg: e.urgentes, etq: e.etiquetar, dias: e.dias_sem, ok: e.valido, feito: false, pulou: false })),
         tally: novoTally() };
       salvaTurno(); emTurno = -1; desenhaDia();
     } catch (e) { toast(e.status ? e.message : 'Sem conexão para montar a ronda', 'bad', 4000); }
     finally { const x = $('#rGerar'); if (x) x.disabled = false; }
+  }
+
+  async function carregaMinhas() {
+    try {
+      const r = await api('/api/responsaveis');
+      MINHAS = Object.keys(r).filter(g => r[g].includes(nome())).map(Number).sort((a, b) => a - b);
+    } catch { /* sem rede: segue sem filtro */ }
+    const box = $('#rFiltro'); if (!box) return;
+    const so = lsGet('rondaMinhas', true);
+    box.innerHTML = MINHAS.length ? `<div class="f" style="margin-top:14px">Quais gôndolas?</div><div class="chips" style="margin-top:6px">
+      <button class="chip" data-minhas="1" aria-pressed="${so}">Só as minhas (${MINHAS.join(', ')})</button><button class="chip" data-minhas="0" aria-pressed="${!so}">Todas</button></div>` : '';
   }
 
   async function painelSemana() {
@@ -326,10 +340,11 @@ const Coletor = (() => {
         <p class="muted">O app escolhe os endereços onde há mais a perder ou mais tempo sem conferir, já na ordem de caminhada.</p>
         <div class="f" style="margin-top:14px">Quantos endereços hoje?</div>
         <div class="chips" id="rTam" style="margin-top:6px">${[5, 10, 20].map(x => `<button class="chip" data-n="${x}" aria-pressed="${x === n}">${x}</button>`).join('')}</div>
+        <div id="rFiltro"></div>
         <button id="rGerar" class="big primary" style="margin-top:16px">Gerar ronda de hoje</button>
         <div id="rPainel" style="margin-top:18px"></div>
         <button id="rManual" class="sm" style="margin-top:14px">Conferir um endereço específico</button></div>`;
-      painelSemana();
+      painelSemana(); carregaMinhas();
       return;
     }
     if (turno.fim) { box.innerHTML = resumoTurno(); return; }
@@ -344,7 +359,7 @@ const Coletor = (() => {
         <span class="achips">${t.feito ? '<span class="rc ok">conferido</span>' : chipsEnd(t)}</span>
         <span class="ach">${t.feito ? ico('check') : ico('chevron')}</span></button>`;
     }).join('');
-    box.innerHTML = `<div class="rd-head"><b>${feitos} de ${turno.n} endereços</b><span class="muted small">cobre ${turno.cobertura.toLocaleString('pt-BR')}% do valor em risco</span></div>
+    box.innerHTML = `<div class="rd-head"><b>${feitos} de ${turno.n} endereços</b><span class="muted small">cobre ${turno.cobertura.toLocaleString('pt-BR')}% do valor em risco${turno.minhas ? ' das suas gôndolas' : ''}</span></div>
       <div class="prog"><i style="width:${turno.n ? feitos / turno.n * 100 : 0}%"></i></div>
       ${cartoes}
       <div class="rd-foot">${feitos === turno.n ? '<button id="rEncerrar" class="big primary">Ver resultado da ronda</button>' : '<button id="rEncerrar" class="sm">Encerrar ronda agora</button>'}</div>`;
@@ -362,8 +377,7 @@ const Coletor = (() => {
       <p class="muted">${feitos} de ${turno.n} endereços em ${min} min${feitos ? ` · ${(min / feitos).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} min por endereço` : ''}</p>
       <div class="rs-grid">${cel(itens, 'itens conferidos')}${cel(`${t.fix + t.zero} <small>(${div.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%)</small>`, 'não bateram')}${cel(t.etq, 'etiquetas coladas')}${cel(t.ret, 'vencidos retirados')}${cel(t.mov, 'itens movidos')}${cel(t.semBip, 'sem leitura do código')}</div>
       ${leitura ? `<p class="small" style="margin:14px 0">${esc(leitura)}</p>` : ''}
-      <button id="rNova" class="big primary">Nova ronda</button>
-      <a class="sm" href="#/etiquetas" style="display:inline-block;margin-top:12px">Ver lista de etiquetas</a></div>`;
+      <button id="rNova" class="big primary">Nova ronda</button></div>`;
   }
 
   function encerraTurno() {
@@ -513,6 +527,7 @@ const Coletor = (() => {
   // ---------- ligação dos eventos ----------
   function ligar() {
     CFG = null;
+    api('/api/config').then(x => { CFG = x; VALMIN = x.validade_minima || 0; }).catch(() => {});
     $$('.cmodes button').forEach(b => b.addEventListener('click', () => setModo(b.dataset.modo)));
     $('#tReceber').addEventListener('click', () => setTipo('RECEBIMENTO'));
     $('#tContar').addEventListener('click', () => setTipo('CONTAGEM'));
@@ -587,6 +602,7 @@ const Coletor = (() => {
       const t = e.target.closest('button, a');
       if (!t) return;
       if (t.dataset.n) { lsSet('rondaN', +t.dataset.n); desenhaDia(); }
+      else if (t.dataset.minhas) { lsSet('rondaMinhas', t.dataset.minhas === '1'); $$('#rFiltro button').forEach(x => x.setAttribute('aria-pressed', x === t)); }
       else if (t.id === 'rGerar') gerarTurno();
       else if (t.id === 'rManual') { emTurno = -1; mostraRonda('escolha'); }
       else if (t.id === 'rNova') { turno = null; salvaTurno(); desenhaDia(); }

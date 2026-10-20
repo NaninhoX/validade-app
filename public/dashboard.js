@@ -5,7 +5,6 @@ const ROTAS = {
   mapa: { titulo: 'Mapa da loja', sub: () => 'Calor por gôndola, lado e prateleira' },
   coletor: { titulo: 'Coletor', sub: () => 'Receber, conferir, dar baixa e buscar' },
   estoque: { titulo: 'Estoque', sub: () => 'Todos os lotes em loja' },
-  etiquetas: { titulo: 'Etiquetas', sub: () => 'Itens em faixa de desconto' },
   mov: { titulo: 'Movimentações', sub: () => 'Tudo que o coletor e o painel registraram' },
   config: { titulo: 'Configurações', sub: () => 'Regras, equipe e dados' },
 };
@@ -41,7 +40,7 @@ async function enviar(body, msg) {
 // ---------- casca ----------
 function pintaNav(nome) {
   $$('.nav[data-r], .sheet-item[data-r]').forEach(a => { if (a.dataset.r === nome) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
-  const sec = ['etiquetas', 'mov', 'config'].includes(nome);
+  const sec = ['mov', 'config'].includes(nome);
   const mb = $('#maisBtn'); if (sec) mb.setAttribute('aria-current', 'page'); else mb.removeAttribute('aria-current');
 }
 function fechaMais() { $('#maisSheet').hidden = true; $('#maisBack').hidden = true; $('#maisBtn').setAttribute('aria-expanded', 'false'); }
@@ -108,7 +107,7 @@ function muroBarras() {
 
 const PAGINAS = {};
 PAGINAS.geral = async () => {
-  const [res, fila, mapa, cfg] = await Promise.all([carregaResumo(), api('/api/fila?limite=8'), api('/api/mapa'), api('/api/config')]);
+  const [res, fila, mapa, cfg, placar] = await Promise.all([carregaResumo(), api('/api/fila?limite=8'), api('/api/mapa'), api('/api/config'), S.admin ? api('/api/placar').catch(() => []) : []]);
   S.cfg = cfg;
   const t = res.totais, por = res.por_status, q = res.qualidade;
   MURO = { dados: res.muro, cor: por[0].cor };
@@ -150,9 +149,14 @@ PAGINAS.geral = async () => {
   <div class="grid cols-2" style="margin-top:18px">
     <div class="card reveal" style="--i:9"><div class="head"><h2>Marcas com maior perda potencial</h2></div>
       ${(() => { const m = Math.max(1, ...res.marcas.map(x => x.perda)); return res.marcas.slice(0, 7).map(x => `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${esc(x.marca)}</span><b class="num">${brl(x.perda)}</b></div><div class="meter" style="margin-top:6px"><i style="width:${x.perda / m * 100}%"></i></div></div>`).join(''); })()}</div>
+    ${placar.length ? `<div class="card reveal" style="--i:9"><div class="head"><div><h2>Responsáveis</h2><div class="sub">Só administradores veem · ronda dos últimos 7 dias</div></div><a href="#/config" class="small">Editar →</a></div>
+      ${placar.map(p => `<div class="row" style="grid-template-columns:auto minmax(0,1fr) auto"><div class="avatar" style="width:34px;height:34px">${esc(p.nome.slice(0, 1))}</div>
+        <div style="min-width:0"><div class="pname">${esc((n => n.charAt(0) + n.slice(1).toLowerCase())(p.nome))} <span class="xs muted">gôndola${p.gondolas.length > 1 ? 's' : ''} ${p.gondolas.join(', ')}</span></div>
+        <div class="xs muted">${p.vencidos ? `<b style="color:var(--bad)">${p.vencidos} vencido${p.vencidos > 1 ? 's' : ''}</b> · ` : ''}${p.nunca_contadas ? p.nunca_contadas + ' nunca contada' + (p.nunca_contadas > 1 ? 's' : '') : p.pior_dias_sem_ronda !== null ? 'pior: ronda há ' + p.pior_dias_sem_ronda + ' d' : 'sem estoque'} · ${p.ronda7_lotes ? `${p.ronda7_lotes} conferidos, ${String(p.ronda7_divergencia).replace('.', ',')}% não bateram` : 'sem ronda na semana'}</div></div>
+        <b class="num">${brlK(p.risco)}</b></div>`).join('')}</div>` : ''}
     <div class="card reveal" style="--i:10"><div class="head"><h2>Qualidade dos dados</h2></div>
-      ${[[q.vencidos_em_estoque, 'lotes vencidos ainda no estoque', 'retirar e dar baixa'], [q.endereco_fora_padrao, 'lotes com endereço fora do padrão', q.enderecos_fora_padrao.map(e => e.endereco).join(', ') || ''], [q.sem_preco, 'lotes sem preço', 'a perda não é calculada'], [q.sem_endereco, 'lotes sem endereço', ''], [q.sem_cadastro, 'lotes de EAN sem cadastro', '']]
-        .map(([n, a, b]) => `<div class="row" style="grid-template-columns:auto 1fr;opacity:${n ? 1 : .5}"><b class="num" style="font-size:20px;min-width:38px;color:${n ? 'var(--warn)' : 'var(--good)'}">${n}</b><div><div>${a}</div>${b && n ? `<div class="xs muted">${esc(b)}</div>` : ''}</div></div>`).join('')}</div>
+      ${[[q.vencidos_em_estoque, 'lotes vencidos ainda no estoque', 'retirar e dar baixa'], [q.endereco_fora_padrao, 'lotes com endereço fora do padrão', q.enderecos_fora_padrao.map(e => e.endereco).join(', ') || ''], [q.produtos_sem_preco, q.produtos_sem_preco === 1 ? 'produto em estoque sem preço' : 'produtos em estoque sem preço', 'toque para informar no Estoque', '#/estoque?sempreco=1'], [q.sem_endereco, 'lotes sem endereço', ''], [q.sem_cadastro, 'lotes de EAN sem cadastro', '']]
+        .map(([n, a, b, link]) => `<${link && n ? `a href="${link}"` : 'div'} class="row${link && n ? ' click' : ''}" style="grid-template-columns:auto 1fr;color:inherit;opacity:${n ? 1 : .5}"><b class="num" style="font-size:20px;min-width:38px;color:${n ? 'var(--warn)' : 'var(--good)'}">${n}</b><div><div>${a}</div>${b && n ? `<div class="xs muted">${esc(b)}</div>` : ''}</div></${link && n ? 'a' : 'div'}>`).join('')}</div>
   </div>`;
 };
 PAGINAS.geral.ligar = () => {
@@ -179,7 +183,7 @@ PAGINAS.mapa = async () => { await Mapa.render(view, { admin: S.admin }); return
 // ---------- estoque ----------
 const E = { q: '', status: '', gondola: '', marca: '', offset: 0, total: 0, marcas: [] };
 PAGINAS.estoque = async q => {
-  E.q = q.get('q') || ''; E.status = q.get('status') || ''; E.gondola = q.get('gondola') || ''; E.marca = q.get('marca') || '';
+  E.q = q.get('q') || ''; E.status = q.get('status') || ''; E.gondola = q.get('gondola') || ''; E.marca = q.get('marca') || ''; E.sempreco = q.get('sempreco') === '1' ? '1' : '';
   const [res, cfg, todas] = await Promise.all([S.resumo ? Promise.resolve(S.resumo) : carregaResumo(), S.cfg ? Promise.resolve(S.cfg) : api('/api/config'), api('/api/lotes?limite=1')]);
   S.cfg = cfg; E.marcas = todas.marcas;
   const gond = Array.from({ length: 19 }, (_, i) => i + 1);
@@ -188,6 +192,7 @@ PAGINAS.estoque = async q => {
       <div class="search"><span id="ss"></span><input id="fq" type="search" placeholder="Buscar produto, EAN, lote ou endereço" value="${esc(E.q)}" aria-label="Buscar"></div>
       <select id="fgond" aria-label="Gôndola"><option value="">Todas as gôndolas</option>${gond.map(g => `<option ${E.gondola == g ? 'selected' : ''} value="${g}">Gôndola ${g}</option>`).join('')}</select>
       <select id="fmarca" aria-label="Marca"><option value="">Todas as marcas</option>${E.marcas.map(m => `<option ${E.marca === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
+      <select id="fpreco" aria-label="Preço"><option value="">Com e sem preço</option><option value="1" ${E.sempreco ? 'selected' : ''}>Só sem preço</option></select>
     </div>
     <div class="seg scrollx reveal" style="--i:1" id="fst"><button data-st="" aria-pressed="${E.status === ''}">Todos</button>${res.por_status.map(s => `<button data-st="${esc(s.status)}" aria-pressed="${E.status === s.status}">${esc(s.status)} <span class="faint">${s.lotes}</span></button>`).join('')}</div>
     <div class="card flush reveal" style="--i:2"><div class="head"><h2 id="estTit">Estoque</h2><span class="sub" id="estInfo"></span></div>
@@ -202,6 +207,7 @@ PAGINAS.estoque.ligar = () => {
   $('#fq').addEventListener('input', e => { clearTimeout(deb); deb = setTimeout(() => { E.q = e.target.value.trim(); recarrega(); }, 250); });
   $('#fgond').addEventListener('change', e => { E.gondola = e.target.value; recarrega(); });
   $('#fmarca').addEventListener('change', e => { E.marca = e.target.value; recarrega(); });
+  $('#fpreco').addEventListener('change', e => { E.sempreco = e.target.value; recarrega(); });
   $('#fst').addEventListener('click', e => { const b = e.target.closest('button[data-st]'); if (!b) return; E.status = b.dataset.st; $$('#fst button').forEach(x => x.setAttribute('aria-pressed', x === b)); recarrega(); });
   $('#maisEst').addEventListener('click', () => carregaEstoque(false));
   $('#est').addEventListener('click', acaoLote);
@@ -211,14 +217,14 @@ PAGINAS.estoque.ligar = () => {
 async function carregaEstoque(reset) {
   if (reset) { E.offset = 0; $('#est').innerHTML = ''; }
   const p = new URLSearchParams({ offset: E.offset, limite: 100 });
-  for (const k of ['q', 'status', 'gondola', 'marca']) if (E[k]) p.set(k, E[k]);
+  for (const k of ['q', 'status', 'gondola', 'marca', 'sempreco']) if (E[k]) p.set(k, E[k]);
   const r = await api('/api/lotes?' + p);
   E.total = r.total;
   $('#est').insertAdjacentHTML('beforeend', r.itens.map((l, i) => `
     <tr style="animation:rise .35s var(--ease) both;animation-delay:${Math.min(i, 14) * 25}ms"><td class="c-st">${pill(l.status, l.cor)}</td>
     <td class="c-pr"><div class="pname">${esc(l.nome || '(sem cadastro)')}</div><div class="xs muted">${esc(l.ean)}${l.marca ? ' · ' + esc(l.marca) : ''}</div></td>
     <td class="c-lt" data-l="Lote">${esc(l.lote)}</td><td class="c-qt num" data-l="Qtd">${l.qtd}</td><td class="c-vl nowrap" data-l="Validade">${brData(l.validade)}</td><td class="c-dd num" data-l="Dias">${l.dias}</td><td class="c-en">${addr(l.endereco, l.endereco_ok)}</td>
-    <td class="c-pc num" data-l="Preço">${brl(l.preco)}</td><td class="c-of num">${l.desconto ? `<b>${l.desconto}%</b>${l.preco_desc !== null ? `<div class="xs muted">${brl(l.preco_desc)}</div>` : ''}` : '—'}</td>
+    <td class="c-pc num" data-l="Preço">${l.preco === null || l.preco === undefined ? `<button class="sm" data-act="preco" data-id="${l.id}">＋ Preço</button>` : brl(l.preco)}</td><td class="c-of num">${l.desconto ? `<b>${l.desconto}%</b>${l.preco_desc !== null ? `<div class="xs muted">${brl(l.preco_desc)}</div>` : ''}` : '—'}</td>
     <td class="c-ac nowrap"><button class="icon subtle sm" data-act="baixa" data-id="${l.id}" title="Dar baixa">${ico('minus')}</button><button class="icon subtle sm" data-act="ajuste" data-id="${l.id}" title="Ajustar quantidade">${ico('edit')}</button><button class="icon subtle sm" data-act="mover" data-id="${l.id}" title="Mover de endereço">${ico('move')}</button></td></tr>`).join('')|| (reset ? '<tr><td colspan="10" class="muted" style="padding:32px;text-align:center">Nenhum lote com esses filtros.</td></tr>' : ''));
   E.offset += r.itens.length;
   $('#estInfo').textContent = `${int(Math.min(E.offset, E.total))} de ${int(E.total)} lotes`;
@@ -232,7 +238,13 @@ async function acaoLote(e) {
   const l = window.__lotes[b.dataset.id];
   const nome = `${l.nome || l.ean} · lote ${l.lote} · ${l.endereco || 'sem endereço'}`;
   let ok = false;
-  if (b.dataset.act === 'baixa') {
+  if (b.dataset.act === 'preco') {
+    const d = await dialogo({ titulo: 'Preço de venda', sub: l.nome || l.ean, campos: [{ id: 'p', label: 'Preço (R$)', inputmode: 'decimal' }] });
+    if (!d) return;
+    if (!/^d+([.,]d{1,2})?$/.test(d.p.trim())) return toast('Preço inválido (ex.: 39,90)', 'bad');
+    try { await api('/api/produtos', { method: 'POST', body: { ean: l.ean, nome: l.nome || l.ean, preco: d.p.trim().replace(',', '.') } }); toast('Preço salvo', 'ok'); ok = true; }
+    catch (er) { return toast(er.message, 'bad', 5000); }
+  } else if (b.dataset.act === 'baixa') {
     const d = await dialogo({ titulo: 'Dar baixa', sub: `${nome} — saldo ${l.qtd}`, campos: [
       { id: 'qtd', label: 'Quantidade', tipo: 'number', min: 1, valor: l.qtd, inputmode: 'numeric' },
       { id: 'motivo', label: 'Motivo', tipo: 'select', opcoes: l.dias <= 0 ? ['RMA', ...S.cfg.motivos_baixa.filter(x => x !== 'RMA')] : S.cfg.motivos_baixa }] });
@@ -249,16 +261,6 @@ async function acaoLote(e) {
   if (ok) { carregaResumo(); const n = E.offset; E.offset = 0; $('#est').innerHTML = ''; do { await carregaEstoque(false); } while (E.offset < Math.min(n, E.total) && E.offset > 0); }
 }
 
-// ---------- etiquetas ----------
-PAGINAS.etiquetas = async () => {
-  const g = await api('/api/etiquetas');
-  return `<div class="editbar noprint" style="justify-content:space-between;margin-bottom:16px"><div class="callout" style="flex:1">${ico('info')}<div>Itens dentro da regra de desconto vigente (não inclui vencidos — esses saem da loja). Percentuais vêm de Configurações.</div></div><button id="imprimir">${ico('printer')} Imprimir</button></div>
-  ${g.length ? g.map((gr, gi) => `<div class="reveal" style="--i:${gi};margin-bottom:26px"><h2 style="margin-bottom:12px;font-size:18px">Desconto de ${gr.desconto}% <span class="muted" style="font-weight:500">· ${gr.itens.length} lotes</span></h2>
-    <div class="etq-grid">${gr.itens.map(i => `<div class="etq"><div class="xs muted">${addr(i.endereco, i.endereco_ok)} lote ${esc(i.lote)}</div><div class="pname" style="margin:8px 0">${esc(i.nome || '')}</div>
-      ${i.preco_desc !== null ? `<div><s>${brl(i.preco)}</s> <span class="price">${brl(i.preco_desc)}</span></div>` : '<div style="color:var(--bad)">sem preço cadastrado</div>'}
-      <div class="xs muted" style="margin-top:6px">vence ${brData(i.validade)} (${i.dias} d) · ${i.qtd} un</div></div>`).join('')}</div></div>`).join('') : '<div class="card"><p class="muted">Nenhum item em faixa de desconto agora.</p></div>'}`;
-};
-PAGINAS.etiquetas.ligar = () => { const b = $('#imprimir'); if (b) b.addEventListener('click', () => window.print()); };
 
 // ---------- movimentações ----------
 const TIPO_TXT = { IMPORT: 'Carga inicial', RECEBIMENTO: 'Recebimento', CONTAGEM: 'Contagem', AJUSTE: 'Ajuste', BAIXA: 'Baixa', ETIQUETA: 'Etiqueta de desconto', TRANSF_SAIDA: 'Transferência (saída)', TRANSF_ENTRADA: 'Transferência (entrada)' };
@@ -290,12 +292,13 @@ PAGINAS.config = async () => {
       <div style="margin-top:14px"><button class="primary" id="salvaResp">${ico('check')} Salvar responsáveis</button></div></div>`;
   return `<div class="grid cols-2" style="align-items:start">
     <div class="grid">
-      <div class="card reveal"><div class="head"><div><h2>Regras de desconto</h2><div class="sub">Uma regra só para o painel, o mapa, as etiquetas e o coletor</div></div></div>
+      <div class="card reveal"><div class="head"><div><h2>Regras de desconto</h2><div class="sub">Uma regra só para o painel, o mapa e o coletor</div></div></div>
         <div class="callout" style="margin-bottom:14px">${ico('info')}<div><b>Prevenção vigente:</b> até 90 dias, ração (seca e úmida) 20% e demais itens 30%; até 30 dias, tudo 50%. Não existe mais a faixa de 10%.</div></div>
         <div class="scroll"><table><thead><tr><th>Status</th><th>Até (dias)</th><th>Geral %</th><th>Ração %</th></tr></thead><tbody id="faixas">${cfg.faixas.map((f, i) => `<tr><td>${pill(f.status, f.cor)}</td>
           <td>${f.ate === null ? '<span class="muted">acima</span>' : `<input type="number" style="width:90px" data-i="${i}" data-k="ate" value="${f.ate}" ${S.admin ? '' : 'disabled'}>`}</td>
           <td><input type="number" min="0" max="100" style="width:90px" data-i="${i}" data-k="desconto" value="${f.desconto}" ${S.admin ? '' : 'disabled'}></td>
           <td><input type="number" min="0" max="100" style="width:90px" data-i="${i}" data-k="desconto_racao" value="${f.desconto_racao}" ${S.admin ? '' : 'disabled'}></td></tr>`).join('')}</tbody></table></div>
+        <label class="small" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px">Avisar no recebimento quando o lote chegar com menos de <input type="number" id="valMin" min="0" max="365" style="width:90px" value="${cfg.validade_minima ?? 90}" ${S.admin ? '' : 'disabled'}> dias <span class="xs muted">(0 = não avisar)</span></label>
         ${S.admin ? `<div style="margin-top:14px"><button class="primary" id="salvaFaixas">${ico('check')} Salvar regras</button></div>` : '<p class="small muted" style="margin-top:12px">Só administradores podem alterar.</p>'}</div>
       <div class="card reveal" style="--i:1"><div class="head"><h2>Dados</h2></div>
         <div class="editbar"><a class="btn" href="/api/export.xlsx" download>${ico('download')} Exportar .xlsx</a></div>
@@ -322,7 +325,7 @@ PAGINAS.config.ligar = () => {
   if (sf) sf.addEventListener('click', async () => {
     const faixas = S.cfg.faixas.map(f => ({ ...f }));
     $$('#faixas input').forEach(i => { faixas[+i.dataset.i][i.dataset.k] = Number(i.value); });
-    try { await api('/api/config', { method: 'PUT', body: { faixas } }); toast('Regras salvas', 'ok'); S.resumo = null; rota(); } catch (e) { toast(e.message, 'bad', 5000); }
+    try { await api('/api/config', { method: 'PUT', body: { faixas, validade_minima: Number($('#valMin').value) } }); toast('Regras salvas', 'ok'); S.resumo = null; rota(); } catch (e) { toast(e.message, 'bad', 5000); }
   });
   const imp = $('#importar');
   if (imp) imp.addEventListener('click', async () => {
@@ -353,8 +356,8 @@ PAGINAS.config.ligar = () => {
 
 // ---------- início ----------
 (async () => {
-  for (const [id, ic] of [['logo', 'box'], ['i-geral', 'grid'], ['i-mapa', 'map'], ['i-estoque', 'layers'], ['i-etiquetas', 'tag'], ['i-mov', 'clock'], ['i-config', 'sliders'], ['i-coletor', 'scan'], ['i-mais', 'more'],
-    ['m-etiquetas', 'tag'], ['m-mov', 'clock'], ['m-config', 'sliders'], ['m-export', 'download'], ['m-sair', 'logout']]) $('#' + id).innerHTML = ico(ic, 22);
+  for (const [id, ic] of [['logo', 'box'], ['i-geral', 'grid'], ['i-mapa', 'map'], ['i-estoque', 'layers'], ['i-mov', 'clock'], ['i-config', 'sliders'], ['i-coletor', 'scan'], ['i-mais', 'more'],
+    ['m-mov', 'clock'], ['m-config', 'sliders'], ['m-export', 'download'], ['m-sair', 'logout']]) $('#' + id).innerHTML = ico(ic, 22);
   $('#atualiza').innerHTML = ico('refresh');
   $('#export').innerHTML = ico('download') + ' Exportar';
   $('#voltar').innerHTML = ico('chevron');

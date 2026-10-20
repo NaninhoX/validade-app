@@ -295,3 +295,37 @@ test('baixa: RMA substitui Vencido e RMA Fornecedor', async () => {
   await S.leitura(db, { tipo: 'BAIXA', lote_id: r.lote.id, qtd: 3, motivo: 'RMA', operador: 'TESTE' });
   await assert.rejects(S.leitura(db, { tipo: 'BAIXA', ...base, validade: mais(-2), qtd: 1, motivo: 'Vencido' }), /motivo/);
 });
+
+test('ronda: só as minhas gôndolas', async () => {
+  const db = await novoDb();
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, endereco: '3-A-1', validade: mais(10) });
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, endereco: '7-B-2', validade: mais(10) });
+  assert.deepEqual((await S.ronda(db, { n: 5, gondolas: ['7'] })).enderecos.map(e => e.endereco), ['7-B-2']);
+  assert.equal((await S.ronda(db, { n: 5, gondolas: [] })).enderecos.length, 2);
+});
+
+test('recebimento avisa lote com validade curta; o mínimo é configurável', async () => {
+  const db = await novoDb();
+  assert.equal(await S.getValidadeMinima(db), 90);
+  const r = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, validade: mais(40) });
+  assert.ok(r.avisos.some(a => /mínimo da loja: 90/.test(a)));
+  const ok = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, lote: 'L2', validade: mais(200) });
+  assert.ok(!ok.avisos.some(a => /mínimo/.test(a)));
+  await S.setValidadeMinima(db, 0);
+  const off = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, lote: 'L3', validade: mais(40) });
+  assert.ok(!off.avisos.some(a => /mínimo/.test(a)));
+  await assert.rejects(S.setValidadeMinima(db, 400), /0 a 365/);
+});
+
+test('placar por responsável e produtos em estoque sem preço', async () => {
+  const db = await novoDb();
+  await A.salvarUsuario(db, { nome: 'DAVI', pin: '123456', papel: 'operador' });
+  await S.setResponsaveis(db, { 3: ['DAVI'], 9: ['DAVI'] });
+  const v = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, endereco: '3-A-1', validade: mais(-1) });
+  await S.leitura(db, { tipo: 'CONTAGEM', lote_id: v.lote.id, qtd: 2, motivo: 'Ronda: corrigido', operador: 'DAVI' });
+  const [p] = await S.placar(db);
+  assert.deepEqual([p.nome, p.gondolas, p.vencidos, p.lotes, p.ronda7_lotes, p.ronda7_divergencia], ['DAVI', [3, 9], 1, 1, 1, 100]);
+  await S.upsertProduto(db, { ean: '7891000000031', nome: 'SEM PRECO' });
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 1, ...base, ean: '7891000000031', lote: 'Z', validade: mais(200) });
+  assert.equal((await S.resumo(db)).qualidade.produtos_sem_preco, 1);
+});
