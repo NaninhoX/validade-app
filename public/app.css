@@ -359,3 +359,6 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0
 .nomes-mod { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
 .nomes-mod input { min-height: 38px; font-size: 13px; }
 @media (max-width: 700px) { .pal { grid-template-columns: 30px repeat(4, minmax(0, 1fr)) 38px; } .pal > input { grid-column: 2 / -2; } }
+.nova-g { border: 1px dashed var(--line-2); border-radius: 12px; padding: 12px; }
+.nova-g > summary { cursor: pointer; font-weight: 600; display: flex; gap: 8px; align-items: center; min-height: 32px; list-style: none; }
+.nova-g > summary::-webkit-details-marker { display: none; }

@@ -103,8 +103,9 @@ const Coletor = (() => {
     <div class="seg" style="width:100%;margin-bottom:16px" role="group" aria-label="Tipo de entrada">
       <button id="tReceber" aria-pressed="true" style="flex:1;min-height:40px">Receber (soma)</button>
       <button id="tContar" aria-pressed="false" style="flex:1;min-height:40px">Contar (define)</button>
+      <button id="tPreco" aria-pressed="false" style="flex:1;min-height:40px">Só preço</button>
     </div>
-    <div class="f-wrap"><label class="f" for="end"><span class="step">1</span>Endereço</label>
+    <div class="f-wrap fx"><label class="f" for="end"><span class="step">1</span>Endereço</label>
       <div class="in"><input id="end" list="listaEnd" autocomplete="off" autocapitalize="characters" placeholder="ex.: 1-B-3"><button class="cam" data-cam="end" aria-label="Ler etiqueta do endereço">${ico('camera', 24)}</button></div><datalist id="listaEnd"></datalist>
       <div id="endChips" aria-label="Atalhos de endereço" style="display:grid;gap:8px;margin-top:10px"></div>
       <div class="xs muted" id="endDesc" style="margin-top:8px;min-height:18px"></div></div>
@@ -115,12 +116,12 @@ const Coletor = (() => {
       <div class="f-wrap"><label class="f" for="cNome">Produto novo — nome</label><input id="cNome" autocomplete="off"></div>
       <div class="f-wrap"><label class="f" for="cPreco">Preço (opcional)</label><input id="cPreco" inputmode="decimal" autocomplete="off"></div>
     </div>
-    <div class="f-wrap" id="precoWrap" hidden><label class="f" for="pPreco">Preço de venda <span class="muted">(este produto ainda não tem preço)</span></label>
+    <div class="f-wrap" id="precoWrap" hidden><label class="f" for="pPreco">Preço de venda <span class="muted" id="pPrecoRot">(este produto ainda não tem preço)</span></label>
       <input id="pPreco" inputmode="decimal" autocomplete="off" placeholder="ex.: 39,90"></div>
-    <div class="f-wrap"><label class="f" for="lote"><span class="step">3</span>Lote</label><input id="lote" autocomplete="off" autocapitalize="characters"></div>
-    <div class="f-wrap"><label class="f" for="val"><span class="step">4</span>Validade (DDMMAA, DD/MM/AAAA ou MM/AA)</label><input id="val" inputmode="numeric" autocomplete="off" placeholder="ex.: 150327"></div>
-    <div class="prev" id="prev" aria-live="polite"></div>
-    <div class="f-wrap"><label class="f" for="qtd"><span class="step">5</span>Quantidade</label><input id="qtd" inputmode="numeric" autocomplete="off"></div>
+    <div class="f-wrap fx"><label class="f" for="lote"><span class="step">3</span>Lote</label><input id="lote" autocomplete="off" autocapitalize="characters"></div>
+    <div class="f-wrap fx"><label class="f" for="val"><span class="step">4</span>Validade (DDMMAA, DD/MM/AAAA ou MM/AA)</label><input id="val" inputmode="numeric" autocomplete="off" placeholder="ex.: 150327"></div>
+    <div class="prev fx" id="prev" aria-live="polite"></div>
+    <div class="f-wrap fx"><label class="f" for="qtd"><span class="step">5</span>Quantidade</label><input id="qtd" inputmode="numeric" autocomplete="off"></div>
     <div id="avisos"></div>
     <button id="salvar" class="primary big">Salvar</button>
   </section>
@@ -191,14 +192,52 @@ const Coletor = (() => {
     $('#endDesc').innerHTML = !v.trim() ? 'Gôndola-lado-prateleira. Ex.: 1-B-3 (lado B, prateleira 3) · 1-F ou 1-C = ponta'
       : p.valido ? `<span style="color:var(--good)">✓</span> ${esc(descEndereco(v))}` : q ? `Falta o lado (${ladosDe(q.g).join(', ')}) e a prateleira (1 a 5)` : '<span style="color:var(--bad)">Endereço fora do padrão</span>';
     const linha = (rot, itens) => `<div class="chips" style="margin:0;width:100%;align-items:center"><span class="small muted" style="width:72px">${rot}</span>${itens}</div>`;
-    $('#endChips').innerHTML = q && +q.g === 19 ? '<div class="xs muted">Sacaria: use 19 ou o pallet, ex.: 19-P1</div>' :
+    $('#endChips').innerHTML = q && AREAS.includes(+q.g) ? '<div class="xs muted">Sacaria: use 19 ou o pallet, ex.: 19-P1</div>' :
       linha('Lado', ladosDe(q?.g).map(l => `<button class="chip sq" data-lado="${l}" aria-pressed="${q?.lado === l}" title="${LADO_TXT[l]}">${l}</button>`).join('')) +
       linha('Prateleira', [1, 2, 3, 4, 5].map(n => `<button class="chip sq" data-nivel="${n}" aria-pressed="${q?.nivel === n}">${n}</button>`).join(''));
     lsSet('ultimoEnd', v);
   }
 
   // ---------- entrada ----------
-  function setTipo(t) { tipoEntrada = t; $('#tReceber').setAttribute('aria-pressed', t === 'RECEBIMENTO'); $('#tContar').setAttribute('aria-pressed', t === 'CONTAGEM'); }
+  let precosSalvos = 0;
+  function setTipo(t) {
+    tipoEntrada = t;
+    $('#tReceber').setAttribute('aria-pressed', t === 'RECEBIMENTO'); $('#tContar').setAttribute('aria-pressed', t === 'CONTAGEM'); $('#tPreco').setAttribute('aria-pressed', t === 'PRECO');
+    $$('.fx').forEach(e => { e.hidden = t === 'PRECO'; });                      // "Só preço": só EAN e preço
+    $('#salvar').textContent = t === 'PRECO' ? 'Salvar preço' + (precosSalvos ? ' · ' + precosSalvos + (precosSalvos === 1 ? ' feito' : ' feitos') : '') : 'Salvar';
+    if (produtoAtual && produtoAtual.produto && !produtoAtual.offline) mostraPrecoCampo(produtoAtual.produto);
+  }
+
+  // Campo de preço: sempre visível ao contar e no modo "Só preço" (já preenchido com o atual); ao receber, só se o produto não tem preço.
+  function mostraPrecoCampo(p) {
+    const mostra = tipoEntrada !== 'RECEBIMENTO' || !p.preco;
+    $('#precoWrap').hidden = !mostra;
+    if (mostra) { $('#pPreco').value = p.preco ? String(p.preco).replace('.', ',') : ''; $('#pPrecoRot').textContent = p.preco ? '(atual: ' + brl(p.preco) + ')' : '(este produto ainda não tem preço)'; }
+    return mostra;
+  }
+
+  async function salvarPreco() {
+    const ean = $('#ean').value.replace(/\D/g, '');
+    if (!ean) { toast('Bipe o produto', 'bad'); beep(false); return $('#ean').focus(); }
+    if (!produtoAtual) { await buscaProdutoEntrada(); if (!produtoAtual) return; }
+    let nome, preco;
+    if (!produtoAtual.cadastrado && !produtoAtual.offline) {
+      nome = $('#cNome').value.trim(); preco = $('#cPreco').value.trim();
+      if (!nome) { toast('Informe o nome do produto novo', 'bad'); beep(false); return $('#cNome').focus(); }
+    } else if (produtoAtual.produto) { nome = produtoAtual.produto.nome; preco = $('#pPreco').value.trim(); }
+    else { toast('Sem conexão: o preço não foi salvo', 'bad', 4000); return; }
+    if (!/^\d+([.,]\d{1,2})?$/.test(preco)) { toast('Preço inválido (ex.: 39,90)', 'bad'); beep(false); return ($('#pPreco').hidden ? $('#cPreco') : $('#pPreco')).focus(); }
+    $('#salvar').disabled = true;
+    try {
+      await api('/api/produtos', { method: 'POST', body: { ean, nome, preco: preco.replace(',', '.') } });
+      beep(true); precosSalvos++;
+      toast('R$ ' + preco + ' · ' + nome, 'ok', 2200);
+      ['ean', 'cNome', 'cPreco', 'pPreco'].forEach(id => { $('#' + id).value = ''; });
+      $('#prod').hidden = true; $('#cadRapido').hidden = true; $('#precoWrap').hidden = true; produtoAtual = null;
+      setTipo('PRECO'); $('#ean').focus();
+    } catch (e) { beep(false); toast(e.status ? e.message : 'Sem conexão: o preço não foi salvo', 'bad', 5000); }
+    finally { const b = $('#salvar'); if (b) b.disabled = false; }
+  }
 
   async function buscaProdutoEntrada() {
     const ean = $('#ean').value.trim();
@@ -220,7 +259,7 @@ const Coletor = (() => {
       box.hidden = false;
       box.innerHTML = `<b>${esc(p.nome)}</b><span class="muted small">${p.preco ? brl(p.preco) : 'sem preço'}${p.marca ? ' · ' + esc(p.marca) : ''}</span>` +
         (produtoAtual.lotes.length ? `<div class="chips">${produtoAtual.lotes.map(l => `<button class="lotechip" data-lote="${esc(l.lote)}" data-val="${l.validade}" data-end="${esc(l.endereco)}">${esc(l.lote)} · ${brData(l.validade)} · ${l.qtd}un · ${esc(l.endereco || 'sem end.')}</button>`).join('')}</div>` : '<span class="muted small">Nenhum lote em estoque.</span>');
-      if (!p.preco) { $('#precoWrap').hidden = false; $('#pPreco').focus(); return; }
+      if (mostraPrecoCampo(p) && (tipoEntrada === 'PRECO' || !p.preco)) { $('#pPreco').focus(); return; }
     }
     $('#lote').focus();
   }
@@ -238,6 +277,7 @@ const Coletor = (() => {
   }
 
   async function salvarEntrada() {
+    if (tipoEntrada === 'PRECO') return salvarPreco();
     const ean = $('#ean').value.replace(/\D/g, ''), endereco = $('#end').value.trim().toUpperCase();
     const validade = previaValidade(), qtd = $('#qtd').value.trim();
     if (!parseEndereco(endereco).valido) { toast('Endereço fora do padrão (ex.: 1-B-3)', 'bad'); beep(false); return $('#end').focus(); }
@@ -290,7 +330,7 @@ const Coletor = (() => {
       const minhas = MINHAS.length && lsGet('rondaMinhas', true);
       const r = await api('/api/ronda?n=' + n + (minhas ? '&setores=' + MINHAS.join(',') : ''));
       if (!r.enderecos.length) { toast('Nada para conferir hoje — todos os endereços já foram vistos', 'ok', 4000); return; }
-      turno = { dia: hojeLocal(), n: r.enderecos.length, criado: Date.now(), fim: null, cobertura: r.cobertura, setores: r.setores || {}, minhas: !!minhas,
+      turno = { dia: hojeLocal(), n: r.enderecos.length, criado: Date.now(), fim: null, cobertura: r.cobertura, setores: r.setores || {}, nomes: r.nomes_gondolas || {}, minhas: !!minhas,
         itens: r.enderecos.map(e => ({ e: e.endereco, g: e.gondola, lotes: e.lotes, venc: e.vencidos, urg: e.urgentes, etq: e.etiquetar, dias: e.dias_sem, ok: e.valido, feito: false, pulou: false })),
         tally: novoTally() };
       salvaTurno(); emTurno = -1; desenhaDia();
@@ -358,7 +398,7 @@ const Coletor = (() => {
     const prox = turno.itens.findIndex(i => !i.feito && !i.pulou);
     let g = null;
     const cartoes = turno.itens.map((t, k) => {
-      const cab = t.g !== g ? `<div class="rd-g">${t.g >= 99 ? 'Sem gôndola' : 'Gôndola ' + t.g}</div>` : '';
+      const cab = t.g !== g ? `<div class="rd-g">${t.g >= 99 ? 'Sem gôndola' : ((turno.nomes || {})[t.g] || 'Gôndola ' + t.g)}</div>` : '';
       g = t.g;
       return cab + `<button class="alvo ${t.feito ? 'feito' : ''} ${k === prox ? 'prox' : ''}" data-i="${k}" id="al-${k}">
         <span class="aend">${esc(t.e)}</span><span class="adesc">${esc(descEndereco(t.e)) || ''}${setorTxt(t)}${t.pulou && !t.feito ? ' · pulado' : ''}</span>
@@ -533,10 +573,11 @@ const Coletor = (() => {
   // ---------- ligação dos eventos ----------
   function ligar() {
     CFG = null;
-    api('/api/config').then(x => { CFG = x; VALMIN = x.validade_minima || 0; }).catch(() => {});
+    api('/api/config').then(x => { CFG = x; VALMIN = x.validade_minima || 0; setAreas(x.areas); }).catch(() => {});
     $$('.cmodes button').forEach(b => b.addEventListener('click', () => setModo(b.dataset.modo)));
     $('#tReceber').addEventListener('click', () => setTipo('RECEBIMENTO'));
     $('#tContar').addEventListener('click', () => setTipo('CONTAGEM'));
+    $('#tPreco').addEventListener('click', () => setTipo('PRECO'));
 
     // câmera
     $$('button.cam').forEach(b => b.addEventListener('click', async () => {
@@ -580,8 +621,8 @@ const Coletor = (() => {
     aoEnter('end', () => { $('#end').value = $('#end').value.trim().toUpperCase(); atualizaEnd(); $('#ean').focus(); });
     aoEnter('ean', buscaProdutoEntrada);
     aoEnter('cNome', () => $('#cPreco').focus());
-    aoEnter('cPreco', () => $('#lote').focus());
-    aoEnter('pPreco', () => $('#lote').focus());
+    aoEnter('cPreco', () => (tipoEntrada === 'PRECO' ? salvarPreco() : $('#lote').focus()));
+    aoEnter('pPreco', () => (tipoEntrada === 'PRECO' ? salvarPreco() : $('#lote').focus()));
     aoEnter('lote', () => $('#val').focus());
     aoEnter('val', () => $('#qtd').focus());
     aoEnter('qtd', salvarEntrada);

@@ -55,8 +55,9 @@ const Mapa = (() => {
   // O módulo 1 é sempre o mais perto da Frente (ou da PE). Sacaria (19) é uma área livre com pallets.
   const U_NIVEIS = 10;
   const PE_PD = id => id === 9 || id === 10;
-  const SACARIA = id => id === 19;
-  const pontasDe = id => (PE_PD(id) ? { esq: 'PE', dir: 'PD' } : id <= 8 ? { esq: 'C', dir: 'F' } : { esq: 'F', dir: 'C' });
+  const SACARIA = id => (cfgTodas()[id] && cfgTodas()[id].tipo ? cfgTodas()[id].tipo === 'area' : id === 19);
+  const rotuloG = id => (cfgTodas()[id] && cfgTodas()[id].nome) || `Gôndola ${id}`;
+  const pontasDe = id => (!PE_PD(id) && cfgTodas()[id] && cfgTodas()[id].frente ? (cfgTodas()[id].frente === 'E' ? { esq: 'F', dir: 'C' } : { esq: 'C', dir: 'F' }) : PE_PD(id) ? { esq: 'PE', dir: 'PD' } : id <= 8 ? { esq: 'C', dir: 'F' } : { esq: 'F', dir: 'C' });
   const NOME_LADO = { A: 'Lado A', B: 'Lado B', F: 'Frente', C: 'Costas', PE: 'Ponta esquerda', PD: 'Ponta direita', P: 'Sacaria' };
   const DIM0 = { modulo_c: 140, modulo_l: 40, ponta_c: 100, ponta_p: 40 };
   const dim = () => (M.edit && M.draftDim) || M.data.dimensoes || DIM0;
@@ -103,7 +104,7 @@ const Mapa = (() => {
           if (nome) t += `<text x="${x + w - 6}" y="${y + 13}" text-anchor="end" font-size="10" fill="${cor}" opacity=".9">${esc(nome.length > 22 ? nome.slice(0, 21) + '…' : nome)}</text>`;
           t += c ? `<text x="${x + w / 2}" y="${y + h / 2 + 1}" text-anchor="middle" font-size="14" font-weight="700" fill="${cor}">${esc(c.pior || '')}</text>
             <text x="${x + w / 2}" y="${y + h - 6}" text-anchor="middle" font-size="10.5" fill="${cor}">${c.lotes} lote${c.lotes > 1 ? 's' : ''} · ${esc(k.txt)}</text>`
-            : `<text x="${x + w / 2}" y="${y + h / 2 + 5}" text-anchor="middle" font-size="12" fill="var(--faint)">vazio</text>`;
+            : `<text x="${x + w / 2}" y="${y + h / 2 + 5}" text-anchor="middle" font-size="12" fill="var(--faint)">sem lotes</text>`;
         }
       }
       return `<g class="mp-cel${c ? '' : ' vazia'}${sel ? ' sel' : ''}"${chave && c ? ` data-chave="${esc(chave)}" tabindex="0" role="button" aria-label="${esc(enderecoDe(id, chave))}"` : ''}><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3" ${estilo}/>${t}</g>`;
@@ -148,7 +149,7 @@ const Mapa = (() => {
         (s.resp.length ? `<text x="${x}" y="${my + gm.T + 40}" text-anchor="${anchor}" font-size="11.5" fill="var(--muted)">${esc(respTxt(s))}</text>` : '');
     };
     const lados = gm.area ? [] : ladosG(id);
-    return `<svg class="mp-det" viewBox="0 0 ${W} ${H}" role="group" aria-label="Gôndola ${id} vista de cima">
+    return `<svg class="mp-det" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(rotuloG(id))} vista de cima">
       ${formas(id, d, { texto: true, ox: mx, oy: my })}
       ${gm.area ? rot('P', W / 2, my - 30, 'middle') : (lados.includes('B') ? rot('B', W / 2, my - 30, 'middle') : '') + (lados.includes('A') ? rot('A', W / 2, my + gm.T + 24, 'middle') : '')}
       ${gm.area ? '' : ponta(p.esq, mx, 'start') + ponta(p.dir, W - mx, 'end')}
@@ -166,7 +167,7 @@ const Mapa = (() => {
     stage.innerHTML = '<div class="gridview">' + ids.map((id, i) => {
       const d = porId.get(id), h = calor(d, false), r = respGondola(id);
       return '<button class="gt' + (h.vazio ? ' vazia' : '') + (M.sel === id ? ' sel' : '') + '" data-g="' + id + '" style="--i:' + i + ';' + (h.vazio ? '' : '--hc:' + h.bg + ';--hi:' + h.ink) + '" aria-label="Gôndola ' + id + '">' +
-        '<span class="n">' + id + '</span><span class="t">' + (h.vazio ? 'vazia' : esc(h.txt)) + '</span>' + (d && !h.vazio ? '<span class="s">' + d.lotes + ' lotes</span>' : '') + (r ? '<span class="r">' + esc(r) + '</span>' : '') + (d && d.vencidos ? '<span class="tag">' + d.vencidos + '</span>' : '') + '</button>';
+        '<span class="n">' + id + '</span>' + (cfgTodas()[id] && cfgTodas()[id].nome ? '<span class="s">' + esc(cfgTodas()[id].nome) + '</span>' : '') + '<span class="t">' + (h.vazio ? 'vazia' : esc(h.txt)) + '</span>' + (d && !h.vazio ? '<span class="s">' + d.lotes + ' lotes</span>' : '') + (r ? '<span class="r">' + esc(r) + '</span>' : '') + (d && d.vencidos ? '<span class="tag">' + d.vencidos + '</span>' : '') + '</button>';
     }).join('') + '</div>';
     $$('.gt', stage).forEach(b => b.addEventListener('click', () => { M.sel = +b.dataset.g; M.shelf = null; desenhaPalco(); desenhaDetalhe(); desenhaLateral(); rolaParaDetalhe(); }));
     const aviso = $('#orfas'); if (aviso) aviso.innerHTML = '';
@@ -177,7 +178,11 @@ const Mapa = (() => {
   const setaSvg = s => `<svg viewBox="0 0 ${s.c} 24" width="${s.c}" height="24" aria-hidden="true"><line x1="2" y1="12" x2="${s.c - 12}" y2="12" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 9"/><path d="M${s.c - 16} 3 L${s.c - 2} 12 L${s.c - 16} 21 Z" fill="currentColor"/></svg>`;
 
   function desenhaPalco() {
-    const L = layoutAtual();
+    let L = layoutAtual();
+    if (M.editG && M.novasG) {   // gôndolas recém-criadas aparecem já na edição, numa posição provisória
+      const extra = [...M.novasG].filter(n => M.draftG[n] && !L.gondolas.some(g => g.id === n));
+      if (extra.length) { L = { ...L, gondolas: [...L.gondolas] }; extra.forEach(n => L.gondolas.push(caixaInicial(L, n))); }
+    }
     const stage = $('#stage');
     if (!stage) return;
     const grade = M.vista === 'grade' && !M.edit && !M.editG;
@@ -196,7 +201,7 @@ const Mapa = (() => {
       ${L.gondolas.map((g, i) => {
         const d = porId.get(g.id), c = caixa(g);
         return `<div class="gon${M.sel === g.id ? ' sel' : ''}${M.edit ? ' edit' : ''}" data-g="${g.id}" style="left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px;--i:${i}" tabindex="0" role="button" aria-label="Gôndola ${g.id}">
-          ${svgPlanta(g, d)}<span class="gn">${g.id}</span>${d && d.vencidos ? `<span class="tag">${d.vencidos}</span>` : ''}${M.edit && M.sel === g.id ? '<span class="rz" data-rz="1"></span>' : ''}</div>`;
+          ${svgPlanta(g, d)}<span class="gn">${g.id}${cfgTodas()[g.id] && cfgTodas()[g.id].nome ? ` · ${esc(cfgTodas()[g.id].nome)}` : ''}</span>${d && d.vencidos ? `<span class="tag">${d.vencidos}</span>` : ''}${M.edit && M.sel === g.id ? '<span class="rz" data-rz="1"></span>' : ''}</div>`;
       }).join('')}</div>`;
     const orfas = M.data.gondolas.filter(g => !noLayout.has(g.id));
     const aviso = $('#orfas');
@@ -214,7 +219,7 @@ const Mapa = (() => {
         if (M.edit) return;
         const d = M.data.gondolas.find(g => g.id === id);
         const r = respGondola(id);
-        tip.innerHTML = d ? `<b>Gôndola ${id}</b>${r ? ' · ' + esc(r) : ''}<br>${d.lotes} lotes · ${int(d.qtd)} itens<br>Valor ${brl(d.valor)}<br>${d.risco ? 'Em risco ' + brl(d.risco) + '<br>' : ''}Pior: ${esc(d.pior || '—')}${d.nunca_contada ? '<br>Nunca contada' : d.dias_sem_ronda !== null ? '<br>Ronda há ' + d.dias_sem_ronda + ' d' : ''}` : `<b>Gôndola ${id}</b><br>sem estoque`;
+        tip.innerHTML = d ? `<b>${esc(rotuloG(id))}</b>${r ? ' · ' + esc(r) : ''}<br>${d.lotes} lotes · ${int(d.qtd)} itens<br>Valor ${brl(d.valor)}<br>${d.risco ? 'Em risco ' + brl(d.risco) + '<br>' : ''}Pior: ${esc(d.pior || '—')}${d.nunca_contada ? '<br>Nunca contada' : d.dias_sem_ronda !== null ? '<br>Ronda há ' + d.dias_sem_ronda + ' d' : ''}` : `<b>Gôndola ${id}</b><br>sem estoque`;
         tip.style.left = Math.min(innerWidth - 250, e.clientX + 16) + 'px'; tip.style.top = (e.clientY + 16) + 'px'; tip.classList.add('on');
       });
       el.addEventListener('mouseleave', () => tip.classList.remove('on'));
@@ -267,7 +272,7 @@ const Mapa = (() => {
     if (M.edit || M.editG || M.sel === null) { el.innerHTML = ''; el.hidden = true; return; }
     const gm = geomG(M.sel);
     el.hidden = false;
-    el.innerHTML = `<div class="card reveal"><div class="head"><div><h2>Gôndola ${M.sel} · vista de cima</h2><div class="sub">${(gm.L / 100).toLocaleString('pt-BR')} m de comprimento · ${gm.T} cm de largura · toque num módulo para ver os lotes</div></div></div>
+    el.innerHTML = `<div class="card reveal"><div class="head"><div><h2>${esc(rotuloG(M.sel))} · vista de cima</h2><div class="sub">${(gm.L / 100).toLocaleString('pt-BR')} m de comprimento · ${gm.T} cm de largura · toque num módulo para ver os lotes</div></div></div>
       <div class="det-scroll">${svgDetalhe(M.sel)}</div></div>`;
     $$('.mp-cel[data-chave]', el).forEach(c => {
       const abre = () => { M.shelf = { g: M.sel, chave: c.dataset.chave }; desenhaDetalhe(); desenhaLateral(); if (innerWidth < 1180) { const l = $('#lateral'); if (l) setTimeout(() => l.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); } };
@@ -296,7 +301,7 @@ const Mapa = (() => {
         ${c.itens.map(it => `<div class="item"><span class="dot" style="--c:${esc(it.cor)}"></span><div style="min-width:0"><div class="pname" style="font-size:13px">${esc(it.nome || it.ean)}</div><div class="xs muted">lote ${esc(it.lote)} · vence ${brData(it.validade)} (${it.dias}d)${it.desconto ? ' · oferta ' + it.desconto + '%' : ''}</div></div><div style="text-align:right">${pill(it.status, it.cor)}<div class="xs muted" style="margin-top:3px">${it.qtd} un</div></div></div>`).join('')}</div>`;
     }
     return `<div class="card drawer">
-      <div class="head" style="margin-bottom:10px"><div><h2 style="font-size:20px">Gôndola ${g.id}</h2><div class="sub">${g.lotes ? `${g.lotes} lotes · ${int(g.qtd)} itens · ${brl(g.valor)}` : 'sem estoque cadastrado'}</div></div>
+      <div class="head" style="margin-bottom:10px"><div><h2 style="font-size:20px">${esc(rotuloG(g.id))}</h2><div class="sub">${g.lotes ? `${g.lotes} lotes · ${int(g.qtd)} itens · ${brl(g.valor)}` : 'sem estoque cadastrado'}</div></div>
         <button class="icon subtle" id="fecha" aria-label="Fechar">${ico('x')}</button></div>
       ${g.risco ? `<div class="callout warn" style="margin-bottom:12px">${ico('flame')}<div><b>${brl(g.risco)}</b> em risco${g.vencidos ? ` · <b>${g.vencidos}</b> vencido${g.vencidos > 1 ? 's' : ''}` : ''}${g.nunca_contada ? ' · endereços ainda sem contagem' : g.dias_sem_ronda > 7 ? ` · ronda há ${g.dias_sem_ronda} dias` : ''}</div></div>` : ''}
       <h3 style="margin:2px 0 4px">Setores</h3>${lados.map(resumoLado).join('')}
@@ -306,7 +311,7 @@ const Mapa = (() => {
 
   function lateralEdicao() {
     const L = M.draft, g = L.gondolas.find(x => x.id === M.sel), a = M.selSeta !== null ? L.setas[M.selSeta] : null;
-    const livres = Array.from({ length: 19 }, (_, i) => i + 1).filter(n => !L.gondolas.some(x => x.id === n));
+    const livres = [...new Set([...Array.from({ length: 19 }, (_, i) => i + 1), ...Object.keys(cfgTodas()).map(Number)])].sort((a, b) => a - b).filter(n => !L.gondolas.some(x => x.id === n));
     return `<div class="card drawer"><div class="head"><div><h2>Editar planta</h2><div class="sub">Arraste as gôndolas e as setas; a bolinha azul muda o comprimento (a proporção real é mantida).</div></div></div>
       <div class="grid" style="gap:14px">
         <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f">Largura da planta</label><input id="eLarg" type="number" min="400" max="4000" step="50" value="${L.largura}"></div>
@@ -330,45 +335,99 @@ const Mapa = (() => {
   const CAMPOS_DIM = [['modulo_c', 'Módulo: comprimento'], ['modulo_l', 'Módulo: profundidade'], ['ponta_c', 'Ponta: largura'], ['ponta_p', 'Ponta: profundidade']];
 
   function lateralEdicaoG() {
-    const ids = [...new Set([...M.data.layout.gondolas.map(g => g.id), ...M.data.gondolas.map(g => g.id)])].sort((a, b) => a - b);
+    const idsLayout = new Set(M.data.layout.gondolas.map(g => g.id));
+    const ids = [...new Set([...idsLayout, ...M.data.gondolas.map(g => g.id), ...Object.keys(M.draftG).map(Number)])].sort((a, b) => a - b);
+    const livres = Array.from({ length: 40 }, (_, i) => i + 1).filter(n => !ids.includes(n));
     const id = M.sel, c = id !== null ? (M.draftG[id] = M.draftG[id] || {}) : null;
     let corpo = '<p class="small muted">Clique numa gôndola do mapa ou escolha na lista.</p>';
-    if (id !== null && SACARIA(id)) {
-      c.pallets = c.pallets || [];
-      corpo = `<div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f">Comprimento da área (cm)</label><input id="gAreaC" type="number" min="100" max="3000" value="${c.c ?? 600}"></div>
+    if (id !== null) {
+      const area = SACARIA(id);
+      const comum = `<div><label class="f" for="gNome">Nome (aparece no mapa)</label><input id="gNome" maxlength="40" placeholder="${area ? 'ex.: Sacaria de cães' : 'ex.: Farmácia'}" value="${esc(c.nome || '')}"></div>
+        <div><label class="f">Tipo</label><div class="seg" id="gTipo"><button data-t="gondola" aria-pressed="${!area}">Gôndola com módulos</button><button data-t="area" aria-pressed="${area}">Área livre (pallets)</button></div></div>`;
+      let resto;
+      if (area) {
+        c.pallets = c.pallets || [];
+        resto = `<div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f">Comprimento da área (cm)</label><input id="gAreaC" type="number" min="100" max="3000" value="${c.c ?? 600}"></div>
           <div><label class="f">Largura da área (cm)</label><input id="gAreaL" type="number" min="100" max="3000" value="${c.l ?? 400}"></div></div>
-        <div><label class="f">Pallets (módulos da sacaria)</label><div class="xs muted" style="margin-bottom:8px">Endereço do pallet: ${id}-P1, ${id}-P2… Posição e tamanho em cm, a partir do canto superior esquerdo da área.</div>
+        <div><label class="f">Pallets (módulos da área)</label><div class="xs muted" style="margin-bottom:8px">Endereço do pallet: ${id}-P1, ${id}-P2… Posição e tamanho em cm, a partir do canto superior esquerdo da área.</div>
           ${c.pallets.map((p, i) => `<div class="pal" data-i="${i}"><b>P${p.id}</b><input data-k="nome" placeholder="Nome" maxlength="40" value="${esc(p.nome || '')}" aria-label="Nome do pallet ${p.id}">
             ${['x', 'y', 'c', 'l'].map(k => `<label class="xs muted">${{ x: 'X', y: 'Y', c: 'Comp.', l: 'Larg.' }[k]}<input data-k="${k}" type="number" min="0" max="3000" value="${p[k]}"></label>`).join('')}
             <button class="sm danger" data-rem="${i}" aria-label="Remover pallet ${p.id}">${ico('minus')}</button></div>`).join('')}
           <button class="sm" id="gAddPal">${ico('plus')} Adicionar pallet</button></div>`;
-    } else if (id !== null) {
-      const D = dimG(id), lados = ladosG(id), n = nMod(id), nomes = c.nomes || {};
-      corpo = `<div><label class="f">Lados com prateleira</label><div class="seg" id="gLados"><button data-l="AB" aria-pressed="${lados.length === 2}">A e B</button><button data-l="B" aria-pressed="${lados.length === 1 && lados[0] === 'B'}">Só B (cima)</button><button data-l="A" aria-pressed="${lados.length === 1 && lados[0] === 'A'}">Só A (baixo)</button></div></div>
-        <div><label class="f" for="gMod">Módulos por lado</label><input id="gMod" type="number" min="1" max="${U_NIVEIS}" value="${n}" style="max-width:120px"></div>
-        <div><label class="f">Medidas desta gôndola (cm) <span class="muted">— vazio usa o padrão da loja</span></label>
-          <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">${CAMPOS_DIM.map(([k, r]) => `<div><label class="xs muted" for="gd_${k}">${r}</label><input id="gd_${k}" data-dim="${k}" type="number" min="10" max="300" placeholder="${dim()[k]}" value="${(c.dim || {})[k] ?? ''}"></div>`).join('')}</div></div>
-        <div><label class="f">Nome de cada módulo <span class="muted">(opcional, o módulo 1 fica junto da Frente)</span></label>
-          ${lados.map(l => `<div class="xs muted" style="margin:8px 0 4px">${NOME_LADO[l]}</div><div class="nomes-mod">${Array.from({ length: n }, (_, i) => `<input data-nome="${l}-${i + 1}" placeholder="${i + 1}" maxlength="40" value="${esc(nomes[`${l}-${i + 1}`] || '')}" aria-label="Nome do módulo ${i + 1} do ${NOME_LADO[l]}">`).join('')}</div>`).join('')}</div>`;
+      } else {
+        const D = dimG(id), lados = ladosG(id), n = nMod(id), nomes = c.nomes || {};
+        resto = `<div><label class="f">Lados com prateleira</label><div class="seg" id="gLados"><button data-l="AB" aria-pressed="${lados.length === 2}">A e B</button><button data-l="B" aria-pressed="${lados.length === 1 && lados[0] === 'B'}">Só B (cima)</button><button data-l="A" aria-pressed="${lados.length === 1 && lados[0] === 'A'}">Só A (baixo)</button></div></div>
+          <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f" for="gMod">Módulos por lado</label><input id="gMod" type="number" min="1" max="${U_NIVEIS}" value="${n}"></div>
+            ${PE_PD(id) ? '' : `<div><label class="f" for="gFrente">Ponta da Frente</label><select id="gFrente"><option value="" ${!c.frente ? 'selected' : ''}>Automática</option><option value="E" ${c.frente === 'E' ? 'selected' : ''}>À esquerda</option><option value="D" ${c.frente === 'D' ? 'selected' : ''}>À direita</option></select></div>`}</div>
+          <div><label class="f">Medidas desta gôndola (cm) <span class="muted">— vazio usa o padrão da loja</span></label>
+            <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">${CAMPOS_DIM.map(([k, r]) => `<div><label class="xs muted" for="gd_${k}">${r}</label><input id="gd_${k}" data-dim="${k}" type="number" min="10" max="300" placeholder="${dim()[k]}" value="${(c.dim || {})[k] ?? ''}"></div>`).join('')}</div></div>
+          <div><label class="f">Nome de cada módulo <span class="muted">(opcional, o módulo 1 fica junto da Frente)</span></label>
+            ${lados.map(l => `<div class="xs muted" style="margin:8px 0 4px">${NOME_LADO[l]}</div><div class="nomes-mod">${Array.from({ length: n }, (_, i) => `<input data-nome="${l}-${i + 1}" placeholder="${i + 1}" maxlength="40" value="${esc(nomes[`${l}-${i + 1}`] || '')}" aria-label="Nome do módulo ${i + 1} do ${NOME_LADO[l]}">`).join('')}</div>`).join('')}</div>`;
+      }
+      corpo = comum + resto + (id >= 19 ? `<div><button class="sm danger" id="gRemove">${ico('minus')} Remover ${esc(rotuloG(id))} do mapa</button></div>` : '');
     }
-    return `<div class="card drawer"><div class="head"><div><h2>Editar gôndolas</h2><div class="sub">Lados, módulos, medidas e nomes. O mapa muda enquanto você edita.</div></div></div>
+    const nova = livres.length ? `<details class="nova-g"><summary>${ico('plus')} Nova gôndola ou área</summary>
+        <div class="grid" style="grid-template-columns:90px 1fr;gap:10px;margin-top:10px"><div><label class="f" for="gnNum">Número</label><select id="gnNum">${livres.map(n => `<option value="${n}" ${n === Math.max(20, livres[0]) ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+          <div><label class="f" for="gnNome">Nome</label><input id="gnNome" maxlength="40" placeholder="ex.: Farmácia, Aquarismo, Ponta de promoção"></div></div>
+        <div class="seg" id="gnTipo" style="margin:10px 0"><button data-t="gondola" aria-pressed="true">Gôndola com módulos</button><button data-t="area" aria-pressed="false">Área livre (pallets)</button></div>
+        <button class="sm primary" id="gnCria">${ico('plus')} Criar e posicionar no mapa</button></details>` : '';
+    return `<div class="card drawer"><div class="head"><div><h2>Editar gôndolas</h2><div class="sub">Lados, módulos, medidas, nomes e novas gôndolas ou áreas. O mapa muda enquanto você edita.</div></div></div>
       <div class="grid" style="gap:14px">
-        <div><label class="f" for="gSel">Gôndola</label><select id="gSel"><option value="">Escolha…</option>${ids.map(i => `<option value="${i}" ${i === id ? 'selected' : ''}>${i === 19 ? '19 · Sacaria de gatos' : 'Gôndola ' + i}</option>`).join('')}</select></div>
+        ${nova}
+        <div><label class="f" for="gSel">Gôndola</label><select id="gSel"><option value="">Escolha…</option>${ids.map(i => `<option value="${i}" ${i === id ? 'selected' : ''}>${i} · ${esc(((M.draftG[i] || {}).nome) || (i === 19 ? 'Sacaria de gatos' : 'Gôndola'))}</option>`).join('')}</select></div>
         ${corpo}
         <div class="editbar" style="justify-content:flex-end"><button id="gCancela">Cancelar</button><button class="primary" id="gSalva">${ico('check')} Salvar gôndolas</button></div>
       </div></div>`;
+  }
+
+  // posição inicial de uma gôndola nova na planta (embaixo, em fila)
+  function caixaInicial(L, id) {
+    const { L: comp, T } = geomG(id), vert = PE_PD(id), len = 200, curto = Math.round(len * T / comp * 10) / 10;
+    const n = L.gondolas.length;
+    return { id, x: 60 + (n % 5) * 190, y: Math.min(L.altura - 60, 60 + Math.floor(n / 5) * 90), w: vert ? curto : len, h: vert ? len : curto, rot: vert ? 90 : 0 };
   }
 
   function ligaEdicaoG() {
     const id = M.sel, c = id !== null ? M.draftG[id] : null;
     const redesenha = () => desenhaPalco();
     $('#gSel').addEventListener('change', e => { M.sel = e.target.value ? +e.target.value : null; desenhaPalco(); desenhaLateral(); });
-    $('#gCancela').addEventListener('click', () => { M.editG = false; M.draftG = null; M.sel = null; montaTudo(); });
+    const nova = $('#gnCria');
+    if (nova) {
+      $('#gnTipo').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b) $$('#gnTipo button').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+      nova.addEventListener('click', () => {
+        const n = +$('#gnNum').value, tipo = $('#gnTipo button[aria-pressed=true]').dataset.t, nome = $('#gnNome').value.trim();
+        M.draftG[n] = tipo === 'area' ? { tipo, nome, c: 600, l: 400, pallets: [] } : { tipo, nome, lados: 'AB', modulos: 5, dim: null, nomes: {} };
+        M.novasG = M.novasG || new Set(); M.novasG.add(n);
+        M.sel = n; desenhaPalco(); desenhaLateral();
+      });
+    }
+    $('#gCancela').addEventListener('click', () => { M.editG = false; M.draftG = null; M.novasG = null; M.removidasG = null; M.sel = null; montaTudo(); });
     $('#gSalva').addEventListener('click', async () => {
-      try { M.data.gondolas_cfg = await api('/api/gondolas', { method: 'PUT', body: M.draftG }); M.editG = false; M.draftG = null; toast('Gôndolas salvas', 'ok'); montaTudo(); }
-      catch (er) { toast(er.message, 'bad', 5000); }
+      try {
+        const L = JSON.parse(JSON.stringify(M.data.layout));
+        L.setas = L.setas || [];
+        let mexeu = false;
+        for (const n of M.removidasG || []) if (L.gondolas.some(g => g.id === n)) { L.gondolas = L.gondolas.filter(g => g.id !== n); mexeu = true; }
+        M.data.gondolas_cfg = await api('/api/gondolas', { method: 'PUT', body: M.draftG });
+        for (const n of M.novasG || []) if (M.data.gondolas_cfg[n] && !L.gondolas.some(g => g.id === n)) { L.gondolas.push(caixaInicial(L, n)); mexeu = true; }
+        if (mexeu) M.data.layout = await api('/api/layout', { method: 'PUT', body: { ...L, provisorio: false } });
+        M.data.areas = Object.entries(M.data.gondolas_cfg).filter(([, v]) => v.tipo === 'area').map(([k]) => +k);
+        M.editG = false; M.draftG = null; M.novasG = null; M.removidasG = null; toast('Gôndolas salvas', 'ok'); montaTudo();
+      } catch (er) { toast(er.message, 'bad', 5000); }
     });
     if (id === null) return;
+    $('#gNome').addEventListener('change', e => { c.nome = e.target.value.trim(); desenhaPalco(); });
+    $('#gTipo').addEventListener('click', e => {
+      const b = e.target.closest('button[data-t]'); if (!b || b.dataset.t === (SACARIA(id) ? 'area' : 'gondola')) return;
+      const nome = c.nome || '';
+      M.draftG[id] = b.dataset.t === 'area' ? { tipo: 'area', nome, c: 600, l: 400, pallets: [] } : { tipo: 'gondola', nome, lados: 'AB', modulos: 5, dim: null, nomes: {} };
+      desenhaPalco(); desenhaLateral();
+    });
+    const rem = $('#gRemove');
+    if (rem) rem.addEventListener('click', () => {
+      if (!confirm(`Tirar ${rotuloG(id)} do mapa? Os lotes com esse endereço continuam no estoque.`)) return;
+      delete M.draftG[id]; M.removidasG = M.removidasG || new Set(); M.removidasG.add(id); M.sel = null; desenhaPalco(); desenhaLateral();
+    });
     if (SACARIA(id)) {
       $('#gAreaC').addEventListener('change', e => { c.c = +e.target.value; redesenha(); });
       $('#gAreaL').addEventListener('change', e => { c.l = +e.target.value; redesenha(); });
@@ -390,6 +449,7 @@ const Mapa = (() => {
       c.nomes = Object.fromEntries(Object.entries(c.nomes || {}).filter(([k]) => +k.split('-')[1] <= c.modulos));
       desenhaPalco(); desenhaLateral();
     });
+    const fr = $('#gFrente'); if (fr) fr.addEventListener('change', e => { c.frente = e.target.value || null; desenhaPalco(); });
     $$('[data-dim]').forEach(inp => inp.addEventListener('change', () => {
       c.dim = c.dim || {};
       if (inp.value === '') delete c.dim[inp.dataset.dim]; else c.dim[inp.dataset.dim] = +inp.value;
@@ -408,7 +468,7 @@ const Mapa = (() => {
       const sl = M.data.sem_local;
       el.innerHTML = `<div class="card drawer"><div class="head"><div><h2>Selecione uma gôndola</h2><div class="sub">Clique na planta para ver a gôndola de cima, com cada lado e cada módulo.</div></div></div>
         <h3 style="margin:4px 0 6px">Onde está o maior risco</h3>
-        ${top.length ? top.map(g => `<div class="row click" data-g="${g.id}"><span class="dot" style="--c:${esc(g.cor || '#94a3b8')}"></span><div><div class="pname">Gôndola ${g.id}</div><div class="xs muted">${g.lotes} lotes · ${g.vencidos} vencidos</div></div><b class="num">${brlK(g.risco)}</b></div>`).join('') : '<p class="muted small">Sem estoque mapeado.</p>'}
+        ${top.length ? top.map(g => `<div class="row click" data-g="${g.id}"><span class="dot" style="--c:${esc(g.cor || '#94a3b8')}"></span><div><div class="pname">${esc(rotuloG(g.id))}</div><div class="xs muted">${g.lotes} lotes · ${g.vencidos} vencidos</div></div><b class="num">${brlK(g.risco)}</b></div>`).join('') : '<p class="muted small">Sem estoque mapeado.</p>'}
         ${sl.lotes ? `<div class="callout warn" style="margin-top:14px">${ico('alert')}<div><b>${sl.lotes} lotes</b> sem endereço válido (${sl.enderecos.map(e => esc(e.endereco)).join(', ')}). Ajuste na próxima ronda.</div></div>` : ''}</div>`;
       $$('.row[data-g]', el).forEach(r => r.addEventListener('click', () => { M.sel = +r.dataset.g; desenhaPalco(); desenhaDetalhe(); desenhaLateral(); rolaParaDetalhe(); }));
       return;
@@ -503,7 +563,7 @@ const Mapa = (() => {
     $$('[data-vista]', v).forEach(b => b.addEventListener('click', () => { M.vista = b.dataset.vista; lsSet('mapaVista', M.vista); montaTudo(); }));
     const ed = $('#editar', v);
     const edg = $('#editarG', v);
-    if (edg) edg.addEventListener('click', () => { M.editG = true; M.draftG = JSON.parse(JSON.stringify(M.data.gondolas_cfg || {})); M.sel = null; M.shelf = null; montaTudo(); });
+    if (edg) edg.addEventListener('click', () => { M.editG = true; M.novasG = null; M.removidasG = null; M.draftG = JSON.parse(JSON.stringify(M.data.gondolas_cfg || {})); M.sel = null; M.shelf = null; montaTudo(); });
     if (ed) ed.addEventListener('click', () => { M.edit = true; M.draftDim = { ...dim() }; M.draft = JSON.parse(JSON.stringify(M.data.layout)); M.draft.setas = M.draft.setas || []; M.sel = null; M.selSeta = null; M.shelf = null; montaTudo(); });
     desenhaPalco(); desenhaDetalhe(); desenhaLateral();
     if (M.ro) M.ro.disconnect();
@@ -515,7 +575,7 @@ const Mapa = (() => {
     M.view = view; M.ctx = ctx; M.metric = lsGet('mapaMetrica', 'risco'); M.vista = lsGet('mapaVista', innerWidth < 760 ? 'grade' : 'planta'); M.edit = false; M.draft = null; M.selSeta = null; M.editG = false; M.draftG = null; M.draftDim = null;
     view.innerHTML = `<div class="skeleton" style="height:480px;border-radius:18px"></div>`;
     const [data, cfg] = await Promise.all([api('/api/mapa'), api('/api/config')]);
-    data.faixas = cfg.faixas;
+    data.faixas = cfg.faixas; setAreas(data.areas);
     M.data = data;
     if (M.sel !== null && !data.gondolas.some(g => g.id === M.sel)) M.sel = null;
     montaTudo();

@@ -15,6 +15,7 @@ async function novoDb() {
   await db.run('TRUNCATE produtos, lotes, eventos, usuarios, config RESTART IDENTITY');
   await S.upsertProduto(db, { ean: '7891000000017', nome: 'RAÇÃO SECA TESTE 1KG', preco: 20, categoria: 'RAÇÃO' });
   await S.upsertProduto(db, { ean: '7891000000024', nome: 'BRINQUEDO BOLA', preco: 10, categoria: 'ACESSÓRIO' });
+  U.setAreas([19]);
   db.apagar = () => {};
   return db;
 }
@@ -393,7 +394,7 @@ test('configuração das gôndolas: lados, módulos, medidas, nomes e sacaria co
     7: { lados: 'A', modulos: 4, dim: { modulo_c: 130, modulo_l: '' }, nomes: { 'A-2': ' Fantasia ' } },
     19: { c: 700, l: 420, pallets: [{ x: 10, y: 10, c: 120, l: 100, nome: 'Rações 15kg' }, { id: 5, x: 200, y: 10 }] },
   });
-  assert.deepEqual(r[7], { lados: 'A', modulos: 4, dim: { modulo_c: 130 }, nomes: { 'A-2': 'Fantasia' } });
+  assert.deepEqual(r[7], { tipo: 'gondola', nome: '', frente: null, lados: 'A', modulos: 4, dim: { modulo_c: 130 }, nomes: { 'A-2': 'Fantasia' } });
   assert.deepEqual(r[19].pallets.map(p => p.id), [1, 5]);
   assert.equal(r[19].tipo, 'area');
   await assert.rejects(S.setGondolasCfg(db, { 7: { lados: 'A', nomes: { 'B-1': 'x' } } }), /não existe/);
@@ -401,4 +402,20 @@ test('configuração das gôndolas: lados, módulos, medidas, nomes e sacaria co
   await assert.rejects(S.setGondolasCfg(db, { 7: { dim: { modulo_c: 5 } } }), /entre 40 e 300/);
   await assert.rejects(S.setGondolasCfg(db, { 19: { pallets: [{ id: 2 }, { id: 2 }] } }), /repetido/);
   assert.deepEqual((await S.mapa(db)).gondolas_cfg[7].nomes, { 'A-2': 'Fantasia' });
+});
+
+test('gôndolas e áreas novas: nome, tipo e frente; endereços de área passam a valer', async () => {
+  const db = await novoDb();
+  assert.equal(U.parseEndereco('22-P1').valido, false);
+  const r = await S.setGondolasCfg(db, { 22: { tipo: 'area', nome: 'Sacaria de cães', c: 800, l: 300, pallets: [{ x: 0, y: 0 }] }, 23: { nome: 'Farmácia', lados: 'A', modulos: 3, frente: 'D' }, 19: { tipo: 'gondola' } });
+  assert.deepEqual([r[22].tipo, r[22].nome, r[23].tipo, r[23].frente, r[23].modulos], ['area', 'Sacaria de cães', 'gondola', 'D', 3]);
+  assert.equal(U.parseEndereco('22-P1').valido, true);
+  assert.equal(U.parseEndereco('22').valido, true);
+  assert.equal(U.parseEndereco('19').valido, false);            // 19 virou gôndola comum
+  assert.equal(U.parseEndereco('23-A-2').valido, true);
+  assert.deepEqual((await S.mapa(db)).areas.sort(), [22]);
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, endereco: '22-P1' });
+  assert.equal((await S.lotesAtivos(db))[0].endereco, '22-P1');
+  U.setAreas([19]);
+  await S.sincronizaAreas(db);                                    // cache curto: recarrega da configuração
 });

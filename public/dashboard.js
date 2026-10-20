@@ -184,13 +184,13 @@ PAGINAS.mapa = async () => { await Mapa.render(view, { admin: S.admin }); return
 const E = { q: '', status: '', gondola: '', marca: '', offset: 0, total: 0, marcas: [] };
 PAGINAS.estoque = async q => {
   E.q = q.get('q') || ''; E.status = q.get('status') || ''; E.gondola = q.get('gondola') || ''; E.marca = q.get('marca') || ''; E.sempreco = q.get('sempreco') === '1' ? '1' : '';
-  const [res, cfg, todas] = await Promise.all([S.resumo ? Promise.resolve(S.resumo) : carregaResumo(), S.cfg ? Promise.resolve(S.cfg) : api('/api/config'), api('/api/lotes?limite=1')]);
+  const [res, cfg, todas, gcfg] = await Promise.all([S.resumo ? Promise.resolve(S.resumo) : carregaResumo(), S.cfg ? Promise.resolve(S.cfg) : api('/api/config'), api('/api/lotes?limite=1'), api('/api/gondolas').catch(() => ({}))]);
   S.cfg = cfg; E.marcas = todas.marcas;
-  const gond = Array.from({ length: 19 }, (_, i) => i + 1);
+  const gond = [...new Set([...Array.from({ length: 19 }, (_, i) => i + 1), ...Object.keys(gcfg).map(Number)])].sort((a, b) => a - b);
   return `<div class="grid" style="gap:14px">
     <div class="reveal filters">
       <div class="search"><span id="ss"></span><input id="fq" type="search" placeholder="Buscar produto, EAN, lote ou endereço" value="${esc(E.q)}" aria-label="Buscar"></div>
-      <select id="fgond" aria-label="Gôndola"><option value="">Todas as gôndolas</option>${gond.map(g => `<option ${E.gondola == g ? 'selected' : ''} value="${g}">Gôndola ${g}</option>`).join('')}</select>
+      <select id="fgond" aria-label="Gôndola"><option value="">Todas as gôndolas</option>${gond.map(g => `<option ${E.gondola == g ? 'selected' : ''} value="${g}">${g} · ${esc((gcfg[g] && gcfg[g].nome) || 'Gôndola')}</option>`).join('')}</select>
       <select id="fmarca" aria-label="Marca"><option value="">Todas as marcas</option>${E.marcas.map(m => `<option ${E.marca === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
       <select id="fpreco" aria-label="Preço"><option value="">Com e sem preço</option><option value="1" ${E.sempreco ? 'selected' : ''}>Só sem preço</option></select>
     </div>
@@ -389,6 +389,7 @@ PAGINAS.config.ligar = () => {
   }
   $('#atualiza').addEventListener('click', () => { S.resumo = null; rota(); });
   Fila.inicia();
+  api('/api/config').then(x => setAreas(x.areas)).catch(() => {});
   carregaResumo().catch(() => {});
   if (!location.hash && S.login && !S.admin) location.hash = '#/coletor';   // operador da loja entra direto no coletor
   rota();
