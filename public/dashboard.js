@@ -7,6 +7,7 @@ const ROTAS = {
   estoque: { titulo: 'Estoque', sub: () => 'Todos os lotes em loja' },
   mov: { titulo: 'Movimentações', sub: () => 'Tudo que o coletor e o painel registraram' },
   config: { titulo: 'Configurações', sub: () => 'Regras, equipe e dados' },
+  folha: { titulo: 'Importar folha', sub: () => 'Foto da folha de papel para lançar lotes' },
 };
 const view = $('#view');
 let token = 0;
@@ -178,6 +179,8 @@ PAGINAS.geral.ligar = () => {
 // ---------- coletor ----------
 PAGINAS.coletor = async () => Coletor.html();
 PAGINAS.coletor.ligar = () => Coletor.ligar();
+PAGINAS.folha = async () => Folha.html();
+PAGINAS.folha.ligar = () => Folha.ligar();
 
 // ---------- mapa ----------
 PAGINAS.mapa = async () => { await Mapa.render(view, { admin: S.admin }); return null; };
@@ -305,7 +308,7 @@ PAGINAS.config = async () => {
         <label class="small" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px">Avisar no recebimento quando o lote chegar com menos de <input type="number" id="valMin" min="0" max="365" style="width:90px" value="${cfg.validade_minima ?? 90}" ${S.admin ? '' : 'disabled'}> dias <span class="xs muted">(0 = não avisar)</span></label>
         ${S.admin ? `<div style="margin-top:14px"><button class="primary" id="salvaFaixas">${ico('check')} Salvar regras</button></div>` : '<p class="small muted" style="margin-top:12px">Só administradores podem alterar.</p>'}</div>
       <div class="card reveal" style="--i:1"><div class="head"><h2>Dados</h2></div>
-        <div class="editbar"><a class="btn" href="/api/export.xlsx" download>${ico('download')} Exportar .xlsx</a> <a class="btn" href="/briefing" target="_blank" rel="noopener">Briefing do dia (1 página)</a> <a class="btn" href="/briefing-semanal" target="_blank" rel="noopener">Briefing semanal (1 página)</a></div>
+        <div class="editbar"><a class="btn" href="/api/export.xlsx" download>${ico('download')} Exportar .xlsx</a> <a class="btn" href="/briefing" target="_blank" rel="noopener">Briefing do dia (1 página)</a> <a class="btn" href="/briefing-semanal" target="_blank" rel="noopener">Briefing semanal (1 página)</a> <a class="btn" href="#/folha">${ico('camera')} Importar folha</a></div>
         ${S.admin ? `<hr style="border:0;border-top:1px solid var(--line);margin:18px 0"><h3 style="margin-bottom:8px">Importar planilha</h3><p class="small muted" style="margin-bottom:10px">Formato do Controle_Validade (abas Produtos, FIFO, Histórico, Recebimento) ou o arquivo exportado aqui. Limite de ~4 MB; para a carga grande, use <code>npm run import</code>.</p>
         <input type="file" id="arq" accept=".xlsx"><label class="small" style="display:flex;gap:8px;align-items:center;margin:12px 0"><input type="checkbox" id="subst" style="width:auto;min-height:0"> Substituir todo o estoque e as movimentações atuais</label>
         <button id="importar">${ico('upload')} Importar</button><pre id="impRel" class="small" style="white-space:pre-wrap;margin-top:12px"></pre>` : ''}</div>

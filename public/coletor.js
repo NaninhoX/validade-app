@@ -98,6 +98,7 @@ const Coletor = (() => {
     <button data-modo="entrada" aria-pressed="true">Entrada</button><button data-modo="ronda" aria-pressed="false">Ronda</button>
     <button data-modo="baixa" aria-pressed="false">Baixa</button><button data-modo="busca" aria-pressed="false">Buscar</button>
   </div>
+  <a class="btn folha-link" href="#/folha" style="margin-bottom:12px">${ico('camera')} Importar folha de papel</a>
 
   <section id="m-entrada">
     <div class="seg" style="width:100%;margin-bottom:16px" role="group" aria-label="Tipo de entrada">
