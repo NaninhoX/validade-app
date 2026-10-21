@@ -148,7 +148,7 @@ PAGINAS.geral = async () => {
     </div>
   </div>
   <div class="card reveal" id="cardCausas" style="--i:9;margin-top:18px"></div>
-  <div id="audCard"></div>
+  <div id="audCard" style="margin-top:18px"></div>
   <div class="grid cols-2" style="margin-top:18px">
     <div class="card reveal" style="--i:9"><div class="head"><h2>Marcas com maior perda potencial</h2></div>
       ${(() => { const m = Math.max(1, ...res.marcas.map(x => x.perda)); return res.marcas.slice(0, 7).map(x => `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${esc(x.marca)}</span><b class="num">${brl(x.perda)}</b></div><div class="meter" style="margin-top:6px"><i style="width:${x.perda / m * 100}%"></i></div></div>`).join(''); })()}</div>
