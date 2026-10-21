@@ -18,6 +18,8 @@
   .field { margin-bottom: 16px; }
   input { min-height: 48px; font-size: 17px; }
   #pin { letter-spacing: .4em; text-align: center; font-size: 22px; }
+  .pinbox { position: relative; } .pinbox .ver { position: absolute; right: 8px; bottom: 6px; min-height: 36px; padding: 0 12px; border-radius: 8px; font-size: 13px; }
+  .nov { display: block; margin: -8px 0 14px; font-size: 12.5px; }
   .err { color: var(--bad); font-size: 13px; min-height: 20px; margin: -4px 0 10px; }
   button.primary { width: 100%; min-height: 48px; font-size: 16px; }
   .shake { animation: shake .4s; }
@@ -30,8 +32,8 @@
   <h1>Controle de Validade</h1>
   <p class="sub">Entre com seu nome e PIN</p>
   <form class="card" id="f" autocomplete="on">
-    <div class="field"><label class="f" for="nome">Nome</label><input id="nome" autocomplete="username" autocapitalize="characters" required></div>
-    <div class="field"><label class="f" for="pin">PIN (6 a 8 números)</label><input id="pin" type="password" inputmode="numeric" autocomplete="current-password" pattern="\d{6,8}" maxlength="8" required></div>
+    <div class="field"><label class="f" for="nome">Nome</label><a href="#" class="nov" id="outro" hidden>Não é você? Entrar com outro nome</a><input id="nome" autocomplete="username" autocapitalize="characters" required></div>
+    <div class="field pinbox"><label class="f" for="pin">PIN (6 a 8 números)</label><input id="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="12"><button type="button" class="ver" id="ver" aria-label="Mostrar o PIN">ver</button></div>
     <div class="err" id="err" role="alert"></div>
     <button class="primary" id="ok">Entrar</button>
   </form>

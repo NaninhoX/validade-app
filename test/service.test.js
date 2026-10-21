@@ -171,9 +171,15 @@ test('login: PIN com hash, bloqueio após 5 erros e papéis', async () => {
   assert.deepEqual(u, { nome: 'ANA', papel: 'admin' });
   const linha = await db.get("SELECT pin_hash FROM usuarios WHERE nome='ANA'");
   assert.ok(!linha.pin_hash.includes('123456'));
-  for (let i = 0; i < 5; i++) await assert.rejects(A.login(db, 'ANA', '000000'), /incorretos/);
+  await assert.rejects(A.login(db, 'ANA', '000000'), /Restam 4 tentativa/);
+  for (let i = 0; i < 3; i++) await assert.rejects(A.login(db, 'ANA', '000000'), /incorreto/);
+  await assert.rejects(A.login(db, 'ANA', '000000'), /bloqueado/);
   await assert.rejects(A.login(db, 'ANA', '123456'), /Muitas tentativas/);      // bloqueada mesmo com o PIN certo
-  await assert.rejects(A.login(db, 'NINGUEM', '123456'), /incorretos/);
+  await assert.rejects(A.login(db, 'NINGUEM', '123456'), /não encontrado/);
+  await A.salvarUsuario(db, { nome: 'Dânyllo', pin: '654321', papel: 'operador' });
+  assert.equal((await A.login(db, 'danyllo', '654 321')).nome, 'DÂNYLLO');          // sem acento e com espaço no PIN
+  await A.salvarUsuario(db, { nome: 'SEMPIN' });
+  await assert.rejects(A.login(db, 'sempin', '123456'), /ainda não tem PIN/);
   await assert.rejects(A.salvarUsuario(db, { nome: 'ANA', papel: 'operador' }), /pelo menos um administrador/);
   db.apagar();
 });

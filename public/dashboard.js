@@ -312,7 +312,7 @@ PAGINAS.config = async () => {
         <button id="importar">${ico('upload')} Importar</button><pre id="impRel" class="small" style="white-space:pre-wrap;margin-top:12px"></pre>` : ''}</div>
     </div>
     ${S.admin ? `<div class="card reveal" style="--i:2"><div class="head"><div><h2>Equipe</h2><div class="sub">${S.login ? 'Cada pessoa entra com nome e PIN' : 'Login desligado neste computador — crie os acessos antes de publicar'}</div></div><button class="sm" id="novoUser">${ico('plus')} Novo</button></div>
-      ${users ? users.map(u => `<div class="row" style="grid-template-columns:auto 1fr auto;${u.ativo ? '' : 'opacity:.5'}"><div class="avatar" style="width:36px;height:36px">${esc(u.nome.slice(0, 1))}</div><div><div class="pname">${esc(u.nome)}</div><div class="xs muted">${u.papel === 'admin' ? 'Administrador' : 'Operador'} · ${u.tem_pin ? 'PIN definido' : '<span style="color:var(--warn)">sem PIN (não consegue entrar)</span>'}${u.ativo ? '' : ' · inativo'}</div></div>
+      ${users ? users.map(u => `<div class="row" style="grid-template-columns:auto 1fr auto;${u.ativo ? '' : 'opacity:.5'}"><div class="avatar" style="width:36px;height:36px">${esc(u.nome.slice(0, 1))}</div><div><div class="pname">${esc(u.nome)}</div><div class="xs muted">${u.papel === 'admin' ? 'Administrador' : 'Operador'} · ${u.bloqueado_ate && u.bloqueado_ate > new Date().toISOString() ? '<span style="color:var(--bad)">bloqueado por tentativas erradas (crie um PIN novo para liberar)</span>' : u.tem_pin ? 'PIN definido' + (u.falhas ? ` · <span style="color:var(--warn)">${u.falhas} tentativa${u.falhas > 1 ? 's' : ''} errada${u.falhas > 1 ? 's' : ''}</span>` : '') : '<span style="color:var(--warn)">sem PIN (não consegue entrar)</span>'}${u.ativo ? '' : ' · inativo'}</div></div>
         <div class="nowrap"><button class="sm" data-pin="${esc(u.nome)}">${ico('lock')} PIN</button> <button class="sm subtle" data-ativo="${esc(u.nome)}" data-v="${u.ativo ? 0 : 1}">${u.ativo ? 'Desativar' : 'Ativar'}</button></div></div>`).join('') : '<p class="muted">Não foi possível listar.</p>'}</div>` : ''}
     ${cartaoResp}
   </div>`;
@@ -350,11 +350,11 @@ PAGINAS.config.ligar = () => {
   });
   const nu = $('#novoUser');
   if (nu) nu.addEventListener('click', async () => {
-    const d = await dialogo({ titulo: 'Novo usuário', sub: 'O PIN tem de 6 a 8 números.', campos: [{ id: 'nome', label: 'Nome' }, { id: 'pin', label: 'PIN', tipo: 'password', inputmode: 'numeric' }, { id: 'papel', label: 'Papel', tipo: 'select', opcoes: ['operador', 'admin'] }], ok: 'Criar' });
+    const d = await dialogo({ titulo: 'Novo usuário', sub: 'O PIN tem de 6 a 8 números.', campos: [{ id: 'nome', label: 'Nome' }, { id: 'pin', label: 'PIN (aparece na tela para você conferir)', tipo: 'text', inputmode: 'numeric' }, { id: 'papel', label: 'Papel', tipo: 'select', opcoes: ['operador', 'admin'] }], ok: 'Criar' });
     if (d) try { await api('/api/usuarios', { method: 'POST', body: d }); toast('Usuário criado', 'ok'); rota(); } catch (e) { toast(e.message, 'bad', 5000); }
   });
   $$('[data-pin]').forEach(b => b.addEventListener('click', async () => {
-    const d = await dialogo({ titulo: 'Novo PIN', sub: b.dataset.pin, campos: [{ id: 'pin', label: 'PIN (6 a 8 números)', tipo: 'password', inputmode: 'numeric' }], ok: 'Salvar' });
+    const d = await dialogo({ titulo: 'Novo PIN', sub: b.dataset.pin, campos: [{ id: 'pin', label: 'PIN (6 a 8 números — aparece na tela para você conferir)', tipo: 'text', inputmode: 'numeric' }], ok: 'Salvar' });
     if (d) try { await api('/api/usuarios/' + encodeURIComponent(b.dataset.pin), { method: 'PUT', body: { pin: d.pin } }); toast('PIN atualizado', 'ok'); rota(); } catch (e) { toast(e.message, 'bad', 5000); }
   }));
   $$('[data-ativo]').forEach(b => b.addEventListener('click', async () => {
