@@ -498,3 +498,14 @@ button.primary:active, .btn.primary:active { transform: scale(.96); }
 .stage.desenhando .gon, .stage.desenhando .alcas { pointer-events: none; }
 .rasc { position: absolute; border: 1.5px dashed var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); pointer-events: none; z-index: 5; border-radius: 2px; }
 .pal.sel { background: var(--accent-soft); border-radius: 10px; padding: 4px; outline: 1px solid var(--accent); }
+
+/* setores por pessoa */
+.rg { display: grid; gap: 4px; }
+.rg-row { display: grid; grid-template-columns: 34px repeat(4, minmax(0, 1fr)); gap: 6px; align-items: center; }
+.rg-n { min-height: 40px; padding: 0; border: 0; background: transparent; font: 700 16px var(--font-display); color: var(--ink); text-align: center; }
+button.rg-n:hover { color: var(--accent); }
+.rg-l { min-height: 40px; padding: 0 4px; font-size: 13px; justify-content: center; }
+.rg-row.nm input { min-height: 40px; font-size: 13px; min-width: 0; }
+.setor-nomes { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.setor-nomes > summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; font-weight: 600; font-size: 14px; }
+.setor-nomes .rg { margin-top: 8px; }

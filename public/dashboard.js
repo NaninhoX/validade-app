@@ -288,12 +288,11 @@ PAGINAS.config = async () => {
   const ativos = (users || []).filter(u => u.ativo).map(u => u.nome);
   const gIds = [...new Set([...Array.from({ length: 18 }, (_, i) => i + 1), ...(layout ? layout.gondolas.map(g => g.id) : []), ...Object.keys(setores || {}).map(Number)])].sort((a, b) => a - b);
   const ladosDe2 = g => (g === 9 || g === 10 ? ['A', 'B', 'PE', 'PD'] : ['A', 'B', 'F', 'C']);
-  const NOME_LADO2 = { A: 'Lado A', B: 'Lado B', F: 'Frente', C: 'Costas', PE: 'Ponta esquerda', PD: 'Ponta direita' };
-  const cartaoResp = !S.admin || !users ? '' : `<div class="card reveal" style="--i:3"><div class="head"><div><h2>Setores das gôndolas</h2><div class="sub">Dê um nome a cada lado (ex.: “Higiene”) e escolha quem cuida dele. Os nomes aparecem no mapa e na ronda.</div></div></div>
-      <div id="setoresG">${gIds.map(id => { const s = (setores || {})[id] || {}; const resumo = ladosDe2(id).map(l => (s[l] && (s[l].nome || s[l].resp.length)) ? `${l}: ${esc(s[l].nome || s[l].resp.map(n => n.charAt(0) + n.slice(1).toLowerCase()).join(', '))}` : '').filter(Boolean).join(' · ');
-        return `<details class="setor-g" data-g="${id}"><summary><b>${id}</b><span class="xs muted">${resumo || 'sem setores definidos'}</span></summary>
-        ${ladosDe2(id).map(l => `<div class="setor-l" data-lado="${l}"><label class="f">${NOME_LADO2[l]}</label><input type="text" maxlength="40" placeholder="Nome do setor (opcional)" value="${esc((s[l] && s[l].nome) || '')}" aria-label="Nome do ${NOME_LADO2[l]} da gôndola ${id}">
-          <div class="chips" style="margin:8px 0 0">${ativos.map(n => `<button class="chip" data-n="${esc(n)}" aria-pressed="${!!(s[l] && s[l].resp.includes(n))}">${esc(n.charAt(0) + n.slice(1).toLowerCase())}</button>`).join('')}</div></div>`).join('')}</details>`; }).join('')}</div>
+  const ROT_LADO = { A: 'Lado A', B: 'Lado B', F: 'Frente', C: 'Costas', PE: 'Pta. esq.', PD: 'Pta. dir.' };
+  S.setCfg = { gIds, ativos, ladosDe: ladosDe2, rotulos: ROT_LADO, setores: JSON.parse(JSON.stringify(setores || {})), sel: ativos[0] || null };
+  const cartaoResp = !S.admin || !users ? '' : `<div class="card reveal" style="--i:3"><div class="head"><div><h2>Setores das gôndolas</h2><div class="sub">Escolha a pessoa e toque nos lados que ela cuida. Aparece no mapa e na ronda.</div></div></div>
+      <div id="setGrid"></div>
+      <details class="setor-nomes"><summary>Dar nome aos setores (opcional, ex.: “Higiene”)</summary><div id="setNomes"></div></details>
       <div style="margin-top:14px"><button class="primary" id="salvaSetores">${ico('check')} Salvar setores</button></div></div>`;
   return `<div class="grid cols-2" style="align-items:start">
     <div class="grid">
@@ -318,15 +317,47 @@ PAGINAS.config = async () => {
   </div>`;
 };
 PAGINAS.config.ligar = () => {
-  const sg = $('#setoresG');
-  if (sg) sg.addEventListener('click', e => { const b = e.target.closest('button[data-n]'); if (b) b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); });
+  const SC = S.setCfg, sgrid = $('#setGrid');
+  const nomeBonito = n => n.charAt(0) + n.slice(1).toLowerCase();
+  const tem = (g, l, p) => !!(SC.setores[g] && SC.setores[g][l] && SC.setores[g][l].resp.includes(p));
+  const poe = (g, l, p, v) => {
+    const s = ((SC.setores[g] = SC.setores[g] || {})[l] = SC.setores[g][l] || { nome: '', resp: [] });
+    s.resp = s.resp.filter(x => x !== p); if (v) s.resp.push(p);
+  };
+  const desenhaSet = () => {
+    if (!sgrid) return;
+    const p = SC.sel;
+    if (!p) { sgrid.innerHTML = '<p class="muted">Cadastre a equipe primeiro.</p>'; return; }
+    const total = x => SC.gIds.reduce((n, g) => n + SC.ladosDe(g).filter(l => tem(g, l, x)).length, 0);
+    const meus = SC.gIds.flatMap(g => SC.ladosDe(g).filter(l => tem(g, l, p)).map(l => g + '-' + l));
+    sgrid.innerHTML = `<div class="chips" style="margin:0 0 12px">${SC.ativos.map(n => `<button class="chip" data-p="${esc(n)}" aria-pressed="${n === p}">${esc(nomeBonito(n))} <span class="xs" style="opacity:.7">${total(n) || ''}</span></button>`).join('')}</div>
+      <div class="xs muted" style="margin-bottom:8px">Toque no lado que ${esc(nomeBonito(p))} cuida. Toque no número para marcar ou limpar a gôndola inteira.</div>
+      <div class="rg">${SC.gIds.map(g => `<div class="rg-row"><button class="rg-n" data-gt="${g}" aria-label="Gôndola ${g} inteira">${g}</button>${SC.ladosDe(g).map(l => `<button class="chip rg-l" data-g="${g}" data-l="${l}" aria-pressed="${tem(g, l, p)}">${SC.rotulos[l]}</button>`).join('')}</div>`).join('')}</div>
+      <div class="xs muted" style="margin-top:10px">${meus.length ? esc(nomeBonito(p)) + ' cuida de: ' + meus.join(', ') : esc(nomeBonito(p)) + ' ainda não tem lados.'}</div>`;
+  };
+  if (sgrid) {
+    desenhaSet();
+    sgrid.addEventListener('click', e => {
+      const bp = e.target.closest('button[data-p]'), bl = e.target.closest('button[data-l]'), bg = e.target.closest('button[data-gt]');
+      if (bp) SC.sel = bp.dataset.p;
+      else if (bl) poe(+bl.dataset.g, bl.dataset.l, SC.sel, !tem(+bl.dataset.g, bl.dataset.l, SC.sel));
+      else if (bg) { const g = +bg.dataset.gt, ls = SC.ladosDe(g), todos = ls.every(l => tem(g, l, SC.sel)); ls.forEach(l => poe(g, l, SC.sel, !todos)); }
+      else return;
+      desenhaSet();
+    });
+    $('#setNomes').innerHTML = `<div class="rg">${SC.gIds.map(g => `<div class="rg-row nm"><b class="rg-n">${g}</b>${SC.ladosDe(g).map(l => `<input type="text" maxlength="40" data-g="${g}" data-l="${l}" placeholder="${SC.rotulos[l]}" value="${esc((SC.setores[g] && SC.setores[g][l] && SC.setores[g][l].nome) || '')}" aria-label="Nome do setor, gôndola ${g}, ${SC.rotulos[l]}">`).join('')}</div>`).join('')}</div>`;
+    $('#setNomes').addEventListener('input', e => {
+      const i = e.target.closest('input[data-l]'); if (!i) return;
+      const s = ((SC.setores[i.dataset.g] = SC.setores[i.dataset.g] || {})[i.dataset.l] = SC.setores[i.dataset.g][i.dataset.l] || { nome: '', resp: [] });
+      s.nome = i.value.trim();
+    });
+  }
   const ss = $('#salvaSetores');
   if (ss) ss.addEventListener('click', async () => {
     const r = {};
-    $$('#setoresG .setor-g').forEach(g => $$('.setor-l', g).forEach(l => {
-      const nome = $('input', l).value.trim(), resp = $$('button[aria-pressed=true]', l).map(b => b.dataset.n);
-      if (nome || resp.length) (r[g.dataset.g] = r[g.dataset.g] || {})[l.dataset.lado] = { nome, resp };
-    }));
+    for (const g of Object.keys(SC.setores)) for (const l of Object.keys(SC.setores[g])) {
+      const s = SC.setores[g][l]; if (s.nome || s.resp.length) (r[g] = r[g] || {})[l] = { nome: s.nome, resp: s.resp };
+    }
     try { await api('/api/setores', { method: 'PUT', body: r }); toast('Setores salvos', 'ok'); } catch (e) { toast(e.message, 'bad', 5000); }
   });
   const sf = $('#salvaFaixas');
