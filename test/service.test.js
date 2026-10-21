@@ -428,3 +428,17 @@ test('gôndolas e áreas novas: nome, tipo e frente; endereços de área passam 
   U.setAreas([19]);
   await S.sincronizaAreas(db);                                    // cache curto: recarrega da configuração
 });
+
+test('briefing: junta retirar, etiquetar e ronda, com responsáveis', async () => {
+  const db = await novoDb();
+  await A.salvarUsuario(db, { nome: 'DAVI', pin: '123456', papel: 'operador' });
+  await S.setSetores(db, { 1: { A: { nome: '', resp: ['DAVI'] } } });
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 3, ...base, lote: 'V', validade: '2020-01-01', endereco: '1-A-1' });
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, lote: 'E', validade: U.hojeISO(new Date(Date.now() + 20 * 864e5)), endereco: '1-A-2' });
+  const b = await S.briefing(db);
+  assert.equal(b.retirar.total, 1);
+  assert.deepEqual(b.retirar.itens[0].resp, ['DAVI']);
+  assert.equal(b.etiquetar.total, 1);
+  assert.equal(b.ronda.enderecos.length, 2);
+  assert.ok(b.totais.vencido_lotes === 1);
+});

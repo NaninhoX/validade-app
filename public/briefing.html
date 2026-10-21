@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Briefing do dia · Controle de Validade</title>
+<link rel="icon" href="icon.svg">
+<style>
+  @font-face { font-family: Roboto; font-weight: 400; src: url(vendor/fonts/roboto-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family: Roboto; font-weight: 500; src: url(vendor/fonts/roboto-latin-500-normal.woff2) format("woff2"); }
+  @font-face { font-family: Roboto; font-weight: 700; src: url(vendor/fonts/roboto-latin-700-normal.woff2) format("woff2"); }
+  @page { size: A4; margin: 10mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e9edf2; color: #0f2340; font: 400 11px/1.35 Roboto, "Segoe UI", system-ui, sans-serif; }
+  .barra { display: flex; gap: 10px; justify-content: center; padding: 12px; position: sticky; top: 0; background: #e9edf2; }
+  .barra button, .barra a { font: 500 14px Roboto, sans-serif; min-height: 40px; padding: 0 18px; border-radius: 8px; border: 1px solid #013a7b; background: #fff; color: #013a7b; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+  .barra .p { background: #013a7b; color: #fff; }
+  .folha { width: 210mm; min-height: 297mm; margin: 0 auto 20px; background: #fff; padding: 10mm; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #013a7b; padding-bottom: 6px; }
+  h1 { font: 700 18px Roboto, sans-serif; margin: 0; color: #013a7b; }
+  header .d { text-align: right; font-size: 11px; color: #364a68; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 4px; }
+  .kpi { border: 1px solid #c9d3e0; border-radius: 6px; padding: 6px 8px; }
+  .kpi small { display: block; color: #627590; font-size: 9.5px; }
+  .kpi b { font: 700 15px Roboto, sans-serif; }
+  .kpi.r b { color: #cb1b36; }
+  h2 { font: 700 12px Roboto, sans-serif; margin: 10px 0 3px; color: #013a7b; display: flex; justify-content: space-between; align-items: baseline; }
+  h2 span { font: 400 10px Roboto, sans-serif; color: #627590; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font: 500 9.5px Roboto, sans-serif; color: #627590; border-bottom: 1px solid #c9d3e0; padding: 2px 4px; }
+  td { padding: 3px 4px; border-bottom: 1px solid #e3e9f1; vertical-align: top; }
+  td.l { font-weight: 700; white-space: nowrap; width: 48px; }
+  td.q, th.q { text-align: right; white-space: nowrap; width: 30px; }
+  td.v { white-space: nowrap; width: 58px; }
+  td.r { width: 62px; color: #364a68; }
+  td.c { width: 16px; }
+  .cx { display: inline-block; width: 11px; height: 11px; border: 1.2px solid #364a68; border-radius: 2px; vertical-align: -2px; }
+  .mais { font-size: 10px; color: #627590; margin: 3px 0 0; }
+  .ronda { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 14px; }
+  .ronda div { display: flex; gap: 6px; align-items: baseline; padding: 3px 0; border-bottom: 1px solid #e3e9f1; }
+  .ronda .e { font-weight: 700; min-width: 44px; }
+  .ronda .n { color: #627590; font-size: 10px; margin-left: auto; text-align: right; }
+  .venc { color: #cb1b36; font-weight: 500; }
+  .urg { color: #b45309; font-weight: 500; }
+  footer { margin-top: 12px; padding-top: 8px; border-top: 1px solid #c9d3e0; display: flex; justify-content: space-between; color: #364a68; font-size: 10px; gap: 10px; }
+  .vazio { color: #627590; padding: 6px 0; }
+  .erro { text-align: center; padding: 40px; color: #cb1b36; }
+  @media print {
+    body { background: #fff; }
+    .barra { display: none; }
+    .folha { margin: 0; padding: 0; width: auto; min-height: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="barra"><button class="p" id="imprime">Imprimir ou salvar em PDF</button><a href="/">Voltar ao app</a></div>
+<main class="folha" id="folha"><p class="vazio">Carregando…</p></main>
+<script src="common.js"></script>
+<script src="briefing.js"></script>
+</body>
+</html>
