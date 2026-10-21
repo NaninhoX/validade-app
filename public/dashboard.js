@@ -146,6 +146,7 @@ PAGINAS.geral = async () => {
         ${gRisco.map(g => `<a class="row click" href="#/mapa" data-g="${g.id}" style="color:inherit"><span class="dot" style="--c:${esc(g.cor || '#94a3b8')}"></span><div><div class="pname">Gôndola ${g.id}</div><div class="xs muted">${g.vencidos} vencidos · ${g.nunca_contada ? 'nunca contada' : g.dias_sem_ronda !== null ? 'ronda há ' + g.dias_sem_ronda + ' d' : ''}</div></div><b class="num">${brlK(g.risco)}</b></a>`).join('') || '<p class="muted">Sem dados.</p>'}</div>
     </div>
   </div>
+  <div class="card reveal" id="cardCausas" style="--i:9;margin-top:18px"></div>
   <div class="grid cols-2" style="margin-top:18px">
     <div class="card reveal" style="--i:9"><div class="head"><h2>Marcas com maior perda potencial</h2></div>
       ${(() => { const m = Math.max(1, ...res.marcas.map(x => x.perda)); return res.marcas.slice(0, 7).map(x => `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${esc(x.marca)}</span><b class="num">${brl(x.perda)}</b></div><div class="meter" style="margin-top:6px"><i style="width:${x.perda / m * 100}%"></i></div></div>`).join(''); })()}</div>
@@ -160,6 +161,7 @@ PAGINAS.geral = async () => {
   </div>`;
 };
 PAGINAS.geral.ligar = () => {
+  Causa.montaCard($('#cardCausas'));
   $$('[data-count]').forEach(el => contar(el, +el.dataset.count, el.dataset.fmt === 'brl' ? brl : int));
   requestAnimationFrame(() => requestAnimationFrame(() => $$('.seg-arc').forEach(c => { c.style.strokeDasharray = `${c.dataset.len} ${c.dataset.c - c.dataset.len}`; })));
   $$('[data-status]').forEach(el => el.addEventListener('click', () => { location.hash = '#/estoque?status=' + encodeURIComponent(el.dataset.status); }));
@@ -245,10 +247,8 @@ async function acaoLote(e) {
     try { await api('/api/produtos', { method: 'POST', body: { ean: l.ean, nome: l.nome || l.ean, preco: d.p.trim().replace(',', '.') } }); toast('Preço salvo', 'ok'); ok = true; }
     catch (er) { return toast(er.message, 'bad', 5000); }
   } else if (b.dataset.act === 'baixa') {
-    const d = await dialogo({ titulo: 'Dar baixa', sub: `${nome} — saldo ${l.qtd}`, campos: [
-      { id: 'qtd', label: 'Quantidade', tipo: 'number', min: 1, valor: l.qtd, inputmode: 'numeric' },
-      { id: 'motivo', label: 'Motivo', tipo: 'select', opcoes: l.dias <= 0 ? ['RMA', ...S.cfg.motivos_baixa.filter(x => x !== 'RMA')] : S.cfg.motivos_baixa }] });
-    if (d) ok = await enviar({ tipo: 'BAIXA', lote_id: l.id, qtd: d.qtd, motivo: d.motivo }, 'Baixa registrada');
+    const d = await Causa.dialogoBaixa({ sub: `${nome} — saldo ${l.qtd}`, saldo: l.qtd, motivos: S.cfg.motivos_baixa, vencido: l.dias <= 0 });
+    if (d) ok = await enviar({ tipo: 'BAIXA', lote_id: l.id, qtd: d.qtd, motivo: d.motivo, causa: d.causa }, 'Baixa registrada');
   } else if (b.dataset.act === 'ajuste') {
     const d = await dialogo({ titulo: 'Ajustar quantidade', sub: `${nome} — saldo ${l.qtd}`, campos: [{ id: 'qtd', label: 'Quantidade contada', tipo: 'number', min: 0, valor: l.qtd, inputmode: 'numeric' }] });
     if (d) ok = await enviar({ tipo: 'AJUSTE', lote_id: l.id, qtd: d.qtd, motivo: 'Ajuste pelo painel' }, 'Quantidade ajustada');
@@ -269,7 +269,7 @@ PAGINAS.mov = async () => {
   const ev = await api('/api/eventos?limite=300');
   return `<div class="card reveal"><div class="tl">${ev.map((e, i) => `<div class="ev" style="--c:${TIPO_COR[e.tipo] || '#8e8e93'};${e.desfeito ? 'opacity:.45' : ''};${i < 12 ? `animation:rise .4s var(--ease) both;animation-delay:${i * 35}ms` : ''}">
     <div style="display:flex;gap:12px;align-items:baseline;justify-content:space-between;flex-wrap:wrap"><div><b>${esc(TIPO_TXT[e.tipo] || e.tipo)}</b>${e.historico ? ' <span class="xs faint">(histórico)</span>' : ''} · ${esc(e.nome || e.ean)}</div><div class="xs muted">${brDataHora(e.ts)} · ${esc(e.operador || '')}</div></div>
-    <div class="xs muted" style="margin-top:2px">${e.lote ? 'lote ' + esc(e.lote) + ' · ' : ''}${e.endereco ? addr(e.endereco, U_ok(e.endereco)) + ' · ' : ''}<b style="color:${e.delta < 0 ? 'var(--bad)' : 'var(--good)'}">${e.delta > 0 ? '+' : ''}${e.delta}</b>${e.qtd_depois !== null ? ` → saldo ${e.qtd_depois}` : ''}${e.motivo ? ' · ' + esc(e.motivo) : ''}
+    <div class="xs muted" style="margin-top:2px">${e.lote ? 'lote ' + esc(e.lote) + ' · ' : ''}${e.endereco ? addr(e.endereco, U_ok(e.endereco)) + ' · ' : ''}<b style="color:${e.delta < 0 ? 'var(--bad)' : 'var(--good)'}">${e.delta > 0 ? '+' : ''}${e.delta}</b>${e.qtd_depois !== null ? ` → saldo ${e.qtd_depois}` : ''}${e.motivo ? ' · ' + esc(e.motivo) : ''}${e.causa ? ' · causa: ' + esc(e.causa) : ''}
     ${!e.desfeito && !e.historico && e.tipo !== 'IMPORT' ? `<button class="sm subtle" data-grupo="${esc(e.grupo)}" style="margin-left:8px;min-height:24px">${ico('undo')} Desfazer</button>` : ''}${e.desfeito ? ' · <i>desfeito</i>' : ''}</div></div>`).join('')}</div></div>`;
 };
 const U_ok = e => parseEndereco(e).valido;

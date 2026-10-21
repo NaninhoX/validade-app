@@ -541,8 +541,9 @@ const Coletor = (() => {
       return registra(it, 0, 'Ronda: não encontrado', 'zero');
     }
     if (a === 'ret') {
-      if (!confirm(`Confirma que retirou ${it.qtd} un. de "${it.nome}" (lote ${it.lote}, vencido) da loja para o RMA?`)) return;
-      const r = await lancar({ tipo: 'BAIXA', lote_id: it.id, qtd: it.qtd, motivo: 'RMA' });
+      const causa = await Causa.escolherCausa({ titulo: `Retirar ${it.qtd} un. para o RMA`, sub: `${it.nome} · lote ${it.lote} (vencido). Por que perdemos este item?` });
+      if (!causa) return;
+      const r = await lancar({ tipo: 'BAIXA', lote_id: it.id, qtd: it.qtd, motivo: 'RMA', causa });
       conta('ret');
       if (r.grupo) mostraUndo(r.grupo, `Retirado: ${it.qtd} × ${it.nome}`, it.id, 'ret');
       rondaItens = rondaItens.filter(x => x.id !== it.id);
@@ -710,13 +711,11 @@ const Coletor = (() => {
       if (!b) return;
       const l = window.__baixaLotes.find(x => x.id === +b.dataset.b);
       CFG = CFG || await api('/api/config').catch(() => ({ motivos_baixa: ['Venda', 'RMA', 'Avaria', 'Furto', 'Retirada Preventiva', 'Doação', 'Outro'] }));
-      const d = await dialogo({ titulo: 'Dar baixa', sub: `lote ${l.lote} · saldo ${l.qtd}`, campos: [
-        { id: 'q', label: 'Quantidade', valor: l.qtd, inputmode: 'numeric' },
-        { id: 'm', label: 'Motivo', tipo: 'select', opcoes: l.dias <= 0 ? ['RMA', ...CFG.motivos_baixa.filter(x => x !== 'RMA')] : CFG.motivos_baixa }] });
-      if (!d || !/^\d+$/.test(d.q.trim()) || +d.q < 1) return;
+      const d = await Causa.dialogoBaixa({ sub: `lote ${l.lote} · saldo ${l.qtd}`, saldo: l.qtd, motivos: CFG.motivos_baixa, vencido: l.dias <= 0 });
+      if (!d) return;
       try {
-        const r = await lancar({ tipo: 'BAIXA', lote_id: l.id, qtd: +d.q, motivo: d.m });
-        if (r.grupo) mostraUndo(r.grupo, `Baixa: ${d.q} × lote ${l.lote} (${d.m})`);
+        const r = await lancar({ tipo: 'BAIXA', lote_id: l.id, qtd: d.qtd, motivo: d.motivo, causa: d.causa });
+        if (r.grupo) mostraUndo(r.grupo, `Baixa: ${d.qtd} × lote ${l.lote} (${d.motivo})`);
         toast('Baixa registrada', 'ok', 2000);
         $('#bEan').value = ''; $('#bLista').innerHTML = ''; $('#bEan').focus();
       } catch (er) { toast(er.message, 'bad', 5000); }

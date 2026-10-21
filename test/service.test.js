@@ -324,7 +324,7 @@ test('baixa: RMA substitui Vencido e RMA Fornecedor', async () => {
   assert.ok(S.MOTIVOS_BAIXA.includes('RMA'));
   assert.ok(!S.MOTIVOS_BAIXA.includes('Vencido') && !S.MOTIVOS_BAIXA.includes('RMA Fornecedor'));
   const r = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 3, ...base, validade: mais(-2) });
-  await S.leitura(db, { tipo: 'BAIXA', lote_id: r.lote.id, qtd: 3, motivo: 'RMA', operador: 'TESTE' });
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: r.lote.id, qtd: 3, motivo: 'RMA', causa: 'Giro baixo', operador: 'TESTE' });
   await assert.rejects(S.leitura(db, { tipo: 'BAIXA', ...base, validade: mais(-2), qtd: 1, motivo: 'Vencido' }), /motivo/);
 });
 
