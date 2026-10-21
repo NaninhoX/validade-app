@@ -1,7 +1,7 @@
 'use strict';
 // Mapa de calor da loja: planta (gôndolas) + detalhe por lado e prateleira. A planta é editável (arrastar/redimensionar) por administradores.
 const Mapa = (() => {
-  const M = { vista: 'planta', data: null, metric: 'risco', sel: null, shelf: null, selCam: null, selPt: null, lado: 'B', cam: null, kfit: 1, detKey: '', camAlvo: null, suprime: false, painelMin: false, edit: false, editG: false, draftG: null, draftDim: null, draft: null, view: null, ctx: null, ro: null };
+  const M = { vista: 'planta', data: null, metric: 'risco', sel: null, shelf: null, selCam: null, selPt: null, lado: 'B', selPal: null, desenhando: null, draftL: null, escHandler: null, cam: null, kfit: 1, detKey: '', camAlvo: null, suprime: false, painelMin: false, edit: false, editG: false, draftG: null, draftDim: null, draft: null, view: null, ctx: null, ro: null };
 
   // ---------- cores ----------
   const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
@@ -91,7 +91,7 @@ const Mapa = (() => {
   // desenha os retângulos (em cm) de uma gôndola; `texto` liga números e rótulos (visão detalhada)
   function formas(id, d, { texto, ox = 0, oy = 0 }) {
     const gm = geomG(id);
-    const cel = (chave, x, y, w, h, rotulo, nome, ponta) => {
+    const cel = (chave, x, y, w, h, rotulo, nome, ponta, extra = '') => {
       const c = chave && d ? d.celulas.find(z => z.chave === chave) : null;
       const k = calor(c, true);
       const sel = M.shelf && M.shelf.g === id && M.shelf.chave === chave;
@@ -107,12 +107,12 @@ const Mapa = (() => {
             : `<text x="${x + w / 2}" y="${y + h / 2 + 5}" text-anchor="middle" font-size="12" fill="var(--faint)">sem lotes</text>`;
         }
       }
-      return `<g class="mp-cel${c ? '' : ' vazia'}${sel ? ' sel' : ''}"${chave && c ? ` data-chave="${esc(chave)}" tabindex="0" role="button" aria-label="${esc(enderecoDe(id, chave))}"` : ''}><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3" ${estilo}/>${t}</g>`;
+      return `<g${extra} class="mp-cel${c ? '' : ' vazia'}${sel ? ' sel' : ''}"${chave && c ? ` data-chave="${esc(chave)}" tabindex="0" role="button" aria-label="${esc(enderecoDe(id, chave))}"` : ''}><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3" ${estilo}/>${t}</g>`;
     };
     if (gm.area) {   // sacaria: área livre; pallets cadastrados viram módulos
       const cf = cfgG(id), geral = d ? d.celulas.find(z => z.chave === 'geral') : null, kg = calor(geral, true);
       let s = `<g class="mp-cel${geral ? '' : ' vazia'}${M.shelf && M.shelf.g === id && M.shelf.chave === 'geral' ? ' sel' : ''}"${geral ? ' data-chave="geral" tabindex="0" role="button"' : ''}><rect x="${ox}" y="${oy}" width="${gm.L}" height="${gm.T}" rx="6" ${geral && !kg.vazio ? `style="fill:${kg.bg}"` : ''}/>${texto ? `<text x="${ox + 10}" y="${oy + 20}" font-size="13" font-weight="700" fill="var(--faint)">Sacaria${geral ? ' · sem pallet definido: ' + geral.lotes + ' lotes' : ''}</text>` : ''}</g>`;
-      for (const p of cf.pallets || []) s += cel(`P${p.id}`, ox + p.x, oy + p.y, p.c, p.l, `P${p.id}`, p.nome, false);
+      for (const p of cf.pallets || []) s += cel(`P${p.id}`, ox + p.x, oy + p.y, p.c, p.l, `P${p.id}`, p.nome, false, ` data-pal="${p.id}"`);
       return s;
     }
     const { D, n, T } = gm, lados = ladosG(id), pt = pontasDe(id), nomes = cfgG(id).nomes || {};
@@ -159,7 +159,7 @@ const Mapa = (() => {
     const aviso = $('#orfas'); if (aviso) aviso.innerHTML = '';
   }
 
-  function layoutAtual() { return M.edit ? M.draft : M.data.layout; }
+  function layoutAtual() { return M.editG ? M.draftL : M.edit ? M.draft : M.data.layout; }
 
   const setaSvg = s => `<svg viewBox="0 0 ${s.c} 24" width="${s.c}" height="24" aria-hidden="true"><line x1="2" y1="12" x2="${s.c - 12}" y2="12" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 9"/><path d="M${s.c - 16} 3 L${s.c - 2} 12 L${s.c - 16} 21 Z" fill="currentColor"/></svg>`;
 
@@ -169,14 +169,7 @@ const Mapa = (() => {
   const DETALHE_PX = 560;                       // largura na tela a partir da qual a gôndola mostra o desenho completo
   const larguraNaTela = (g, k) => caixa(g).w * k;
 
-  function layoutExibido() {
-    let L = layoutAtual();
-    if (M.editG && M.novasG) {   // gôndolas recém-criadas aparecem já na edição, numa posição provisória
-      const extra = [...M.novasG].filter(n => M.draftG[n] && !L.gondolas.some(g => g.id === n));
-      if (extra.length) { L = { ...L, gondolas: [...L.gondolas] }; extra.forEach(n => L.gondolas.push(caixaInicial(L, n))); }
-    }
-    return L;
-  }
+  const layoutExibido = () => layoutAtual();
 
   function aplicaCam(anima) {
     const c = $('#canvas'); if (!c) return;
@@ -186,6 +179,7 @@ const Mapa = (() => {
     $('#stage').classList.toggle('zoom-longe', M.cam.k < (M.kfit || 1) * 1.6);
     const fx = $('#fluxo');
     if (fx) { fx.classList.toggle('anim', !!anima); desenhaFluxo(); if (anima) setTimeout(() => { fx.classList.remove('anim'); desenhaFluxo(); }, 600); }
+    desenhaAlcas();
   }
 
   // enquadra a planta inteira
@@ -230,13 +224,14 @@ const Mapa = (() => {
 
   function ligaCamera(st) {
     const ptrs = new Map(); let pan = null, pinca = null, moveu = false;
+    st.addEventListener('pointerdown', e => { if (!M.desenhando || !M.editG || e.target.closest('.ctrls')) return; e.stopImmediatePropagation(); e.preventDefault(); iniciaDesenho(e); }, true);
     st.addEventListener('wheel', e => {
       e.preventDefault();
       const r = st.getBoundingClientRect();
       zoomEm(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0016)));
     }, { passive: false });
     st.addEventListener('pointerdown', e => {
-      if (e.target.closest('.ctrls')) return;
+      if (e.target.closest('.ctrls') || e.target.closest('.alcas .alca, .alcas .alcas-corpo')) return;
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       moveu = false;
       if (ptrs.size === 1) pan = { x: e.clientX, y: e.clientY, tx: M.cam.tx, ty: M.cam.ty };
@@ -292,8 +287,8 @@ const Mapa = (() => {
         const d = porId.get(g.id), c = caixa(g), texto = larguraNaTela(g, kDet) >= DETALHE_PX, nome = (cfgTodas()[g.id] || {}).nome, r = respGondola(g.id);
         const resumo = d && d.lotes ? `${d.risco ? brlK(d.risco) : 'ok'}` : '';
         return `<div class="gon${M.sel === g.id ? ' sel' : ''}${M.edit ? ' edit' : ''}${texto ? ' perto' : ''}" data-g="${g.id}" style="left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px;--i:${i}" tabindex="0" role="button" aria-label="${esc(rotuloG(g.id))}">
-          ${svgPlanta(g, d, texto)}<span class="gn"><b>${g.id}</b>${nome ? ` · ${esc(nome)}` : ''}${!texto && (resumo || r) ? `<small>${[resumo, r].filter(Boolean).map(esc).join(' · ')}</small>` : ''}</span>${d && d.vencidos ? `<span class="tag">${d.vencidos}</span>` : ''}${M.edit && M.sel === g.id ? '<span class="rz" data-rz="1"></span>' : ''}</div>`;
-      }).join('')}</div><svg id="fluxo" class="fluxo" aria-hidden="true"></svg>`;
+          ${svgPlanta(g, d, texto)}<span class="gn"><b>${g.id}</b>${nome ? ` · ${esc(nome)}` : ''}${!texto && (resumo || r) ? `<small>${[resumo, r].filter(Boolean).map(esc).join(' · ')}</small>` : ''}</span>${d && d.vencidos ? `<span class="tag">${d.vencidos}</span>` : ''}</div>`;
+      }).join('')}</div><svg id="fluxo" class="fluxo" aria-hidden="true"></svg><svg id="alcas" class="alcas" aria-hidden="true"></svg>`;
     aplicaCam(false);
     const orfas = M.data.gondolas.filter(g => !noLayout.has(g.id));
     const aviso = $('#orfas');
@@ -301,10 +296,167 @@ const Mapa = (() => {
     ligaPalco();
   }
 
+  // ---------- alças de redimensionar (nas quatro direções) e desenho de novas gôndolas ----------
+  const CURSOR = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' };
+  const snap5 = v => Math.round(v / 5) * 5;
+  const limita = (v, a, b) => Math.max(a, Math.min(b, v));
+  const layoutEditavel = () => (M.editG ? M.draftL : M.edit ? M.draft : null);
+  const kcmDe = g => { const c = caixa(g); return c.w / c.aw; };                 // pixels do mapa por centímetro
+  function escalaCm() {                                                           // escala típica da planta (mediana das gôndolas com módulos)
+    const ks = (layoutEditavel() || M.data.layout).gondolas.filter(g => !SACARIA(g.id)).map(kcmDe).filter(k => isFinite(k) && k > 0).sort((a, b) => a - b);
+    return ks.length ? ks[ks.length >> 1] : 0.2;
+  }
+
+  // o que está selecionado para editar e o retângulo dele no mapa
+  function alvoDeEdicao() {
+    const Lx = layoutEditavel();
+    if (!Lx || M.sel === null) return null;
+    const g = Lx.gondolas.find(x => x.id === M.sel);
+    if (!g) return null;
+    const c = caixa(g), kcm = c.w / c.aw, cf = cfgTodas()[g.id] || {};
+    if (M.editG && SACARIA(g.id) && M.selPal !== null) {
+      const p = (cf.pallets || []).find(q => q.id === M.selPal);
+      if (p) return { tipo: 'pal', g, p, kcm, rect: { x: c.x + p.x * kcm, y: c.y + p.y * kcm, w: p.c * kcm, h: p.l * kcm }, corpo: true };
+    }
+    const temPallets = M.editG && SACARIA(g.id) && (cf.pallets || []).length > 0;       // com pallets, o corpo da área fica livre para clicar neles
+    return { tipo: 'gond', g, kcm, rect: { x: c.x, y: c.y, w: c.w, h: c.h }, corpo: M.editG && !temPallets, vert: g.rot === 90 };
+  }
+
+  function desenhaAlcas() {
+    const svg = $('#alcas');
+    if (!svg || !M.cam) return;
+    const al = alvoDeEdicao();
+    if (!al || M.desenhando) { svg.innerHTML = ''; return; }
+    const k = M.cam.k, r = al.rect, x = r.x * k + M.cam.tx, y = r.y * k + M.cam.ty, w = r.w * k, h = r.h * k, s = 11;
+    // em Editar planta o tamanho muda só no comprimento (a proporção real é mantida); em Editar gôndolas, nas quatro direções
+    const dirs = M.edit ? (al.vert ? ['n', 's'] : ['e', 'w']) : ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+    const pos = { n: [x + w / 2, y], s: [x + w / 2, y + h], e: [x + w, y + h / 2], w: [x, y + h / 2], ne: [x + w, y], nw: [x, y], se: [x + w, y + h], sw: [x, y + h] };
+    svg.innerHTML = `<rect class="alcas-borda" x="${x}" y="${y}" width="${w}" height="${h}"/>` + (al.corpo ? `<rect class="alcas-corpo" x="${x}" y="${y}" width="${w}" height="${h}"/>` : '') +
+      dirs.map(d => `<rect class="alca" data-d="${d}" x="${pos[d][0] - s / 2}" y="${pos[d][1] - s / 2}" width="${s}" height="${s}" rx="2" style="cursor:${CURSOR[d]}"/>`).join('');
+    $$('.alca', svg).forEach(a => a.addEventListener('pointerdown', e => arrastaAlca(e, a.dataset.d)));
+    const cp = $('.alcas-corpo', svg); if (cp) cp.addEventListener('pointerdown', e => arrastaAlca(e, 'mover'));
+  }
+
+  function arrastaAlca(e, dir) {
+    e.stopPropagation(); e.preventDefault();
+    const al = alvoDeEdicao();
+    if (!al) return;
+    const g = al.g, cfg = M.editG ? (M.draftG[g.id] = M.draftG[g.id] || {}) : null, k = M.cam.k, kcm = al.kcm, x0 = e.clientX, y0 = e.clientY;
+    const c0 = caixa(g), ini = { x: c0.x, y: c0.y, w: c0.w, h: c0.h }, gx = g.x, gy = g.y;
+    const geo0 = geomG(g.id), cfg0 = cfg ? JSON.parse(JSON.stringify(cfg)) : null, p0 = al.p ? { ...al.p } : null;
+    const D = dimG(g.id), n = nMod(g.id), nl = ladosG(g.id).length;
+    const area = (cfg0 && cfg0.pallets) ? { c: cfg0.c ?? 600, l: cfg0.l ?? 400 } : null;
+    let raf = 0;
+    const aplica = ev => {
+      const dpx = (ev.clientX - x0) / k, dpy = (ev.clientY - y0) / k, dX = dpx / kcm, dY = dpy / kcm;      // pixels do mapa e centímetros
+      const sx = dir.includes('e') ? 1 : dir.includes('w') ? -1 : 0, sy = dir.includes('s') ? 1 : dir.includes('n') ? -1 : 0;
+      if (al.tipo === 'pal') {
+        const p = cfg.pallets.find(q => q.id === p0.id);
+        if (dir === 'mover') { p.x = limita(snap5(p0.x + dX), 0, area.c - p0.c); p.y = limita(snap5(p0.y + dY), 0, area.l - p0.l); }
+        else {
+          let nx = p0.x, ny = p0.y, nc = p0.c, nL = p0.l;
+          if (sx > 0) nc = p0.c + dX; if (sx < 0) { nc = p0.c - dX; nx = p0.x + dX; }
+          if (sy > 0) nL = p0.l + dY; if (sy < 0) { nL = p0.l - dY; ny = p0.y + dY; }
+          nc = limita(snap5(nc), 20, 600); nL = limita(snap5(nL), 20, 600);
+          if (sx < 0) nx = p0.x + p0.c - nc; if (sy < 0) ny = p0.y + p0.l - nL;
+          p.x = limita(snap5(nx), 0, area.c - 20); p.y = limita(snap5(ny), 0, area.l - 20);
+          p.c = Math.min(nc, area.c - p.x); p.l = Math.min(nL, area.l - p.y);
+        }
+      } else if (dir === 'mover') {
+        g.x = snap5(gx + dpx); g.y = snap5(gy + dpy);
+      } else if (M.editG) {
+        let nw, nh;
+        const gw = sx * dX, gh = sy * dY;                                           // crescimento em cm nos eixos da tela
+        if (geo0.area) {
+          cfg.c = limita(snap5((cfg0.c ?? 600) + gw), 100, 3000); cfg.l = limita(snap5((cfg0.l ?? 400) + gh), 100, 3000);
+          nw = cfg.c * kcm; nh = cfg.l * kcm;
+        } else {
+          const vert = g.rot === 90, cresceLen = vert ? gh : gw, cresceEsp = vert ? gw : gh;
+          cfg.dim = { ...(cfg0.dim || {}) };
+          if (cresceLen) cfg.dim.modulo_c = limita(Math.round((geo0.L - 2 * D.ponta_p + cresceLen) / n), 40, 300);
+          if (cresceEsp) cfg.dim.modulo_l = limita(Math.round((nl * D.modulo_l + cresceEsp) / nl), 20, 100);
+          const gm = geomG(g.id);
+          nw = (vert ? gm.T : gm.L) * kcm; nh = (vert ? gm.L : gm.T) * kcm;
+        }
+        g.w = nw; g.h = nh; g.x = sx < 0 ? ini.x + ini.w - nw : ini.x; g.y = sy < 0 ? ini.y + ini.h - nh : ini.y;
+      } else {                                                                      // Editar planta: só o comprimento, mantendo a proporção real
+        const vert = g.rot === 90, gm = geomG(g.id), cresce = vert ? sy * dpy : sx * dpx, len = Math.max(60, snap5((vert ? ini.h : ini.w) + cresce)), curto = Math.round(len * gm.T / gm.L * 10) / 10;
+        g.w = vert ? curto : len; g.h = vert ? len : curto;
+        g.x = !vert && sx < 0 ? ini.x + ini.w - len : ini.x; g.y = vert && sy < 0 ? ini.y + ini.h - len : ini.y;
+      }
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; desenhaPalco(); });
+    };
+    const fim = () => { window.removeEventListener('pointermove', aplica); window.removeEventListener('pointerup', fim); cancelAnimationFrame(raf); desenhaPalco(); desenhaLateral(); };
+    window.addEventListener('pointermove', aplica); window.addEventListener('pointerup', fim);
+  }
+
+  // ---------- criar desenhando no mapa ----------
+  function ativaDesenho(tipo) {
+    if (M.desenhando === tipo) return cancelaDesenho();
+    M.desenhando = tipo;
+    $('#stage').classList.add('desenhando');
+    if (!M.escHandler) { M.escHandler = ev => { if (ev.key === 'Escape' && M.desenhando) cancelaDesenho(); }; document.addEventListener('keydown', M.escHandler); }
+    desenhaAlcas(); desenhaLateral();
+  }
+  function cancelaDesenho() {
+    M.desenhando = null;
+    const st = $('#stage'); if (st) st.classList.remove('desenhando');
+    desenhaAlcas(); desenhaLateral();
+  }
+
+  function iniciaDesenho(e) {
+    const st = $('#stage'), r0 = st.getBoundingClientRect(), tipo = M.desenhando;
+    const mundo = ev => ({ x: snap5((ev.clientX - r0.left - M.cam.tx) / M.cam.k), y: snap5((ev.clientY - r0.top - M.cam.ty) / M.cam.k) });
+    const a = mundo(e), rasc = document.createElement('div');
+    rasc.className = 'rasc'; st.appendChild(rasc);
+    const retDe = b => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) });
+    const mover = ev => { const r = retDe(mundo(ev)); Object.assign(rasc.style, { left: r.x * M.cam.k + M.cam.tx + 'px', top: r.y * M.cam.k + M.cam.ty + 'px', width: r.w * M.cam.k + 'px', height: r.h * M.cam.k + 'px' }); };
+    const fim = ev => {
+      window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', fim); rasc.remove();
+      const r = retDe(mundo(ev));
+      cancelaDesenho();
+      if (r.w < 12 || r.h < 8) { toast('Arraste para desenhar um retângulo maior', 'bad', 2500); return; }
+      criaDesenhado(tipo, r);
+    };
+    mover(e);
+    window.addEventListener('pointermove', mover); window.addEventListener('pointerup', fim);
+  }
+
+  function criaDesenhado(tipo, r) {
+    const Lx = M.draftL, esc = escalaCm(), D = dim();
+    if (tipo === 'pallet') {                                                         // pallet dentro da área selecionada
+      const g = Lx.gondolas.find(x => x.id === M.sel), cf = M.draftG[M.sel];
+      if (!g || !cf || !SACARIA(M.sel)) return;
+      const c = caixa(g), kcm = c.w / c.aw;
+      const usados = new Set((cf.pallets || []).map(p => p.id)); let id = 1; while (usados.has(id)) id++;
+      const x = limita(snap5((r.x - c.x) / kcm), 0, (cf.c ?? 600) - 20), y = limita(snap5((r.y - c.y) / kcm), 0, (cf.l ?? 400) - 20);
+      cf.pallets = cf.pallets || [];
+      cf.pallets.push({ id, x, y, c: Math.min(limita(snap5(r.w / kcm), 20, 600), (cf.c ?? 600) - x), l: Math.min(limita(snap5(r.h / kcm), 20, 600), (cf.l ?? 400) - y), nome: '' });
+      M.selPal = id; desenhaPalco(); desenhaLateral(); toast('Pallet P' + id + ' criado', 'ok', 2000); return;
+    }
+    const ocupados = new Set([...Lx.gondolas.map(g => g.id), ...Object.keys(M.draftG).map(Number), ...M.data.gondolas.map(g => g.id)]);
+    let id = null;
+    for (let n = 20; n <= 40 && id === null; n++) if (!ocupados.has(n)) id = n;
+    for (let n = 1; n < 20 && id === null; n++) if (!ocupados.has(n)) id = n;
+    if (id === null) { toast('Não há número livre (1 a 40)', 'bad'); return; }
+    let box;
+    if (tipo === 'area') {
+      const cf = { tipo: 'area', nome: '', c: limita(snap5(r.w / esc), 100, 3000), l: limita(snap5(r.h / esc), 100, 3000), pallets: [] };
+      M.draftG[id] = cf; box = { id, x: r.x, y: r.y, w: cf.c * esc, h: cf.l * esc, rot: 0 };
+    } else {
+      const vert = PE_PD(id) || r.h > r.w, longo = vert ? r.h : r.w, curto = vert ? r.w : r.h;
+      M.draftG[id] = { tipo: 'gondola', nome: '', lados: curto / esc < 1.3 * D.modulo_l ? 'B' : 'AB', modulos: limita(Math.round((longo / esc - 2 * D.ponta_p) / D.modulo_c), 1, U_NIVEIS), dim: null, nomes: {} };
+      const gm = geomG(id);
+      box = { id, x: r.x, y: r.y, w: (vert ? gm.T : gm.L) * esc, h: (vert ? gm.L : gm.T) * esc, rot: vert ? 90 : 0 };
+    }
+    Lx.gondolas.push(box); M.sel = id; M.selPal = null; M.shelf = null;
+    desenhaPalco(); desenhaLateral(); toast(`${tipo === 'area' ? 'Área' : 'Gôndola'} ${id} desenhada — dê um nome e ajuste pelas alças`, 'ok', 3500);
+  }
+
   // abre/seleciona uma gôndola: painel por cima e câmera aproximada
-  function escolheGondola(id, chave) {
+  function escolheGondola(id, chave, pal) {
     const mudou = M.sel !== id;
-    M.selCam = null; M.selPt = null; M.sel = id;
+    M.selCam = null; M.selPt = null; M.sel = id; M.selPal = pal ?? null;
     if (chave && /^[AB]-/.test(chave)) M.lado = chave[0];
     if (chave) M.shelf = { g: id, chave }; else if (mudou) M.shelf = null;
     if (M.edit || M.editG) { desenhaPalco(); desenhaLateral(); return; }
@@ -318,6 +470,7 @@ const Mapa = (() => {
       const id = +el.dataset.g;
       el.addEventListener('click', e => {
         if (M.suprime) return;
+        if (M.editG) { const pal = e.target.closest('.mp-cel[data-pal]'); escolheGondola(id, null, pal ? +pal.dataset.pal : null); return; }
         const cel = e.target.closest('.mp-cel[data-chave]');
         if (cel && el.classList.contains('perto') && !M.edit && !M.editG) { escolheGondola(id, cel.dataset.chave); return; }
         if (!M.edit && !M.editG && M.sel === id && el.classList.contains('perto')) return;
@@ -558,7 +711,7 @@ const Mapa = (() => {
         resto = `<div class="grid" style="grid-template-columns:1fr 1fr;gap:10px"><div><label class="f">Comprimento da área (cm)</label><input id="gAreaC" type="number" min="100" max="3000" value="${c.c ?? 600}"></div>
           <div><label class="f">Largura da área (cm)</label><input id="gAreaL" type="number" min="100" max="3000" value="${c.l ?? 400}"></div></div>
         <div><label class="f">Pallets (módulos da área)</label><div class="xs muted" style="margin-bottom:8px">Endereço do pallet: ${id}-P1, ${id}-P2… Posição e tamanho em cm, a partir do canto superior esquerdo da área.</div>
-          ${c.pallets.map((p, i) => `<div class="pal" data-i="${i}"><b>P${p.id}</b><input data-k="nome" placeholder="Nome" maxlength="40" value="${esc(p.nome || '')}" aria-label="Nome do pallet ${p.id}">
+          ${c.pallets.map((p, i) => `<div class="pal${M.selPal === p.id ? ' sel' : ''}" data-i="${i}"><b>P${p.id}</b><input data-k="nome" placeholder="Nome" maxlength="40" value="${esc(p.nome || '')}" aria-label="Nome do pallet ${p.id}">
             ${['x', 'y', 'c', 'l'].map(k => `<label class="xs muted">${{ x: 'X', y: 'Y', c: 'Comp.', l: 'Larg.' }[k]}<input data-k="${k}" type="number" min="0" max="3000" value="${p[k]}"></label>`).join('')}
             <button class="sm danger" data-rem="${i}" aria-label="Remover pallet ${p.id}">${ico('minus')}</button></div>`).join('')}
           <button class="sm" id="gAddPal">${ico('plus')} Adicionar pallet</button></div>`;
@@ -581,6 +734,9 @@ const Mapa = (() => {
         <button class="sm primary" id="gnCria">${ico('plus')} Criar e posicionar no mapa</button></details>` : '';
     return `<div class="card drawer"><div class="head"><div><h2>Editar gôndolas</h2><div class="sub">Lados, módulos, medidas, nomes e novas gôndolas ou áreas. O mapa muda enquanto você edita.</div></div></div>
       <div class="grid" style="gap:14px">
+        <div><label class="f">Criar desenhando no mapa</label>
+          <div class="editbar"><button class="sm${M.desenhando === 'gondola' ? ' primary' : ''}" id="gDesGond">${ico('edit')} Desenhar gôndola</button><button class="sm${M.desenhando === 'area' ? ' primary' : ''}" id="gDesArea">${ico('edit')} Desenhar área livre</button>${id !== null && SACARIA(id) ? `<button class="sm${M.desenhando === 'pallet' ? ' primary' : ''}" id="gDesPal">${ico('edit')} Desenhar pallet</button>` : ''}</div>
+          ${M.desenhando ? '<div class="callout" style="margin-top:8px">' + ico('info') + '<div>Clique e arraste no mapa para desenhar o retângulo. <b>Esc</b> cancela.</div></div>' : '<div class="xs muted" style="margin-top:6px">Clique e arraste no mapa, como num CAD. Depois ajuste o tamanho pelas alças nos quatro lados e nos cantos.</div>'}</div>
         ${nova}
         <div><label class="f" for="gSel">Gôndola</label><select id="gSel"><option value="">Escolha…</option>${ids.map(i => `<option value="${i}" ${i === id ? 'selected' : ''}>${i} · ${esc(((M.draftG[i] || {}).nome) || (i === 19 ? 'Sacaria de gatos' : 'Gôndola'))}</option>`).join('')}</select></div>
         ${corpo}
@@ -598,29 +754,27 @@ const Mapa = (() => {
   function ligaEdicaoG() {
     const id = M.sel, c = id !== null ? M.draftG[id] : null;
     const redesenha = () => desenhaPalco();
-    $('#gSel').addEventListener('change', e => { M.sel = e.target.value ? +e.target.value : null; desenhaPalco(); desenhaLateral(); });
+    $('#gSel').addEventListener('change', e => { M.sel = e.target.value ? +e.target.value : null; M.selPal = null; desenhaPalco(); desenhaLateral(); });
+    $('#gDesGond').addEventListener('click', () => ativaDesenho('gondola'));
+    $('#gDesArea').addEventListener('click', () => ativaDesenho('area'));
+    const dp = $('#gDesPal'); if (dp) dp.addEventListener('click', () => ativaDesenho('pallet'));
     const nova = $('#gnCria');
     if (nova) {
       $('#gnTipo').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b) $$('#gnTipo button').forEach(x => x.setAttribute('aria-pressed', x === b)); });
       nova.addEventListener('click', () => {
         const n = +$('#gnNum').value, tipo = $('#gnTipo button[aria-pressed=true]').dataset.t, nome = $('#gnNome').value.trim();
         M.draftG[n] = tipo === 'area' ? { tipo, nome, c: 600, l: 400, pallets: [] } : { tipo, nome, lados: 'AB', modulos: 5, dim: null, nomes: {} };
-        M.novasG = M.novasG || new Set(); M.novasG.add(n);
-        M.sel = n; desenhaPalco(); desenhaLateral();
+        M.draftL.gondolas.push(caixaInicial(M.draftL, n));
+        M.sel = n; M.selPal = null; desenhaPalco(); desenhaLateral();
       });
     }
-    $('#gCancela').addEventListener('click', () => { M.editG = false; M.draftG = null; M.novasG = null; M.removidasG = null; M.sel = null; montaTudo(); });
+    $('#gCancela').addEventListener('click', () => { cancelaDesenho(); M.editG = false; M.draftG = null; M.draftL = null; M.sel = null; M.selPal = null; montaTudo(); });
     $('#gSalva').addEventListener('click', async () => {
       try {
-        const L = JSON.parse(JSON.stringify(M.data.layout));
-        L.caminhos = caminhosDe(L); delete L.setas;
-        let mexeu = false;
-        for (const n of M.removidasG || []) if (L.gondolas.some(g => g.id === n)) { L.gondolas = L.gondolas.filter(g => g.id !== n); mexeu = true; }
         M.data.gondolas_cfg = await api('/api/gondolas', { method: 'PUT', body: M.draftG });
-        for (const n of M.novasG || []) if (M.data.gondolas_cfg[n] && !L.gondolas.some(g => g.id === n)) { L.gondolas.push(caixaInicial(L, n)); mexeu = true; }
-        if (mexeu) M.data.layout = await api('/api/layout', { method: 'PUT', body: { ...L, provisorio: false } });
+        M.data.layout = await api('/api/layout', { method: 'PUT', body: { ...M.draftL, provisorio: false } });
         M.data.areas = Object.entries(M.data.gondolas_cfg).filter(([, v]) => v.tipo === 'area').map(([k]) => +k);
-        M.editG = false; M.draftG = null; M.novasG = null; M.removidasG = null; toast('Gôndolas salvas', 'ok'); montaTudo();
+        M.editG = false; M.draftG = null; M.draftL = null; M.selPal = null; toast('Gôndolas salvas', 'ok'); montaTudo();
       } catch (er) { toast(er.message, 'bad', 5000); }
     });
     if (id === null) return;
@@ -634,7 +788,7 @@ const Mapa = (() => {
     const rem = $('#gRemove');
     if (rem) rem.addEventListener('click', () => {
       if (!confirm(`Tirar ${rotuloG(id)} do mapa? Os lotes com esse endereço continuam no estoque.`)) return;
-      delete M.draftG[id]; M.removidasG = M.removidasG || new Set(); M.removidasG.add(id); M.sel = null; desenhaPalco(); desenhaLateral();
+      delete M.draftG[id]; M.draftL.gondolas = M.draftL.gondolas.filter(g => g.id !== id); M.sel = null; M.selPal = null; desenhaPalco(); desenhaLateral();
     });
     if (SACARIA(id)) {
       $('#gAreaC').addEventListener('change', e => { c.c = +e.target.value; redesenha(); });
@@ -646,6 +800,7 @@ const Mapa = (() => {
       });
       $$('.pal').forEach(row => {
         const p = c.pallets[+row.dataset.i];
+        row.addEventListener('click', e => { if (e.target.closest('input, button')) return; M.selPal = p.id; desenhaPalco(); desenhaLateral(); });
         $$('input', row).forEach(inp => inp.addEventListener('change', () => { p[inp.dataset.k] = inp.dataset.k === 'nome' ? inp.value : +inp.value; redesenha(); }));
         $('[data-rem]', row).addEventListener('click', () => { c.pallets.splice(+row.dataset.i, 1); desenhaPalco(); desenhaLateral(); });
       });
@@ -774,7 +929,7 @@ const Mapa = (() => {
     $$('[data-vista]', v).forEach(b => b.addEventListener('click', () => { M.vista = b.dataset.vista; lsSet('mapaVista', M.vista); montaTudo(); }));
     const ed = $('#editar', v);
     const edg = $('#editarG', v);
-    if (edg) edg.addEventListener('click', () => { M.editG = true; M.novasG = null; M.removidasG = null; M.painelMin = false; M.draftG = JSON.parse(JSON.stringify(M.data.gondolas_cfg || {})); M.sel = null; M.shelf = null; montaTudo(); });
+    if (edg) edg.addEventListener('click', () => { M.editG = true; M.selPal = null; M.desenhando = null; M.draftL = JSON.parse(JSON.stringify(M.data.layout)); M.draftL.caminhos = caminhosDe(M.draftL); delete M.draftL.setas; M.painelMin = false; M.draftG = JSON.parse(JSON.stringify(M.data.gondolas_cfg || {})); M.sel = null; M.shelf = null; montaTudo(); });
     if (ed) ed.addEventListener('click', () => { M.edit = true; M.painelMin = false; M.draftDim = { ...dim() }; M.draft = JSON.parse(JSON.stringify(M.data.layout)); M.draft.caminhos = caminhosDe(M.draft); delete M.draft.setas; M.sel = null; M.selCam = null; M.selPt = null; M.shelf = null; montaTudo(); });
     ligaCamera($('#stage'));
     $('#cPainel').addEventListener('click', () => { M.painelMin = !M.painelMin; desenhaLateral(); });

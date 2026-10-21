@@ -487,3 +487,14 @@ button.primary:active, .btn.primary:active { transform: scale(.96); }
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
   .cam-linha { animation: none !important; }
 }
+
+/* alças de redimensionar, desenho no mapa */
+.alcas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 4; }
+.alcas-borda { fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.alcas-corpo { fill: transparent; pointer-events: all; cursor: move; }
+.alca { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; pointer-events: all; }
+.alca:hover { fill: var(--accent); }
+.stage.desenhando { cursor: crosshair; }
+.stage.desenhando .gon, .stage.desenhando .alcas { pointer-events: none; }
+.rasc { position: absolute; border: 1.5px dashed var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); pointer-events: none; z-index: 5; border-radius: 2px; }
+.pal.sel { background: var(--accent-soft); border-radius: 10px; padding: 4px; outline: 1px solid var(--accent); }
