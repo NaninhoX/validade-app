@@ -95,7 +95,7 @@ const Coletor = (() => {
   function html() {
     return `<div class="cwrap">
   <div class="seg cmodes" role="group" aria-label="Modo do coletor">
-    <button data-modo="entrada" aria-pressed="true">Entrada</button><button data-modo="ronda" aria-pressed="false">Ronda</button>
+    <button data-modo="entrada" aria-pressed="true">Entrada</button><button data-modo="ronda" aria-pressed="false">Ronda</button><button data-modo="auditoria" aria-pressed="false">Auditoria</button>
     <button data-modo="baixa" aria-pressed="false">Baixa</button><button data-modo="busca" aria-pressed="false">Buscar</button>
   </div>
 
@@ -151,6 +151,8 @@ const Coletor = (() => {
     </div>
   </section>
 
+  <section id="m-auditoria" hidden></section>
+
   <section id="m-baixa" hidden>
     <div class="f-wrap"><label class="f" for="bEan">Código de barras (EAN)</label>
       <div class="in"><input id="bEan" inputmode="numeric" autocomplete="off" placeholder="bipe ou use a câmera"><button class="cam" data-cam="bEan" aria-label="Ler código pela câmera">${ico('camera', 24)}</button></div></div>
@@ -172,7 +174,8 @@ const Coletor = (() => {
   function setModo(m, foco = true) {
     modo = m; lsSet('coletorModo', m);
     $$('.cmodes button').forEach(b => b.setAttribute('aria-pressed', b.dataset.modo === m));
-    ['entrada', 'ronda', 'baixa', 'busca'].forEach(x => { $('#m-' + x).hidden = x !== m; });
+    ['entrada', 'ronda', 'auditoria', 'baixa', 'busca'].forEach(x => { $('#m-' + x).hidden = x !== m; });
+    if (m === 'auditoria') { Auditoria.abre($('#m-auditoria')); return; }
     if (m === 'ronda' && !$('#rDia').hidden) desenhaDia();
     if (!foco || matchMedia('(pointer: coarse)').matches) return;   // no celular não abre o teclado sozinho
     ({ entrada: () => ($('#end').value ? $('#ean') : $('#end')), ronda: () => $('#rEnd'), baixa: () => $('#bEan'), busca: () => $('#sEan') }[m]()).focus({ preventScroll: true });
@@ -578,6 +581,7 @@ const Coletor = (() => {
     $('#tReceber').addEventListener('click', () => setTipo('RECEBIMENTO'));
     $('#tContar').addEventListener('click', () => setTipo('CONTAGEM'));
     $('#tPreco').addEventListener('click', () => setTipo('PRECO'));
+    Auditoria.liga($('#m-auditoria'));
 
     // câmera
     $$('button.cam').forEach(b => b.addEventListener('click', async () => {

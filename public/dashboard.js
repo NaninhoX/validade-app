@@ -154,12 +154,14 @@ PAGINAS.geral = async () => {
         <div style="min-width:0"><div class="pname">${esc((n => n.charAt(0) + n.slice(1).toLowerCase())(p.nome))} <span class="xs muted">setor${p.setores.length > 1 ? 'es' : ''} ${p.setores.join(', ')}</span></div>
         <div class="xs muted">${p.vencidos ? `<b style="color:var(--bad)">${p.vencidos} vencido${p.vencidos > 1 ? 's' : ''}</b> · ` : ''}${p.nunca_contadas ? p.nunca_contadas + ' nunca contada' + (p.nunca_contadas > 1 ? 's' : '') : p.pior_dias_sem_ronda !== null ? 'pior: ronda há ' + p.pior_dias_sem_ronda + ' d' : 'sem estoque'} · ${p.ronda7_lotes ? `${p.ronda7_lotes} conferidos, ${String(p.ronda7_divergencia).replace('.', ',')}% não bateram` : 'sem ronda na semana'}</div></div>
         <b class="num">${brlK(p.risco)}</b></div>`).join('')}</div>` : ''}
+    <div id="audCard"></div>
     <div class="card reveal" style="--i:10"><div class="head"><h2>Qualidade dos dados</h2></div>
       ${[[q.vencidos_em_estoque, 'lotes vencidos ainda no estoque', 'retirar e dar baixa'], [q.endereco_fora_padrao, 'lotes com endereço fora do padrão', q.enderecos_fora_padrao.map(e => e.endereco).join(', ') || ''], [q.produtos_sem_preco, q.produtos_sem_preco === 1 ? 'produto em estoque sem preço' : 'produtos em estoque sem preço', 'toque para informar no Estoque', '#/estoque?sempreco=1'], [q.sem_endereco, 'lotes sem endereço', ''], [q.sem_cadastro, 'lotes de EAN sem cadastro', '']]
         .map(([n, a, b, link]) => `<${link && n ? `a href="${link}"` : 'div'} class="row${link && n ? ' click' : ''}" style="grid-template-columns:auto 1fr;color:inherit;opacity:${n ? 1 : .5}"><b class="num" style="font-size:20px;min-width:38px;color:${n ? 'var(--warn)' : 'var(--good)'}">${n}</b><div><div>${a}</div>${b && n ? `<div class="xs muted">${esc(b)}</div>` : ''}</div></${link && n ? 'a' : 'div'}>`).join('')}</div>
   </div>`;
 };
 PAGINAS.geral.ligar = () => {
+  Auditoria.cartao($('#audCard'));
   $$('[data-count]').forEach(el => contar(el, +el.dataset.count, el.dataset.fmt === 'brl' ? brl : int));
   requestAnimationFrame(() => requestAnimationFrame(() => $$('.seg-arc').forEach(c => { c.style.strokeDasharray = `${c.dataset.len} ${c.dataset.c - c.dataset.len}`; })));
   $$('[data-status]').forEach(el => el.addEventListener('click', () => { location.hash = '#/estoque?status=' + encodeURIComponent(el.dataset.status); }));
