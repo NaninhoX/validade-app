@@ -120,7 +120,7 @@ const Coletor = (() => {
     <div class="f-wrap" id="precoWrap" hidden><label class="f" for="pPreco">Preço de venda <span class="muted" id="pPrecoRot">(este produto ainda não tem preço)</span></label>
       <input id="pPreco" inputmode="decimal" autocomplete="off" placeholder="ex.: 39,90"></div>
     <div class="f-wrap fx"><label class="f" for="lote"><span class="step">3</span>Lote</label><input id="lote" autocomplete="off" autocapitalize="characters"></div>
-    <div class="f-wrap fx"><label class="f" for="val"><span class="step">4</span>Validade (DDMMAA, DD/MM/AAAA ou MM/AA)</label><input id="val" inputmode="numeric" autocomplete="off" placeholder="ex.: 150327"></div>
+    <div class="f-wrap fx"><label class="f" for="val"><span class="step">4</span>Validade (DDMMAA, DD/MM/AAAA ou MM/AA)</label><input id="val" inputmode="numeric" autocomplete="off" placeholder="ex.: 150327"><button type="button" class="sm subtle" id="valIlegivel" style="margin-top:6px;justify-self:start">Não consegui ler a validade</button></div>
     <div class="prev fx" id="prev" aria-live="polite"></div>
     <div class="f-wrap fx"><label class="f" for="qtd"><span class="step">5</span>Quantidade</label><input id="qtd" inputmode="numeric" autocomplete="off"></div>
     <div id="avisos"></div>
@@ -286,12 +286,13 @@ const Coletor = (() => {
   async function salvarEntrada() {
     if (tipoEntrada === 'PRECO') return salvarPreco();
     const ean = $('#ean').value.replace(/\D/g, ''), endereco = $('#end').value.trim().toUpperCase();
-    const validade = previaValidade(), qtd = $('#qtd').value.trim();
+    const validade = previaValidade(), qtd = $('#qtd').value.trim(), ilegivel = $('#valIlegivel').getAttribute('aria-pressed') === 'true' && tipoEntrada === 'RECEBIMENTO' && !$('#val').value.trim();
     if (!parseEndereco(endereco).valido) { toast('Endereço fora do padrão (ex.: 1-B-3)', 'bad'); beep(false); return $('#end').focus(); }
     if (!ean) { toast('Bipe o produto', 'bad'); beep(false); return $('#ean').focus(); }
-    if (!validade) { toast('Validade inválida', 'bad'); beep(false); return $('#val').focus(); }
+    if (!validade && !ilegivel) { toast('Validade inválida. Se não der para ler, toque em “Não consegui ler a validade”.', 'bad', 4500); beep(false); return $('#val').focus(); }
     if (!/^\d+$/.test(qtd) || (tipoEntrada === 'RECEBIMENTO' && +qtd < 1)) { toast('Quantidade inválida', 'bad'); beep(false); return $('#qtd').focus(); }
     const body = { tipo: tipoEntrada, ean, lote: $('#lote').value, validade, endereco, qtd: +qtd };
+    if (ilegivel) body.validade_confirmar = true;           // entra com a validade mais curta conhecida e fica "a confirmar"
     if (produtoAtual && !produtoAtual.cadastrado && !produtoAtual.offline) {
       if (!$('#cNome').value.trim()) { toast('Informe o nome do produto novo', 'bad'); beep(false); return $('#cNome').focus(); }
       body.nome = $('#cNome').value.trim(); body.preco = $('#cPreco').value.replace(',', '.');
@@ -310,6 +311,7 @@ const Coletor = (() => {
       toast(r.fila ? 'Guardado — será enviado quando a rede voltar' : `${tipoEntrada === 'RECEBIMENTO' ? '+' : '='}${qtd} ${nomeProd}`, r.fila ? '' : 'ok', 2500);
       if (r.grupo) mostraUndo(r.grupo, `${tipoEntrada === 'RECEBIMENTO' ? 'Recebido' : 'Contado'}: ${qtd} × ${nomeProd}`);
       ['ean', 'lote', 'val', 'qtd', 'cNome', 'cPreco', 'pPreco'].forEach(id => { $('#' + id).value = ''; });
+      $('#valIlegivel').setAttribute('aria-pressed', 'false');
       $('#prev').textContent = ''; $('#prod').hidden = true; $('#cadRapido').hidden = true; $('#precoWrap').hidden = true; produtoAtual = null;
       $('#ean').focus();
       carregaEnderecos();
@@ -337,7 +339,7 @@ const Coletor = (() => {
       const minhas = MINHAS.length && lsGet('rondaMinhas', true);
       const r = await api('/api/ronda?n=' + n + (minhas ? '&setores=' + MINHAS.join(',') : ''));
       if (!r.enderecos.length) { toast('Nada para conferir hoje — todos os endereços já foram vistos', 'ok', 4000); return; }
-      turno = { dia: hojeLocal(), n: r.enderecos.length, criado: Date.now(), fim: null, cobertura: r.cobertura, setores: r.setores || {}, nomes: r.nomes_gondolas || {}, minhas: !!minhas,
+      turno = { dia: hojeLocal(), n: r.enderecos.length, criado: Date.now(), fim: null, cobertura: r.cobertura, semEnd: (r.sem_endereco && r.sem_endereco.lotes) || 0, setores: r.setores || {}, nomes: r.nomes_gondolas || {}, minhas: !!minhas,
         itens: r.enderecos.map(e => ({ e: e.endereco, g: e.gondola, lotes: e.lotes, venc: e.vencidos, urg: e.urgentes, etq: e.etiquetar, dias: e.dias_sem, ok: e.valido, feito: false, pulou: false })),
         tally: novoTally() };
       salvaTurno(); emTurno = -1; desenhaDia();
@@ -413,6 +415,7 @@ const Coletor = (() => {
     }).join('');
     box.innerHTML = `<div class="rd-head"><b>${feitos} de ${turno.n} endereços</b><span class="muted small">cobre ${turno.cobertura.toLocaleString('pt-BR')}% do valor em risco${turno.minhas ? ' das suas gôndolas' : ''}</span></div>
       <div class="prog"><i style="width:${turno.n ? feitos / turno.n * 100 : 0}%"></i></div>
+      ${turno.semEnd ? `<div class="callout warn" style="margin-bottom:10px">${ico('alert')}<div><b>${turno.semEnd} lote${turno.semEnd > 1 ? 's' : ''} sem endereço.</b> Eles não aparecem no mapa: ache onde estão e lance o endereço.</div></div>` : ''}
       ${cartoes}
       <div class="rd-foot">${feitos === turno.n ? '<button id="rEncerrar" class="big primary">Ver resultado da ronda</button>' : '<button id="rEncerrar" class="sm">Encerrar ronda agora</button>'}</div>`;
     const alvo = $('#al-' + prox); if (alvo && feitos) alvo.scrollIntoView({ block: 'center' });
@@ -486,8 +489,8 @@ const Coletor = (() => {
           : i.etiquetado ? `<div class="etq ok">${ico('check')}<span>Etiquetado ${i.desconto}%</span></div>` : '';
         return `
       <div class="citem ${feito ? 'feito' : ''}" id="ri-${i.id}" style="animation-delay:${Math.min(k, 8) * 40}ms">
-        <div><div class="pname">${esc(i.nome || i.ean)}</div><div class="muted small">lote ${esc(i.lote)} · ${esc(i.ean)}${i.desconto ? ` · oferta ${i.desconto}%` : ''}</div>${i.preco == null ? `<button class="sm subtle" data-r="preco" data-id="${i.id}" style="margin:4px 0 0 -10px">＋ Informar preço</button>` : `<div class="xs muted">${brl(i.preco)}</div>`}</div>
-        <div style="text-align:right">${pill(i.status, i.cor)}<div class="small" style="margin-top:3px">${brData(i.validade)}</div></div>
+        <div><div class="pname">${esc(i.nome || i.ean)}</div><div class="muted small">lote ${esc(i.lote)} · ${esc(i.ean)}${i.desconto ? ` · oferta ${i.desconto}%` : ''}${i.misto ? ` · <b style="color:var(--warn)">misturado com lote mais antigo: vale ${brData(i.validade_efetiva)}</b>` : ''}${i.a_confirmar ? ' · <b style="color:var(--warn)">validade a confirmar</b>' : ''}</div>${i.preco == null ? `<button class="sm subtle" data-r="preco" data-id="${i.id}" style="margin:4px 0 0 -10px">＋ Informar preço</button>` : `<div class="xs muted">${brl(i.preco)}</div>`}</div>
+        <div style="text-align:right">${pill(i.status, i.cor)}<div class="small" style="margin-top:3px">${brData(i.misto ? i.validade_efetiva : i.validade)}</div></div>
         ${faixa}
         <div class="acts">
           ${venc ? `<button data-r="ret" data-id="${i.id}" class="primary">Retirei (RMA)</button>` : ''}
@@ -495,6 +498,8 @@ const Coletor = (() => {
           <button data-r="fix" data-id="${i.id}">Corrigir</button>
           <button data-r="zero" data-id="${i.id}" class="danger">Não achei</button>
           <button data-r="mov" data-id="${i.id}" class="${i.endereco_ok ? '' : 'primary'}">${ico('move')} Mover</button>
+          ${rondaItens.some(x => x.ean === i.ean && x.id !== i.id) ? `<button data-r="mist" data-id="${i.id}">Completei outra caixa</button>` : ''}
+          ${i.a_confirmar ? `<button data-r="cval" data-id="${i.id}" class="primary">Confirmar validade</button>` : ''}
         </div>
         ${precisaBip && !feito ? `<button class="sm subtle" data-r="semcod" data-id="${i.id}" style="justify-self:start;grid-column:1/-1">Código ilegível ou sem etiqueta</button>` : ''}
       </div>`;
@@ -523,6 +528,31 @@ const Coletor = (() => {
       rondaItens.filter(x => x.ean === it.ean).forEach(x => { x.preco = r.preco; });
       toast('Preço salvo', 'ok', 1800);
       return desenhaRonda();
+    }
+    if (a === 'mist') {
+      const outros = rondaItens.filter(x => x.ean === it.ean && x.id !== it.id), rot = x => 'lote ' + x.lote + ' · vence ' + brData(x.validade_efetiva || x.validade);
+      const d = await dialogo({ titulo: 'Completou outra caixa', sub: `${it.nome} · lote ${it.lote} (sobras foram para outra caixa)`, ok: 'Registrar',
+        campos: [{ id: 'q', label: 'Quantas unidades passaram', valor: it.qtd, inputmode: 'numeric' }, { id: 'd', label: 'Para qual lote', tipo: 'select', opcoes: outros.map(rot) }] });
+      if (!d || !/^\d+$/.test(d.q.trim()) || +d.q < 1 || +d.q > it.qtd) { if (d) toast('Quantidade inválida', 'bad'); return; }
+      const alvo = outros[Math.max(0, outros.map(rot).indexOf(d.d))];
+      try {
+        const r = await api('/api/lotes/misturar', { method: 'POST', body: { origem_id: it.id, destino_id: alvo.id, qtd: +d.q } });
+        it.qtd -= +d.q; alvo.qtd += +d.q;
+        if (r.validade_alerta < alvo.validade) { alvo.misto = true; alvo.validade_efetiva = r.validade_alerta; }
+        if (it.qtd === 0) rondaItens = rondaItens.filter(x => x.id !== it.id);
+        toast('Registrado. O lote ' + alvo.lote + ' agora vale pela validade mais curta.', 'ok', 3500);
+      } catch (e) { toast(e.message, 'bad', 5000); }
+      return desenhaRonda();
+    }
+    if (a === 'cval') {
+      const d = await dialogo({ titulo: 'Confirmar validade', sub: `${it.nome} · lote ${it.lote}`, campos: [{ id: 'v', label: 'Validade (DDMMAA, DD/MM/AAAA ou MM/AA)', valor: '', inputmode: 'numeric' }] });
+      if (!d) return;
+      const iso = parseData(d.v.trim()); if (!iso) { toast('Data inválida', 'bad'); return; }
+      try {
+        await api('/api/lotes/' + it.id + '/confirmar-validade', { method: 'POST', body: { validade: iso } });
+        toast('Validade confirmada', 'ok', 2500);
+        return carregaRonda(rondaEnd, true);
+      } catch (e) { toast(e.message, 'bad', 5000); return; }
     }
     if (a === 'bip') {
       const v = await Scanner.abrir({ titulo: `Bipe: ${it.nome || it.ean}`, aceitar: 'ean' });
@@ -643,6 +673,7 @@ const Coletor = (() => {
     aoEnter('qtd', salvarEntrada);
     $('#salvar').addEventListener('click', salvarEntrada);
     $('#val').addEventListener('input', previaValidade);
+    $('#valIlegivel').addEventListener('click', () => { const b = $('#valIlegivel'), on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on); b.textContent = on ? 'Validade ilegível: entra como “a confirmar” (toque para desfazer)' : 'Não consegui ler a validade'; if (on) { $('#val').value = ''; $('#prev').textContent = ''; } });
     $('#prod').addEventListener('click', e => {
       const c = e.target.closest('button[data-lote]');
       if (!c) return;

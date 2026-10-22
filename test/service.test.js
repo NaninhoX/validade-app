@@ -442,3 +442,77 @@ test('briefing: junta retirar, etiquetar e ronda, com responsáveis', async () =
   assert.equal(b.ronda.enderecos.length, 2);
   assert.ok(b.totais.vencido_lotes === 1);
 });
+
+test('regra conservadora: lote que some na ronda faz os outros valerem pela validade mais curta', async () => {
+  const db = await novoDb();
+  const curto = (await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 3, ...base, lote: 'CURTO', validade: mais(20) })).lote;
+  const longo = (await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 5, ...base, lote: 'LONGO', validade: mais(200) })).lote;
+  await S.leitura(db, { tipo: 'CONTAGEM', lote_id: curto.id, qtd: 0, motivo: 'Ronda: não encontrado', operador: 'TESTE' });
+  const l = (await S.lotesAtivos(db)).find(x => x.id === longo.id);
+  assert.equal(l.misto, true);
+  assert.equal(l.validade, mais(200));              // a validade real continua registrada
+  assert.equal(l.validade_efetiva, mais(20));       // o alerta usa a mais curta
+  assert.ok(l.dias <= 20);
+  await S.leitura(db, { tipo: 'CONTAGEM', lote_id: longo.id, qtd: 0, motivo: 'Ronda: não encontrado', operador: 'TESTE' });
+  const depois = await db.get('SELECT validade_alerta FROM lotes WHERE id=?', [longo.id]);
+  assert.equal(depois.validade_alerta, null);        // zerou: a mistura some junto
+});
+
+test('regra conservadora: lote vencido que some não contamina os outros', async () => {
+  const db = await novoDb();
+  const velho = (await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, lote: 'VELHO', validade: mais(-5) })).lote;
+  const bom = (await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 4, ...base, lote: 'BOM', validade: mais(200) })).lote;
+  await S.leitura(db, { tipo: 'CONTAGEM', lote_id: velho.id, qtd: 0, motivo: 'Ronda: não encontrado', operador: 'TESTE' });
+  assert.equal((await S.lotesAtivos(db)).find(x => x.id === bom.id).misto, false);
+});
+
+test('"completei outra caixa": o destino passa a valer pela validade mais curta e dá para confirmar depois', async () => {
+  const db = await novoDb();
+  const a = (await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 4, ...base, lote: 'A', validade: mais(25) })).lote;
+  const b = (await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 6, ...base, lote: 'B', validade: mais(300) })).lote;
+  const r = await S.misturar(db, { origem_id: a.id, destino_id: b.id, qtd: 3, operador: 'TESTE' });
+  assert.equal(r.validade_alerta, mais(25));
+  const lotes = await S.lotesAtivos(db);
+  assert.equal(lotes.find(x => x.id === a.id).qtd, 1);
+  const dest = lotes.find(x => x.id === b.id);
+  assert.equal(dest.qtd, 9);
+  assert.equal(dest.validade_efetiva, mais(25));
+  await assert.rejects(S.misturar(db, { origem_id: a.id, destino_id: a.id, qtd: 1, operador: 'TESTE' }), /mesmo lote/);
+  await assert.rejects(S.misturar(db, { origem_id: a.id, destino_id: b.id, qtd: 50, operador: 'TESTE' }), /saldo insuficiente/);
+});
+
+test('validade ilegível entra "a confirmar" com a validade mais curta conhecida e depois se confirma', async () => {
+  const db = await novoDb();
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, lote: 'X', validade: mais(40) });
+  const r = await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 5, ean: base.ean, lote: 'Y', validade: '', validade_confirmar: true, endereco: '3-A-1', operador: 'TESTE' });
+  assert.equal(r.lote.a_confirmar, true);
+  assert.equal(r.lote.validade, mais(40));
+  await assert.rejects(S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 1, ...base, lote: 'Z', validade: '' }), /validade inválida/);   // sem o marcador, continua exigindo
+  const c = await S.confirmarValidade(db, { lote_id: r.lote.id, validade: mais(120), operador: 'TESTE' });
+  const l = (await S.lotesAtivos(db)).find(x => x.id === c.lote_id);
+  assert.deepEqual([l.a_confirmar, l.validade, l.qtd], [false, mais(120), 5]);
+  await assert.rejects(S.confirmarValidade(db, { lote_id: l.id, validade: mais(130), operador: 'TESTE' }), /não está marcado/);
+});
+
+test('contagem só por EAN: a falta sai do lote de validade mais longa', async () => {
+  const db = await novoDb();
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 3, ...base, lote: 'CURTO', validade: mais(15) });
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 4, ...base, lote: 'LONGO', validade: mais(250) });
+  const r = await S.ajusteTotal(db, { ean: base.ean, endereco: '3-A-1', qtd_total: 5, operador: 'TESTE' });
+  assert.deepEqual([r.antes, r.depois], [7, 5]);
+  const por = Object.fromEntries((await S.lotesAtivos(db)).map(l => [l.lote, l.qtd]));
+  assert.deepEqual(por, { CURTO: 3, LONGO: 2 });
+  await assert.rejects(S.ajusteTotal(db, { ean: base.ean, endereco: '3-A-1', qtd_total: 99, operador: 'TESTE' }), /informe o lote/);
+});
+
+test('ronda: sem preço não inventa valor; endereço fora do padrão sobe; lotes sem endereço são contados', async () => {
+  const db = await novoDb();
+  await S.upsertProduto(db, { ean: '7891000000031', nome: 'SEM PRECO' });
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 2, ...base, lote: 'P', validade: mais(-3) });
+  await S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 5, ean: '7891000000031', lote: 'S', validade: mais(-3), endereco: '', sem_endereco: true, operador: 'TESTE' });
+  const todos = await S.lotesAtivos(db);
+  assert.equal(S.precoMediano(todos), 20);                          // mediana dos preços unitários que existem
+  assert.equal(todos.find(l => l.lote === 'S').valor, null);        // o produto sem preço continua sem preço
+  const r = await S.ronda(db, { n: 5 });
+  assert.deepEqual(r.sem_endereco, { lotes: 1, qtd: 5 });
+});
