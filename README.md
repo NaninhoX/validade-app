@@ -96,3 +96,14 @@ Usa o leitor nativo do Chrome (BarcodeDetector) e, onde ele não existe, o ZXing
 - A câmera foi testada com leitura de imagens de código de barras, não com um aparelho real de loja.
 - O driver do Neon (`pg`) foi testado por rede contra um servidor Postgres local; a conexão com o Neon de verdade só é exercitada no primeiro deploy.
 - `npm audit` aponta 2 avisos moderados de `uuid` dentro do `exceljs`; o trecho afetado não é usado aqui.
+
+## Novas filiais e demonstração
+
+Cada filial é um projeto próprio na Vercel com o seu Neon (mesmo código, dados separados).
+
+- **Primeiro acesso sem terminal:** crie a variável `ADMIN_INICIAL` com `NOME:PIN` (ex.: `JOAO:123456`, tipo *Sensitive*) e faça o redeploy. Ela cria o administrador no primeiro acesso, só se o banco não tiver nenhum usuário; depois pode ser apagada.
+- **Demonstração:** `DEMO=1 PGLITE_DIR=memory:// npm start` mostra o sistema com produtos e lotes de exemplo, sem tocar no estoque real. Na Vercel, `DEMO_INICIAL=1` carrega os dados de exemplo uma única vez (só em banco sem estoque); apague a variável depois e limpe os dados antes do uso real.
+
+## Carregar a lista da nota ou da contagem
+
+Na Conferência de Recebimento ou de Contagem, o botão **Carregar a lista** aceita planilha (.xlsx), CSV, TXT ou o **XML da NF-e**. O app acha sozinho a linha do cabeçalho (EAN, código de barras, quantidade, lote, validade…); sem cabeçalho, entende `EAN;quantidade` em cada linha. Mostra o que entendeu e o que ficou de fora, e só então carrega as quantidades como "esperado": laranja até chegar, verde quando bate, vermelho quando passa. **Bipar a chave da nota** (44 números do DANFE) anota o número da NF.

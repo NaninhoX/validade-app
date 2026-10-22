@@ -546,3 +546,16 @@ button.rg-n:hover { color: var(--accent); }
 .gon.edit { touch-action: none; }
 
 .nome-fantasma { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; padding: 6px 14px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; box-shadow: var(--shadow-2); }
+
+/* carregar a lista da nota / da contagem */
+.cf-lista-nota { margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cf-lista-nota .xs { flex-basis: 100%; }
+.ln-resumo { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
+.ln-tab { max-height: 38vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 13px; }
+.ln-tab table { width: 100%; border-collapse: collapse; }
+.ln-tab td, .ln-tab th { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.ln-tab th { position: sticky; top: 0; background: var(--surface); font-size: 11.5px; color: var(--muted); }
+.ln-tab .ruim td { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.ln-tab .aviso td { background: color-mix(in srgb, var(--warn) 12%, transparent); }
+dialog.ln { width: min(720px, 94vw); max-height: 90vh; overflow: auto; border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--surface); color: var(--ink); padding: 18px; }
+dialog.ln::backdrop { background: rgba(0, 0, 0, .5); }

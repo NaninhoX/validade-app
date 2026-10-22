@@ -97,6 +97,8 @@ const Conferencias = (() => {
       ${c.tipo === 'RONDA' ? `<div class="callout" style="margin-bottom:14px">${ico('info')}<div>Resumo da ronda do dia${c.obs ? ': ' + esc(c.obs) : ''}. Mostra o que foi contado; “sistema” é o saldo antes da contagem. Somente leitura.</div></div>` : ''}
       ${editavel ? `
       ${eEnd ? `<div class="f-wrap"><label class="f" for="cfEnd">Endereço (opcional)</label><div class="in"><input id="cfEnd" autocomplete="off" autocapitalize="characters" placeholder="ex.: 3-B-2" value="${esc(c.endereco || '')}"><button class="cam" id="cfCamEnd" aria-label="Ler etiqueta do endereço">${ico('camera', 24)}</button></div></div>` : ''}
+      ${c.tipo === 'RECEBIMENTO' || c.tipo === 'CONTAGEM' ? `<div class="cf-lista-nota"><button class="sm" id="cfCarrega">${ico('upload')} Carregar a lista da nota ou da contagem</button><button class="sm" id="cfChave">${ico('camera')} Bipar a chave da nota</button>
+        <div class="xs muted" style="margin-top:6px">Planilha, CSV, TXT ou XML da NF-e. Cada produto fica laranja até chegar na quantidade, verde quando bate e vermelho quando passa.</div></div>` : ''}
       <div class="f-wrap"><label class="f" for="cfEan">Código de barras (EAN)</label>
         <div class="in"><input id="cfEan" inputmode="numeric" autocomplete="off" placeholder="bipe ou use a câmera"><button class="cam" id="cfCam" aria-label="Ler código pela câmera">${ico('camera', 24)}</button></div>
         <div class="xs muted" style="margin-top:6px">Cada leitura soma 1 na mesma linha. Digite <b>+12</b> e Enter para somar 12 ao último produto.</div></div>
@@ -144,6 +146,17 @@ const Conferencias = (() => {
       val.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); confirmaValidade(); } });
       $('#cfAdd').addEventListener('click', confirmaValidade);
     }
+    const bc = $('#cfCarrega'); if (bc) bc.addEventListener('click', () => ListaNota.abre({ conferencia: c, recarrega: async () => { ativo.sujo = true; await recarrega(); } }));
+    const bk = $('#cfChave'); if (bk) bk.addEventListener('click', async () => {
+      try {
+        const v = await Scanner.abrir({ titulo: 'Aponte para o código de barras da nota (DANFE)', aceitar: 'chave' });
+        if (!v) return;
+        const nf = String(+v.slice(25, 34)), serie = String(+v.slice(22, 25));
+        await api('/api/conferencias/' + c.id, { method: 'PUT', body: { nota: nf, operador: op() } });
+        ativo.c.nota = nf; toast('Nota ' + nf + ' (série ' + serie + ') anotada na conferência', 'ok', 3500);
+        const t = $('.cf-tit .muted'); if (t && !/NF /.test(t.textContent)) t.textContent += ' · NF ' + nf;
+      } catch (er) { toast(er.message, 'bad', 6000); }
+    });
     $('#cfFechar').addEventListener('click', fechar);
     $('#cfApagar').addEventListener('click', async () => {
       if (!confirm('Descartar esta conferência? As leituras dela serão apagadas' + (c.tipo === 'VALIDADE' ? ' e o que entrou no estoque por ela será estornado.' : '.'))) return;

@@ -11,6 +11,14 @@ const Scanner = (() => {
     return (10 - (soma % 10)) % 10 === chk;
   }
 
+  // DV da chave da NF-e (módulo 11, pesos 2 a 9 da direita para a esquerda)
+  function chaveValida(c) {
+    let soma = 0, peso = 2;
+    for (let i = 42; i >= 0; i--) { soma += +c[i] * peso; peso = peso === 9 ? 2 : peso + 1; }
+    const r = soma % 11;
+    return (r < 2 ? 0 : 11 - r) === +c[43];
+  }
+
   let zxingPronto = null;
   function carregaZxing() {
     if (window.ZXing) return Promise.resolve();
@@ -31,7 +39,7 @@ const Scanner = (() => {
     if (navigator.vibrate) navigator.vibrate(60);
   }
 
-  // aceitar: 'ean' (só GTIN válido) | 'texto' (qualquer código, ex.: etiqueta de endereço)
+  // aceitar: 'ean' (só GTIN válido) | 'chave' (chave de acesso da NF-e: 44 números com dígito verificador) | 'texto' (qualquer código, ex.: etiqueta de endereço)
   async function abrir({ titulo = 'Aponte para o código de barras', aceitar = 'ean' } = {}) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
       throw new Error('A câmera só funciona em página segura (https). Use o endereço da Vercel ou digite o código.');
@@ -66,6 +74,10 @@ const Scanner = (() => {
       const aceita = texto => {
         const t = String(texto || '').trim();
         if (!t) return false;
+        if (aceitar === 'chave') {
+          const dig = t.replace(/\D/g, '');
+          return dig.length === 44 && chaveValida(dig) ? dig : false;
+        }
         if (aceitar === 'ean') {
           const dig = t.replace(/\D/g, '');
           if (dig !== t || !gtinValido(dig)) return false;
@@ -130,5 +142,5 @@ const Scanner = (() => {
     });
   }
 
-  return { abrir, gtinValido };
+  return { abrir, gtinValido, chaveValida };
 })();

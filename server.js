@@ -9,6 +9,14 @@ const HOST = LAN ? '0.0.0.0' : '127.0.0.1';
 
 const server = http.createServer((req, res) => handler(req, res, { estaticos: true }));
 
+(async () => {
+  // DEMO=1: carrega os dados de demonstração neste computador (use com PGLITE_DIR=memory:// para não misturar com o estoque real)
+  if (process.env.DEMO === '1') {
+    const r = await require('./lib/demo').semearUmaVez(await require('./lib/db').obter());
+    console.log(r.pulado ? 'Demonstração: o banco já tem dados, nada foi criado.' : `Demonstração: ${r.produtos} produtos e ${r.lotes} lotes criados.`);
+  }
+})().catch(e => console.error('Demonstração falhou:', e.message));
+
 server.listen(PORT, HOST, () => {
   console.log('Controle de Validade rodando');
   console.log(`  Dashboard: http://localhost:${PORT}/`);
