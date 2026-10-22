@@ -107,3 +107,9 @@ Cada filial é um projeto próprio na Vercel com o seu Neon (mesmo código, dado
 ## Carregar a lista da nota ou da contagem
 
 Na Conferência de Recebimento ou de Contagem, o botão **Carregar a lista** aceita planilha (.xlsx), CSV, TXT ou o **XML da NF-e**. O app acha sozinho a linha do cabeçalho (EAN, código de barras, quantidade, lote, validade…); sem cabeçalho, entende `EAN;quantidade` em cada linha. Mostra o que entendeu e o que ficou de fora, e só então carrega as quantidades como "esperado": laranja até chegar, verde quando bate, vermelho quando passa. **Bipar a chave da nota** (44 números do DANFE) anota o número da NF.
+
+## Modo avião (sem internet)
+
+Conferências, entrada e contagem funcionam sem rede. Antes de ficar offline, no Coletor ou em Conferências toque em **Preparar para o modo avião**: o aparelho guarda o catálogo de produtos (para mostrar o nome de cada EAN), a lista de endereços e os endereços da ronda de hoje. Sem internet, o que for lançado fica numa fila no aparelho e **sobe sozinho quando a rede voltar** (cada lançamento tem um identificador, então reenviar nunca soma duas vezes). Uma conferência criada e finalizada offline guarda o horário real de abertura e de fechamento. O app só precisa estar instalado e ter sido aberto uma vez com internet.
+
+Precisa de internet: gerar a ronda do dia, carregar a lista da nota, imprimir ou exportar a conferência (isso acontece depois que ela sobe) e a auditoria.

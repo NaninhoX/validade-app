@@ -440,7 +440,13 @@ PAGINAS.config.ligar = () => {
   $$('.sheet-item').forEach(a => a.addEventListener('click', fechaMais));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') fechaMais(); });
   try {
-    const eu = await api('/api/eu');
+    let eu;
+    try { eu = await api('/api/eu'); lsSet('eu', eu); }
+    catch (e) {
+      if (!e.rede || !lsGet('eu', null)) throw e;
+      eu = lsGet('eu'); S.offlineInicio = true;                     // sem rede: abre com a identificação guardada; o coletor e as conferências funcionam
+      toast('Sem conexão: modo offline. O que você registrar sobe quando a internet voltar.', '', 6000);
+    }
     S.login = eu.login; S.usuario = eu.usuario; S.admin = !eu.login || eu.usuario?.papel === 'admin';
     S.op = eu.usuario ? eu.usuario.nome : (lsGet('operador', eu.operadores[0] || 'LOCAL'));
     S.ops = eu.operadores;
@@ -454,7 +460,7 @@ PAGINAS.config.ligar = () => {
   }
   $('#atualiza').addEventListener('click', () => { S.resumo = null; rota(); });
   Fila.inicia();
-  api('/api/config').then(x => setAreas(x.areas)).catch(() => {});
+  api('/api/config').then(x => { lsSet('config', x); setAreas(x.areas); }).catch(() => { const x = lsGet('config', null); if (x) setAreas(x.areas); });
   carregaResumo().catch(() => {});
   if (!location.hash && S.login && !S.admin) location.hash = '#/coletor';   // operador da loja entra direto no coletor
   rota();

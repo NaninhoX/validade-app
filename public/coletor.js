@@ -6,7 +6,7 @@ const Fila = (() => {
   let enviando = false;
 
   function atualiza() {
-    const n = ler().length, p = $('#sync'), t = $('#syncTxt');
+    const n = ler().length + lsGet('confFila', []).length, p = $('#sync'), t = $('#syncTxt');
     if (p) {
       p.className = 'sync' + (!navigator.onLine ? ' off' : n ? ' pend' : '');
       t.textContent = !navigator.onLine ? `Offline${n ? ' · ' + n : ''}` : n ? `Enviando ${n}…` : 'Online';
@@ -99,6 +99,7 @@ const Coletor = (() => {
     <button data-modo="baixa" aria-pressed="false">Baixa</button><button data-modo="busca" aria-pressed="false">Buscar</button>
   </div>
   <a class="btn folha-link" href="#/folha" style="margin-bottom:12px">${ico('camera')} Importar folha de papel</a>
+  <div class="off-prep"><button class="sm" id="offPrep">${ico('download')} Preparar para o modo avião</button><span class="xs muted" id="offInfo"></span></div>
 
   <section id="m-entrada">
     <div class="seg" style="width:100%;margin-bottom:16px" role="group" aria-label="Tipo de entrada">
@@ -254,10 +255,19 @@ const Coletor = (() => {
     produtoAtual = null;
     $('#prod').hidden = true; $('#cadRapido').hidden = true; $('#precoWrap').hidden = true;
     try { produtoAtual = await api('/api/produto/' + encodeURIComponent(ean.replace(/\D/g, ''))); }
-    catch (e) { if (e.status) { toast(e.message, 'bad'); return; } produtoAtual = { offline: true, cadastrado: true, lotes: [] }; }
+    catch (e) {
+      if (e.status) { toast(e.message, 'bad'); return; }
+      const cat = Catalogo.get(ean);
+      produtoAtual = { offline: true, cadastrado: !!cat || Catalogo.tamanho() === 0, lotes: [], produto: cat ? { nome: cat.nome, preco: cat.preco } : null };
+    }
     const box = $('#prod');
-    if (produtoAtual.offline) {
-      box.hidden = false; box.innerHTML = '<b>Sem conexão</b><span class="muted small">O lançamento será enviado quando a rede voltar.</span>';
+    if (produtoAtual.offline && !produtoAtual.cadastrado) {
+      beep(false);
+      $('#cadRapido').hidden = false; $('#cNome').focus();
+      box.hidden = false; box.innerHTML = '<b>EAN fora do catálogo deste aparelho</b><span class="muted small">Sem conexão. Informe o nome: o produto é cadastrado quando a rede voltar.</span>';
+      return;
+    } else if (produtoAtual.offline) {
+      box.hidden = false; box.innerHTML = (produtoAtual.produto ? `<b>${esc(produtoAtual.produto.nome)}</b>` : '<b>Sem conexão</b>') + '<span class="muted small">Sem conexão: o lançamento sobe quando a rede voltar.</span>';
     } else if (!produtoAtual.cadastrado) {
       beep(false);
       $('#cadRapido').hidden = false; $('#cNome').focus();
@@ -295,7 +305,7 @@ const Coletor = (() => {
     if (!/^\d+$/.test(qtd) || (tipoEntrada === 'RECEBIMENTO' && +qtd < 1)) { toast('Quantidade inválida', 'bad'); beep(false); return $('#qtd').focus(); }
     const body = { tipo: tipoEntrada, ean, lote: $('#lote').value, validade, endereco, qtd: +qtd };
     if (ilegivel) body.validade_confirmar = true;           // entra com a validade mais curta conhecida e fica "a confirmar"
-    if (produtoAtual && !produtoAtual.cadastrado && !produtoAtual.offline) {
+    if (produtoAtual && !produtoAtual.cadastrado) {
       if (!$('#cNome').value.trim()) { toast('Informe o nome do produto novo', 'bad'); beep(false); return $('#cNome').focus(); }
       body.nome = $('#cNome').value.trim(); body.preco = $('#cPreco').value.replace(',', '.');
     }
@@ -474,7 +484,14 @@ const Coletor = (() => {
     if (!manter && end === rondaChave && Date.now() - rondaTs < 500) return; // Enter + change disparam juntos
     rondaChave = end; rondaTs = Date.now();
     try {
-      const r = await api('/api/enderecos/' + encodeURIComponent(end));
+      let r;
+      try { r = await api('/api/enderecos/' + encodeURIComponent(end), { tentativas: 0 }); Local.set('end:' + end, r); }
+      catch (er) {
+        if (!er.rede) throw er;
+        r = await Local.get('end:' + end);
+        if (!r) { const e2 = new Error('Sem conexão e este endereço não foi guardado. Antes de ficar offline, use “Preparar para o modo avião”.'); e2.status = 400; throw e2; }
+        toast('Sem conexão: usando os dados guardados deste endereço', '', 3000);
+      }
       if (!manter || rondaEnd !== r.endereco) { rondaFeitos = new Set(); bipados = new Set(); }
       rondaEnd = r.endereco; rondaItens = r.itens;
       $('#rEnd').value = rondaEnd;
@@ -628,6 +645,9 @@ const Coletor = (() => {
     api('/api/config').then(x => { CFG = x; VALMIN = x.validade_minima || 0; setAreas(x.areas); atualizaEnd(); }).catch(() => {});
     api('/api/gondolas').then(x => { GONDS = [...new Set([...GONDS, ...Object.keys(x || {}).map(Number)])]; atualizaEnd(); }).catch(() => {});
     $$('.cmodes button').forEach(b => b.addEventListener('click', () => setModo(b.dataset.modo)));
+    const offInfo = () => { const p = Offline.pronto(); $('#offInfo').textContent = p ? `Pronto em ${new Date(p.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${int(p.catalogo)} produtos${p.ronda ? ' · ' + p.ronda + ' endereços da ronda' : ''}` : 'Baixa os produtos e a ronda de hoje para usar sem internet'; };
+    $('#offPrep').addEventListener('click', async () => { $('#offPrep').disabled = true; await Offline.preparar(); $('#offPrep').disabled = false; offInfo(); });
+    offInfo();
     $('#tReceber').addEventListener('click', () => setTipo('RECEBIMENTO'));
     $('#tContar').addEventListener('click', () => setTipo('CONTAGEM'));
     $('#tPreco').addEventListener('click', () => setTipo('PRECO'));

@@ -186,3 +186,23 @@ test('lista de avaria e RMA: situação Vencido ou Avariado, validade só dos ve
   assert.ok(csv.startsWith('﻿Produto;EAN;Lote;Situação'));
   await assert.rejects(RMA.lista(db, { de: '2020-01-01', ate: '2026-12-31' }), /período grande/);
 });
+
+test('conferência feita offline guarda o horário real do aparelho ao abrir e ao fechar', async () => {
+  await novoDb();
+  const ha = m => new Date(Date.now() - m * 60000).toISOString();
+  const c = await CONF.abrir(db, { tipo: 'RECEBIMENTO', operador: 'T', client_id: 'off-1', ts: ha(90) });
+  assert.equal(c.aberta_em, ha(90).slice(0, 16) === c.aberta_em.slice(0, 16) ? c.aberta_em : null);
+  assert.ok(Math.abs(Date.parse(c.aberta_em) - (Date.now() - 90 * 60000)) < 2000);
+  await CONF.adicionarItem(db, c.id, { ean: '7891000000017', qtd: 2, client_id: 'i-off' }, 'T');
+  const f = await CONF.fechar(db, c.id, ha(30));
+  assert.ok(Math.abs(Date.parse(f.fechada_em) - (Date.now() - 30 * 60000)) < 2000);
+  assert.equal(f.minutos, 60);
+  // horário no futuro ou antes da abertura não vale
+  const c2 = await CONF.abrir(db, { tipo: 'CONTAGEM', operador: 'T', client_id: 'off-2', ts: new Date(Date.now() + 3600e3).toISOString() });
+  assert.ok(Date.parse(c2.aberta_em) <= Date.now() + 1000);
+  await CONF.adicionarItem(db, c2.id, { ean: '7891000000017', qtd: 1, client_id: 'i-off2' }, 'T');
+  const f2 = await CONF.fechar(db, c2.id, ha(500));
+  assert.ok(Date.parse(f2.fechada_em) >= Date.parse(f2.aberta_em));
+  // reenviar a criação (rede caiu depois de criar) devolve a mesma conferência
+  assert.equal((await CONF.abrir(db, { tipo: 'RECEBIMENTO', operador: 'T', client_id: 'off-1', ts: ha(90) })).id, c.id);
+});
