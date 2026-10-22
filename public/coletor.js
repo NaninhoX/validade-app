@@ -107,8 +107,8 @@ const Coletor = (() => {
       <button id="tPreco" aria-pressed="false" style="flex:1;min-height:40px">Só preço</button>
     </div>
     <div class="f-wrap fx"><label class="f" for="end"><span class="step">1</span>Endereço</label>
-      <div class="in"><input id="end" list="listaEnd" autocomplete="off" autocapitalize="characters" placeholder="ex.: 1-B-3"><button class="cam" data-cam="end" aria-label="Ler etiqueta do endereço">${ico('camera', 24)}</button></div><datalist id="listaEnd"></datalist>
-      <div id="endChips" aria-label="Atalhos de endereço" style="display:grid;gap:8px;margin-top:10px"></div>
+      <div id="endChips" aria-label="Escolha o endereço" style="display:grid;gap:10px"></div>
+      <div class="in" style="margin-top:10px"><input id="end" list="listaEnd" autocomplete="off" autocapitalize="characters" placeholder="ou digite / leia a etiqueta: 1-B-3"><button class="cam" data-cam="end" aria-label="Ler etiqueta do endereço">${ico('camera', 24)}</button></div><datalist id="listaEnd"></datalist>
       <div class="xs muted" id="endDesc" style="margin-top:8px;min-height:18px"></div></div>
     <div class="f-wrap"><label class="f" for="ean"><span class="step">2</span>Código de barras (EAN)</label>
       <div class="in"><input id="ean" inputmode="numeric" autocomplete="off" placeholder="bipe ou use a câmera"><button class="cam" data-cam="ean" aria-label="Ler código pela câmera">${ico('camera', 24)}</button></div></div>
@@ -191,14 +191,17 @@ const Coletor = (() => {
 
   // ---------- endereço ----------
   const partes = v => { const m = String(v || '').trim().toUpperCase().match(/^(\d{1,2})(?:-(A|B|F|C|PE|PD|P))?(?:-(\d{1,2}))?$/); return m ? { g: m[1], lado: m[2] || null, nivel: m[3] ? +m[3] : null } : null; };
+  let GONDS = Array.from({ length: 18 }, (_, i) => i + 1);
+  const gondolasConhecidas = () => [...new Set([...GONDS, ...AREAS.map(Number)])].sort((a, b) => a - b);
   function atualizaEnd() {
     const v = $('#end').value, p = parseEndereco(v), q = partes(v);
     $('#endDesc').innerHTML = !v.trim() ? 'Gôndola-lado-prateleira. Ex.: 1-B-3 (lado B, prateleira 3) · 1-F ou 1-C = ponta'
       : p.valido ? `<span style="color:var(--good)">✓</span> ${esc(descEndereco(v))}` : q ? `Falta o lado (${ladosDe(q.g).join(', ')}) e a prateleira (1 a 5)` : '<span style="color:var(--bad)">Endereço fora do padrão</span>';
     const linha = (rot, itens) => `<div class="chips" style="margin:0;width:100%;align-items:center"><span class="small muted" style="width:72px">${rot}</span>${itens}</div>`;
-    $('#endChips').innerHTML = q && AREAS.includes(+q.g) ? '<div class="xs muted">Sacaria: use 19 ou o pallet, ex.: 19-P1</div>' :
-      linha('Lado', ladosDe(q?.g).map(l => `<button class="chip sq" data-lado="${l}" aria-pressed="${q?.lado === l}" title="${LADO_TXT[l]}">${l}</button>`).join('')) +
-      linha('Prateleira', [1, 2, 3, 4, 5].map(n => `<button class="chip sq" data-nivel="${n}" aria-pressed="${q?.nivel === n}">${n}</button>`).join(''));
+    const linhaGond = linha('Gôndola', gondolasConhecidas().map(g => `<button class="chip sq" data-g="${g}" aria-pressed="${q ? +q.g === g : false}" aria-label="Gôndola ${g}">${g}</button>`).join(''));
+    $('#endChips').innerHTML = q && AREAS.includes(+q.g) ? linhaGond + '<div class="xs muted">Área livre: use só o número ou o pallet, ex.: 19-P1 (digite abaixo)</div>' : linhaGond +
+      linha('Lado', ladosDe(q?.g || 1).map(l => `<button class="chip sq" data-lado="${l}" aria-pressed="${q?.lado === l}" title="${LADO_TXT[l]}">${l}</button>`).join('')) +
+      linha('Módulo', [1, 2, 3, 4, 5].map(n => `<button class="chip sq" data-nivel="${n}" aria-pressed="${q?.nivel === n}">${n}</button>`).join(''));
     lsSet('ultimoEnd', v);
   }
 
@@ -349,8 +352,7 @@ const Coletor = (() => {
     } catch { /* sem rede: segue sem filtro */ }
     const box = $('#rFiltro'); if (!box) return;
     const so = lsGet('rondaMinhas', true);
-    box.innerHTML = MINHAS.length ? `<div class="f" style="margin-top:14px">Quais setores?</div><div class="chips" style="margin-top:6px">
-      <button class="chip" data-minhas="1" aria-pressed="${so}">Só os meus (${MINHAS.join(', ')})</button><button class="chip" data-minhas="0" aria-pressed="${!so}">Todas</button></div>` : '';
+    box.innerHTML = MINHAS.length ? `<div class="chips" style="margin-top:14px"><button class="chip" data-minhas="${so ? 0 : 1}" aria-pressed="${so}">Só os meus setores</button></div>` : '';
   }
 
   async function painelSemana() {
@@ -377,7 +379,7 @@ const Coletor = (() => {
   // nome e responsáveis do setor (lado) deste endereço
   function setorTxt(t) {
     const p = parseEndereco(t.e), s = ((turno.setores || {})[p.gondola] || {})[p.lado];
-    return s ? ' · ' + esc([s.nome, s.resp.map(n => n.charAt(0) + n.slice(1).toLowerCase()).join(', ')].filter(Boolean).join(' — ')) : '';
+    return s && s.nome ? ' · ' + esc(s.nome) : '';                     // só o nome do setor; os responsáveis ocupavam a tela e a ronda já é dos meus
   }
 
   function desenhaDia() {
@@ -578,7 +580,8 @@ const Coletor = (() => {
   // ---------- ligação dos eventos ----------
   function ligar() {
     CFG = null;
-    api('/api/config').then(x => { CFG = x; VALMIN = x.validade_minima || 0; setAreas(x.areas); }).catch(() => {});
+    api('/api/config').then(x => { CFG = x; VALMIN = x.validade_minima || 0; setAreas(x.areas); atualizaEnd(); }).catch(() => {});
+    api('/api/gondolas').then(x => { GONDS = [...new Set([...GONDS, ...Object.keys(x || {}).map(Number)])]; atualizaEnd(); }).catch(() => {});
     $$('.cmodes button').forEach(b => b.addEventListener('click', () => setModo(b.dataset.modo)));
     $('#tReceber').addEventListener('click', () => setTipo('RECEBIMENTO'));
     $('#tContar').addEventListener('click', () => setTipo('CONTAGEM'));
@@ -616,7 +619,13 @@ const Coletor = (() => {
       const b = e.target.closest('button.chip');
       if (!b) return;
       const q = partes($('#end').value);
-      if (!q) { toast('Digite o número da gôndola primeiro', 'bad'); $('#end').focus(); return; }
+      if (b.dataset.g) {                                                    // trocou de gôndola: mantém lado e módulo se ainda existirem nela
+        const g = b.dataset.g;
+        if (AREAS.includes(+g)) $('#end').value = g;
+        else { const lado = q && ladosDe(g).includes(q.lado) ? q.lado : null; $('#end').value = lado ? `${g}-${lado}${q.nivel ? '-' + q.nivel : ''}` : g; }
+        atualizaEnd(); return;
+      }
+      if (!q) { toast('Toque primeiro na gôndola', 'bad'); return; }
       const lado = b.dataset.lado || q.lado || 'A';
       const nivel = b.dataset.nivel ? +b.dataset.nivel : q.nivel;
       $('#end').value = `${q.g}-${lado}${nivel ? '-' + nivel : ''}`;
@@ -655,7 +664,7 @@ const Coletor = (() => {
       const t = e.target.closest('button, a');
       if (!t) return;
       if (t.dataset.n) { lsSet('rondaN', +t.dataset.n); desenhaDia(); }
-      else if (t.dataset.minhas) { lsSet('rondaMinhas', t.dataset.minhas === '1'); $$('#rFiltro button').forEach(x => x.setAttribute('aria-pressed', x === t)); }
+      else if (t.dataset.minhas) { const liga = t.dataset.minhas === '1'; lsSet('rondaMinhas', liga); t.setAttribute('aria-pressed', liga); t.dataset.minhas = liga ? '0' : '1'; }
       else if (t.id === 'rGerar') gerarTurno();
       else if (t.id === 'rManual') { emTurno = -1; mostraRonda('escolha'); }
       else if (t.id === 'rNova') { turno = null; salvaTurno(); desenhaDia(); }

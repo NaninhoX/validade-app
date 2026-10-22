@@ -151,7 +151,7 @@ const ladosDe = g => (AREAS.includes(+g) ? ['P'] : +g === 9 || +g === 10 ? ['A',
 function descEndereco(e) {
   const p = parseEndereco(e);
   if (!p.gondola) return '';
-  return `Gôndola ${p.gondola} · ${LADO_TXT[p.lado]}${p.nivel ? (p.lado === 'P' ? ' ' : ' · prateleira ') + p.nivel : ''}`;
+  return `Gôndola ${p.gondola}${p.lado ? " · " + LADO_TXT[p.lado] : ""}${p.nivel ? (p.lado === 'P' ? ' ' : ' · prateleira ') + p.nivel : ''}`;
 }
 
 const pill = (status, cor) => `<span class="pill" style="--c:${esc(cor || '#6e6e73')}">${esc(status)}</span>`;

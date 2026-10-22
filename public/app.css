@@ -509,3 +509,23 @@ button.rg-n:hover { color: var(--accent); }
 .setor-nomes { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
 .setor-nomes > summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; font-weight: 600; font-size: 14px; }
 .setor-nomes .rg { margin-top: 8px; }
+
+/* guias de alinhamento e perímetro da planta */
+.guias { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 5; }
+.guias line { stroke: #ff2d8a; stroke-width: 1; shape-rendering: crispEdges; }
+.stage .perimetro { position: absolute; inset: 0; border: calc(1.5px * var(--inv, 1)) solid color-mix(in srgb, var(--accent) 60%, transparent); border-radius: 2px; pointer-events: none; }
+
+/* setores: cartões de nome arrastados para o lado de cada gôndola */
+.set-pal { position: sticky; top: 0; z-index: 3; background: var(--surface); padding: 6px 0 10px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+.nome-card { touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.nome-card[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.set-gs { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+.set-g { border: 1px solid var(--line-2); border-radius: var(--r); padding: 8px; display: grid; gap: 6px; background: var(--surface-2); }
+.set-n { font: 700 18px var(--font-display); }
+.set-ls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.set-l { min-height: 52px; border: 1px dashed var(--line-2); border-radius: var(--r-sm); padding: 4px 6px; display: grid; align-content: start; gap: 3px; transition: background-color .15s, border-color .15s; }
+.set-l.alvo { background: var(--accent-soft); border-color: var(--accent); border-style: solid; }
+.set-ln { font-size: 10.5px; color: var(--muted); }
+.set-tags { display: flex; flex-wrap: wrap; gap: 3px; }
+.tag-nome { min-height: 26px; padding: 0 8px; font-size: 12.5px; font-weight: 600; border-radius: 999px; background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent); }
+.nome-fantasma { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; padding: 6px 14px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; box-shadow: var(--shadow-2); }

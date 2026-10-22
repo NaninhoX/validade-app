@@ -295,7 +295,7 @@ PAGINAS.config = async () => {
   const ladosDe2 = g => (g === 9 || g === 10 ? ['A', 'B', 'PE', 'PD'] : ['A', 'B', 'F', 'C']);
   const ROT_LADO = { A: 'Lado A', B: 'Lado B', F: 'Frente', C: 'Costas', PE: 'Pta. esq.', PD: 'Pta. dir.' };
   S.setCfg = { gIds, ativos, ladosDe: ladosDe2, rotulos: ROT_LADO, setores: JSON.parse(JSON.stringify(setores || {})), sel: ativos[0] || null };
-  const cartaoResp = !S.admin || !users ? '' : `<div class="card reveal" style="--i:3"><div class="head"><div><h2>Setores das gôndolas</h2><div class="sub">Escolha a pessoa e toque nos lados que ela cuida. Aparece no mapa e na ronda.</div></div></div>
+  const cartaoResp = !S.admin || !users ? '' : `<div class="card reveal" style="--i:3;grid-column:1/-1"><div class="head"><div><h2>Setores das gôndolas</h2><div class="sub">Veja todas as gôndolas e arraste cada nome para o lado que ele cuida. Aparece no mapa e na ronda.</div></div></div>
       <div id="setGrid"></div>
       <details class="setor-nomes"><summary>Dar nome aos setores (opcional, ex.: “Higiene”)</summary><div id="setNomes"></div></details>
       <div style="margin-top:14px"><button class="primary" id="salvaSetores">${ico('check')} Salvar setores</button></div></div>`;
@@ -329,27 +329,45 @@ PAGINAS.config.ligar = () => {
     const s = ((SC.setores[g] = SC.setores[g] || {})[l] = SC.setores[g][l] || { nome: '', resp: [] });
     s.resp = s.resp.filter(x => x !== p); if (v) s.resp.push(p);
   };
+  let armado = null, arrastou = false;                 // cartão de nome "na mão" (toque) e se o último gesto foi um arrasto
+  const nomesDe = (g, l) => (SC.setores[g] && SC.setores[g][l] && SC.setores[g][l].resp) || [];
   const desenhaSet = () => {
     if (!sgrid) return;
-    const p = SC.sel;
-    if (!p) { sgrid.innerHTML = '<p class="muted">Cadastre a equipe primeiro.</p>'; return; }
-    const total = x => SC.gIds.reduce((n, g) => n + SC.ladosDe(g).filter(l => tem(g, l, x)).length, 0);
-    const meus = SC.gIds.flatMap(g => SC.ladosDe(g).filter(l => tem(g, l, p)).map(l => g + '-' + l));
-    sgrid.innerHTML = `<div class="chips" style="margin:0 0 12px">${SC.ativos.map(n => `<button class="chip" data-p="${esc(n)}" aria-pressed="${n === p}">${esc(nomeBonito(n))} <span class="xs" style="opacity:.7">${total(n) || ''}</span></button>`).join('')}</div>
-      <div class="xs muted" style="margin-bottom:8px">Toque no lado que ${esc(nomeBonito(p))} cuida. Toque no número para marcar ou limpar a gôndola inteira.</div>
-      <div class="rg">${SC.gIds.map(g => `<div class="rg-row"><button class="rg-n" data-gt="${g}" aria-label="Gôndola ${g} inteira">${g}</button>${SC.ladosDe(g).map(l => `<button class="chip rg-l" data-g="${g}" data-l="${l}" aria-pressed="${tem(g, l, p)}">${SC.rotulos[l]}</button>`).join('')}</div>`).join('')}</div>
-      <div class="xs muted" style="margin-top:10px">${meus.length ? esc(nomeBonito(p)) + ' cuida de: ' + meus.join(', ') : esc(nomeBonito(p)) + ' ainda não tem lados.'}</div>`;
+    if (!SC.ativos.length) { sgrid.innerHTML = '<p class="muted">Cadastre a equipe primeiro.</p>'; return; }
+    sgrid.innerHTML = `<div class="set-pal"><div class="xs muted">Arraste um nome para o lado da gôndola. No celular: toque no nome e depois no lado. Toque no nome dentro do lado para tirar.</div>
+      <div class="chips" style="margin:8px 0 0">${SC.ativos.map(n => `<button class="chip nome-card" data-p="${esc(n)}" aria-pressed="${armado === n}">${esc(nomeBonito(n))}</button>`).join('')}</div></div>
+      <div class="set-gs">${SC.gIds.map(g => `<div class="set-g"><b class="set-n">${g}</b><div class="set-ls">${SC.ladosDe(g).map(l => `<div class="set-l" data-g="${g}" data-l="${l}"><span class="set-ln">${SC.rotulos[l]}</span><span class="set-tags">${nomesDe(g, l).map(n => `<button class="tag-nome" data-x="${esc(n)}" title="Tirar ${esc(nomeBonito(n))}">${esc(nomeBonito(n))}</button>`).join('')}</span></div>`).join('')}</div></div>`).join('')}</div>`;
+  };
+  const ligaDnd = () => {
+    sgrid.addEventListener('click', e => {
+      if (arrastou) { arrastou = false; return; }
+      const x = e.target.closest('.tag-nome'), card = e.target.closest('.nome-card'), slot = e.target.closest('.set-l');
+      if (x && slot) { poe(+slot.dataset.g, slot.dataset.l, x.dataset.x, false); desenhaSet(); return; }
+      if (card) { armado = armado === card.dataset.p ? null : card.dataset.p; desenhaSet(); return; }
+      if (slot && armado) { const g = +slot.dataset.g, l = slot.dataset.l; poe(g, l, armado, !nomesDe(g, l).includes(armado)); desenhaSet(); }
+    });
+    sgrid.addEventListener('pointerdown', e => {
+      const card = e.target.closest('.nome-card'); if (!card || e.button > 0) return;
+      const nome = card.dataset.p, x0 = e.clientX, y0 = e.clientY; let fant = null, alvo = null;
+      const sobre = ev => { const s = document.elementFromPoint(ev.clientX, ev.clientY); return s ? s.closest('.set-l') : null; };
+      const mover = ev => {
+        if (!fant && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
+        if (!fant) { fant = document.createElement('div'); fant.className = 'nome-fantasma'; fant.textContent = nomeBonito(nome); document.body.appendChild(fant); }
+        fant.style.transform = `translate(${ev.clientX + 8}px, ${ev.clientY + 8}px)`;
+        const s = sobre(ev); if (s !== alvo) { if (alvo) alvo.classList.remove('alvo'); alvo = s; if (alvo) alvo.classList.add('alvo'); }
+      };
+      const fim = ev => {
+        window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', fim); window.removeEventListener('pointercancel', fim);
+        if (!fant) return;                                   // foi só um toque: o clique arma o nome
+        const s = sobre(ev); fant.remove(); if (alvo) alvo.classList.remove('alvo');
+        arrastou = true; setTimeout(() => { arrastou = false; }, 0);
+        if (s) { poe(+s.dataset.g, s.dataset.l, nome, true); desenhaSet(); }
+      };
+      window.addEventListener('pointermove', mover); window.addEventListener('pointerup', fim); window.addEventListener('pointercancel', fim);
+    });
   };
   if (sgrid) {
-    desenhaSet();
-    sgrid.addEventListener('click', e => {
-      const bp = e.target.closest('button[data-p]'), bl = e.target.closest('button[data-l]'), bg = e.target.closest('button[data-gt]');
-      if (bp) SC.sel = bp.dataset.p;
-      else if (bl) poe(+bl.dataset.g, bl.dataset.l, SC.sel, !tem(+bl.dataset.g, bl.dataset.l, SC.sel));
-      else if (bg) { const g = +bg.dataset.gt, ls = SC.ladosDe(g), todos = ls.every(l => tem(g, l, SC.sel)); ls.forEach(l => poe(g, l, SC.sel, !todos)); }
-      else return;
-      desenhaSet();
-    });
+    desenhaSet(); ligaDnd();
     $('#setNomes').innerHTML = `<div class="rg">${SC.gIds.map(g => `<div class="rg-row nm"><b class="rg-n">${g}</b>${SC.ladosDe(g).map(l => `<input type="text" maxlength="40" data-g="${g}" data-l="${l}" placeholder="${SC.rotulos[l]}" value="${esc((SC.setores[g] && SC.setores[g][l] && SC.setores[g][l].nome) || '')}" aria-label="Nome do setor, gôndola ${g}, ${SC.rotulos[l]}">`).join('')}</div>`).join('')}</div>`;
     $('#setNomes').addEventListener('input', e => {
       const i = e.target.closest('input[data-l]'); if (!i) return;
