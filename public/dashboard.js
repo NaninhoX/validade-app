@@ -7,6 +7,8 @@ const ROTAS = {
   estoque: { titulo: 'Estoque', sub: () => 'Todos os lotes em loja' },
   mov: { titulo: 'Movimentações', sub: () => 'Tudo que o coletor e o painel registraram' },
   config: { titulo: 'Configurações', sub: () => 'Regras, equipe e dados' },
+  conferencias: { titulo: 'Conferências', sub: () => 'Bipagem em rajada: recebimento, validade e contagem' },
+  conferencia: { titulo: 'Conferência', sub: () => 'Leia os códigos de barras em sequência' },
   folha: { titulo: 'Importar folha', sub: () => 'Foto da folha de papel para lançar lotes' },
 };
 const view = $('#view');
@@ -40,8 +42,9 @@ async function enviar(body, msg) {
 
 // ---------- casca ----------
 function pintaNav(nome) {
+  if (nome === 'conferencia') nome = 'conferencias';
   $$('.nav[data-r], .sheet-item[data-r]').forEach(a => { if (a.dataset.r === nome) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
-  const sec = ['mov', 'config'].includes(nome);
+  const sec = ['mov', 'config', 'conferencias'].includes(nome);
   const mb = $('#maisBtn'); if (sec) mb.setAttribute('aria-current', 'page'); else mb.removeAttribute('aria-current');
 }
 function fechaMais() { $('#maisSheet').hidden = true; $('#maisBack').hidden = true; $('#maisBtn').setAttribute('aria-expanded', 'false'); }
@@ -49,9 +52,11 @@ function alternaMais() { const abre = $('#maisSheet').hidden; $('#maisSheet').hi
 
 async function rota() {
   const h = location.hash.replace(/^#\/?/, '') || 'geral';
-  const [nome, qs] = h.split('?');
+  const [caminho, qs] = h.split('?');
+  const [nome, param] = caminho.split('/');      // #/conferencia/12 => nome 'conferencia', id 12
   const r = ROTAS[nome] ? nome : 'geral';
   const q = new URLSearchParams(qs || '');
+  if (param) q.set('id', param);
   const meu = ++token;
   pintaNav(r); fechaMais();
   $('#voltar').hidden = r === 'geral';
@@ -149,6 +154,7 @@ PAGINAS.geral = async () => {
   </div>
   <div class="card reveal" id="cardCausas" style="--i:9;margin-top:18px"></div>
   <div id="audCard" style="margin-top:18px"></div>
+  <div id="hojeCard" style="margin-top:18px"></div>
   <div class="grid cols-2" style="margin-top:18px">
     <div class="card reveal" style="--i:9"><div class="head"><h2>Marcas com maior perda potencial</h2></div>
       ${(() => { const m = Math.max(1, ...res.marcas.map(x => x.perda)); return res.marcas.slice(0, 7).map(x => `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${esc(x.marca)}</span><b class="num">${brl(x.perda)}</b></div><div class="meter" style="margin-top:6px"><i style="width:${x.perda / m * 100}%"></i></div></div>`).join(''); })()}</div>
@@ -165,6 +171,7 @@ PAGINAS.geral = async () => {
 PAGINAS.geral.ligar = () => {
   Causa.montaCard($('#cardCausas'));
   Auditoria.cartao($('#audCard'));
+  Conferencias.cartaoHoje($('#hojeCard'));
   $$('[data-count]').forEach(el => contar(el, +el.dataset.count, el.dataset.fmt === 'brl' ? brl : int));
   requestAnimationFrame(() => requestAnimationFrame(() => $$('.seg-arc').forEach(c => { c.style.strokeDasharray = `${c.dataset.len} ${c.dataset.c - c.dataset.len}`; })));
   $$('[data-status]').forEach(el => el.addEventListener('click', () => { location.hash = '#/estoque?status=' + encodeURIComponent(el.dataset.status); }));
@@ -181,6 +188,8 @@ PAGINAS.geral.ligar = () => {
 // ---------- coletor ----------
 PAGINAS.coletor = async () => Coletor.html();
 PAGINAS.coletor.ligar = () => Coletor.ligar();
+PAGINAS.conferencias = async () => { await Conferencias.lista(view); return null; };
+PAGINAS.conferencia = async q => { await Conferencias.burst(view, q.get('id')); return null; };
 PAGINAS.folha = async () => Folha.html();
 PAGINAS.folha.ligar = () => Folha.ligar();
 
@@ -418,7 +427,7 @@ PAGINAS.config.ligar = () => {
 
 // ---------- início ----------
 (async () => {
-  for (const [id, ic] of [['logo', 'box'], ['i-geral', 'grid'], ['i-mapa', 'map'], ['i-estoque', 'layers'], ['i-mov', 'clock'], ['i-config', 'sliders'], ['i-coletor', 'scan'], ['i-mais', 'more'],
+  for (const [id, ic] of [['logo', 'box'], ['i-geral', 'grid'], ['i-mapa', 'map'], ['i-estoque', 'layers'], ['i-mov', 'clock'], ['i-config', 'sliders'], ['i-coletor', 'scan'], ['i-mais', 'more'], ['i-conferencias', 'clipboard'], ['m-conferencias', 'clipboard'],
     ['m-mov', 'clock'], ['m-config', 'sliders'], ['m-export', 'download'], ['m-sair', 'logout']]) $('#' + id).innerHTML = ico(ic, 22);
   $('#atualiza').innerHTML = ico('refresh');
   $('#export').innerHTML = ico('download') + ' Exportar';
