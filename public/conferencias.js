@@ -20,6 +20,8 @@ const Conferencias = (() => {
   const fila = () => lsGet('confFila', []);
   const salvaFila = l => lsSet('confFila', l);
   const empilha = o => { const l = fila(); l.push(o); salvaFila(l); };
+  const estadoTxt = c => (c.aberta ? 'Aberta' : c.tipo === 'RONDA' ? 'Fechada' : c.processada ? 'Processada' : 'Finalizada');
+  const estadoCor = c => (c.aberta ? 'var(--good)' : c.tipo === 'RONDA' ? 'var(--muted)' : c.processada ? 'var(--accent)' : 'var(--warn)');
   let drenando = false, ativo = null;      // ativo: estado da tela de bipagem aberta
 
   function pedeNome(ean) {
@@ -88,12 +90,12 @@ const Conferencias = (() => {
     const eVal = c.tipo === 'VALIDADE', eEnd = c.tipo === 'VALIDADE' || c.tipo === 'CONTAGEM';
     view.innerHTML = `<div class="cf cwrap" id="cf">
       <div class="card cf-head"><div class="cf-tit"><div><b>${esc(nomeTipo(c.tipo))}</b> <span class="muted">#${c.id} · ${esc(c.operador)}${c.nota ? ' · NF ' + esc(c.nota) : ''}</span></div>
-        <span class="pill" id="cfEstado" style="--c:${c.aberta ? 'var(--good)' : 'var(--muted)'}">${c.aberta ? 'Aberta' : 'Fechada'}</span></div>
+        <span class="pill" id="cfEstado" style="--c:${estadoCor(c)}">${estadoTxt(c)}</span></div>
         <div class="cf-cont" id="cfCont" aria-live="polite"></div>
         <div class="cf-acoes">
           ${editavel ? `<button class="primary" id="cfFechar">${ico('check')} Fechar conferência</button><button class="sm subtle" id="cfApagar">Descartar</button>`
-    : `<a class="btn primary" href="/conferencia?id=${c.id}" target="_blank" rel="noopener">${ico('printer')} Imprimir ou salvar em PDF</a><a class="btn" href="/api/conferencias/${c.id}.csv" download>${ico('download')} CSV</a>`}
-        </div><div class="xs muted" id="cfSync"></div></div>
+    : `<a class="btn primary" href="/conferencia?id=${c.id}" target="_blank" rel="noopener">${ico('printer')} Imprimir ou salvar em PDF</a><a class="btn" href="/api/conferencias/${c.id}.csv" download>${ico('download')} CSV</a><a class="btn" href="/api/conferencias/${c.id}.txt" download title="Primeira linha em branco e EAN;quantidade em cada linha, para o Importar de coletor do sistema da loja">TXT para o sistema da loja</a>${c.tipo !== 'RONDA' && !c.processada ? `<button id="cfProc">${ico('check')} Marcar como processada</button>` : ''}`}
+        </div><div class="xs muted" id="cfSync">${c.processada ? `Processada${c.processada_por ? ' por ' + esc(c.processada_por) : ''} em ${dataBr(c.processada_em)} às ${hora(c.processada_em)}${c.min_ate_processar !== null ? ' (' + durTxt(c.min_ate_processar) + ' depois de finalizar)' : ''}` : ''}</div></div>
       ${c.tipo === 'RONDA' ? `<div class="callout" style="margin-bottom:14px">${ico('info')}<div>Resumo da ronda do dia${c.obs ? ': ' + esc(c.obs) : ''}. Mostra o que foi contado; “sistema” é o saldo antes da contagem. Somente leitura.</div></div>` : ''}
       ${editavel ? `
       ${eEnd ? `<div class="f-wrap"><label class="f" for="cfEnd">Endereço (opcional)</label><div class="in"><input id="cfEnd" autocomplete="off" autocapitalize="characters" placeholder="ex.: 3-B-2" value="${esc(c.endereco || '')}"><button class="cam" id="cfCamEnd" aria-label="Ler etiqueta do endereço">${ico('camera', 24)}</button></div></div>` : ''}
@@ -117,6 +119,12 @@ const Conferencias = (() => {
       const ed = e.target.closest('[data-ed]'), del = e.target.closest('[data-del]');
       if (ed) editaLinha(ed.dataset.ed);
       if (del) removeLinha(del.dataset.del);
+    });
+    const pr = $('#cfProc');
+    if (pr) pr.addEventListener('click', async () => {
+      if (!confirm('Confirma que esta conferência já foi lançada (processada) no sistema da loja?')) return;
+      try { await api('/api/conferencias/' + c.id + '/processar', { method: 'POST', body: { operador: op() } }); toast('Marcada como processada', 'ok', 2500); burst(view, c.id); }
+      catch (er) { toast(er.message, 'bad', 6000); }
     });
     if (!editavel) { drena(); return; }
 
@@ -338,7 +346,7 @@ const Conferencias = (() => {
       rows.forEach(r => ops.add(String(r.operador).toUpperCase()));
       const sel = $('#cfFOp'); sel.innerHTML = '<option value="">Todos os operadores</option>' + [...ops].sort().map(o => `<option ${f.operador === o ? 'selected' : ''}>${esc(o)}</option>`).join('');
       $('#cfLista2').innerHTML = rows.length ? rows.map(c => `<a class="row click cf-row" href="#/conferencia/${c.id}" style="color:inherit">
-          <span class="pill" style="--c:${c.aberta ? 'var(--good)' : 'var(--muted)'}">${c.aberta ? 'Aberta' : 'Fechada'}</span>
+          <span class="pill" style="--c:${estadoCor(c)}">${estadoTxt(c)}</span>
           <div><div class="pname"><b>${esc(nomeTipo(c.tipo))}</b> <span class="muted">· ${esc(c.operador)}${c.nota ? ' · NF ' + esc(c.nota) : ''}</span></div>
             <div class="xs muted">${dataBr(c.aberta_em)} · ${hora(c.aberta_em)}${c.fechada_em ? ' às ' + hora(c.fechada_em) : ''} · ${durTxt(c.minutos)}</div></div>
           <div style="text-align:right"><b class="num">${int(c.itens)}</b> <span class="xs muted">itens</span><div class="xs muted">${pl(c.eans, 'EAN', 'EANs')}</div></div></a>`).join('')
@@ -358,7 +366,7 @@ const Conferencias = (() => {
       const cel = (n, rot, href) => `<a class="hoje-c" href="${href}"><b class="num">${int(n)}</b><span class="xs muted">${rot}</span></a>`;
       el.innerHTML = `<div class="card reveal"><div class="head"><h2>Hoje</h2><span class="sub">o que já foi feito no dia</span></div>
         <div class="hoje">${cel(h.rondas, h.rondas === 1 ? 'ronda' : 'rondas', '#/coletor')}${cel(h.conferencias, h.conferencias === 1 ? 'conferência' : 'conferências', '#/conferencias')}${cel(h.auditorias, h.auditorias === 1 ? 'auditoria' : 'auditorias', '#/coletor')}</div>
-        ${h.abertas ? `<div class="xs muted" style="margin-top:8px">${pl(h.abertas, 'conferência aberta', 'conferências abertas')} · <a href="#/conferencias">ver</a></div>` : ''}</div>`;
+        ${h.abertas ? `<div class="xs muted" style="margin-top:8px">${pl(h.abertas, 'conferência aberta', 'conferências abertas')} · <a href="#/conferencias">ver</a></div>` : ''}${h.a_processar ? `<div class="xs muted" style="margin-top:6px"><b style="color:var(--warn)">${pl(h.a_processar, 'conferência finalizada', 'conferências finalizadas')}</b> esperando processar no sistema da loja · <a href="#/conferencias">ver</a></div>` : ''}</div>`;
     } catch { el.innerHTML = ''; }
   }
 

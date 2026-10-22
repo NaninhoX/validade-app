@@ -211,11 +211,11 @@ test('RONDA: resumo criado ao encerrar o turno é idempotente e aceita contagem 
 test('cartão Hoje conta conferências fechadas e auditorias do dia', async () => {
   const db = await novoDb();
   const c = await CF.abrir(db, { tipo: 'RECEBIMENTO', operador: 'ANA' });
-  assert.deepEqual(await CF.hoje(db), { dia: U.hojeISO(), rondas: 0, conferencias: 0, abertas: 1, auditorias: 0 });
+  assert.deepEqual(await CF.hoje(db), { dia: U.hojeISO(), rondas: 0, conferencias: 0, abertas: 1, auditorias: 0, a_processar: 0 });
   await CF.adicionarItem(db, c.id, { client_id: 'h1', ean: EAN }, 'ANA');
   await CF.fechar(db, c.id);
   const l = (await S.leitura(db, { tipo: 'RECEBIMENTO', ean: EAN, lote: 'L1', validade: mais(100), endereco: '3-A-1', qtd: 2, operador: 'ANA' })).lote;
   await S.leitura(db, { tipo: 'CONTAGEM', lote_id: l.id, qtd: 2, motivo: 'Auditoria: confere', operador: 'BIA' });
   const h = await CF.hoje(db);
-  assert.deepEqual([h.conferencias, h.abertas, h.auditorias], [1, 0, 1]);
+  assert.deepEqual([h.conferencias, h.abertas, h.auditorias, h.a_processar], [1, 0, 1, 1]);
 });

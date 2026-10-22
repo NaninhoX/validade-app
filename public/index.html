@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="causa.css">
 <link rel="stylesheet" href="folha.css">
 <link rel="stylesheet" href="conferencias.css">
+<link rel="stylesheet" href="tv.css">
 </head>
 <body>
 <div class="app">
@@ -23,6 +24,7 @@
       <a class="nav destaque" href="#/coletor" data-r="coletor"><span class="ic" id="i-coletor"></span><span class="lbl">Coletor</span><span class="lbl-s">Coletor</span></a>
       <a class="nav" href="#/estoque" data-r="estoque"><span class="ic" id="i-estoque"></span><span class="lbl">Estoque</span><span class="lbl-s">Estoque</span><span class="badge-n" id="nVenc" hidden></span></a>
       <a class="nav sec" href="#/conferencias" data-r="conferencias"><span class="ic" id="i-conferencias"></span><span class="lbl">Conferências</span><span class="lbl-s">Conf.</span></a>
+      <a class="nav sec" href="#/tv" data-r="tv"><span class="ic" id="i-tv"></span><span class="lbl">Modo TV</span><span class="lbl-s">TV</span></a>
       <a class="nav sec" href="#/mov" data-r="mov"><span class="ic" id="i-mov"></span><span class="lbl">Movimentações</span><span class="lbl-s">Mov.</span></a>
       <a class="nav sec" href="#/config" data-r="config"><span class="ic" id="i-config"></span><span class="lbl">Configurações</span><span class="lbl-s">Config.</span></a>
       <button class="nav mais" id="maisBtn" aria-haspopup="true" aria-expanded="false"><span class="ic" id="i-mais"></span><span class="lbl-s">Mais</span></button>
@@ -48,6 +50,7 @@
 <div class="sheet-back" id="maisBack" hidden></div>
 <div class="sheet" id="maisSheet" role="menu" hidden>
   <a class="sheet-item" href="#/conferencias" data-r="conferencias" role="menuitem"><span id="m-conferencias"></span>Conferências</a>
+  <a class="sheet-item" href="#/tv" data-r="tv" role="menuitem"><span id="m-tv"></span>Modo TV</a>
   <a class="sheet-item" href="#/mov" data-r="mov" role="menuitem"><span id="m-mov"></span>Movimentações</a>
   <a class="sheet-item" href="#/config" data-r="config" role="menuitem"><span id="m-config"></span>Configurações</a>
   <a class="sheet-item" href="/api/export.xlsx" download role="menuitem"><span id="m-export"></span>Exportar .xlsx</a>
@@ -74,5 +77,6 @@
 <script src="lista-nota.js"></script>
 <script src="conferencias.js"></script>
 <script src="dashboard.js"></script>
+<script src="tv.js"></script>
 </body>
 </html>

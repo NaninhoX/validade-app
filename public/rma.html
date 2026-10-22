@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Lista de avaria e RMA · Controle de Validade</title>
+<link rel="icon" href="icon.svg">
+<style>
+  @font-face { font-family: Roboto; font-weight: 400; src: url(vendor/fonts/roboto-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family: Roboto; font-weight: 500; src: url(vendor/fonts/roboto-latin-500-normal.woff2) format("woff2"); }
+  @font-face { font-family: Roboto; font-weight: 700; src: url(vendor/fonts/roboto-latin-700-normal.woff2) format("woff2"); }
+  @page { size: A4; margin: 10mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e9edf2; color: #0f2340; font: 400 11px/1.35 Roboto, "Segoe UI", system-ui, sans-serif; }
+  .barra { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; padding: 12px; position: sticky; top: 0; background: #e9edf2; }
+  .barra button, .barra a { font: 500 14px Roboto, sans-serif; min-height: 40px; padding: 0 18px; border-radius: 8px; border: 1px solid #013a7b; background: #fff; color: #013a7b; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+  .barra .p { background: #013a7b; color: #fff; }
+  .barra label { font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+  .barra input { font: 400 14px Roboto, sans-serif; min-height: 40px; padding: 0 8px; border: 1px solid #9aa8bb; border-radius: 8px; }
+  .folha { width: 210mm; min-height: 297mm; margin: 0 auto 20px; background: #fff; padding: 10mm; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #013a7b; padding-bottom: 6px; }
+  h1 { font: 700 18px Roboto, sans-serif; margin: 0; color: #013a7b; }
+  header .d { text-align: right; font-size: 11px; color: #364a68; }
+  .kpis { display: flex; gap: 18px; margin: 8px 0; color: #364a68; }
+  .kpis b { font: 700 15px Roboto, sans-serif; color: #0f2340; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font: 500 9.5px Roboto, sans-serif; color: #627590; border-bottom: 1px solid #c9d3e0; padding: 2px 4px; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  td { padding: 3px 4px; border-bottom: 1px solid #e3e9f1; vertical-align: top; }
+  td.q, th.q { text-align: right; white-space: nowrap; }
+  td.c { width: 16px; }
+  .cx { display: inline-block; width: 11px; height: 11px; border: 1.2px solid #364a68; border-radius: 2px; vertical-align: -2px; }
+  .venc { color: #cb1b36; font-weight: 500; }
+  .vazio { color: #627590; padding: 12px 0; }
+  .nota { margin-top: 12px; font-size: 10px; color: #627590; }
+  .erro { text-align: center; padding: 40px; color: #cb1b36; }
+  @media print { body { background: #fff; } .barra { display: none; } .folha { margin: 0; padding: 0; width: auto; min-height: 0; } }
+</style>
+</head>
+<body>
+<div class="barra">
+  <label>De <input type="date" id="de"></label><label>até <input type="date" id="ate"></label>
+  <button id="aplica">Atualizar</button><button class="p" id="imprime">Imprimir ou salvar em PDF</button><a id="csv" href="#" download>CSV</a><a href="/">Voltar ao app</a>
+</div>
+<main class="folha" id="folha"><p class="vazio">Carregando…</p></main>
+<script src="common.js"></script>
+<script src="rma.js"></script>
+</body>
+</html>

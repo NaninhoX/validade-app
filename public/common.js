@@ -54,6 +54,7 @@ const ICONS = {
   upload: 'M12 16V5 M7 9l5-5 5 5 M5 20h14',
   plus: 'M12 5v14 M5 12h14',
   x: 'M6 6l12 12 M18 6 6 18',
+  tv: 'M3 5h18v11H3z M8 20h8 M12 16v4',
   check: 'M5 12l5 5 9-10',
   undo: 'M9 14 4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14z M21 21l-5-5',

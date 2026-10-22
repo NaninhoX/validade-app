@@ -148,6 +148,7 @@ const Coletor = (() => {
       <button id="rNovo" class="big">＋ Item que não estava na lista</button>
       <div id="rFim" class="rfim" hidden>
         <button id="rPular" class="big">Pular</button>
+        <button id="rTodos" class="big">Todos conferem</button>
         <button id="rConcluir" class="big primary">Concluir endereço</button>
       </div>
     </div>
@@ -718,6 +719,17 @@ const Coletor = (() => {
       } else if (t.classList.contains('alvo')) abreTurno(+t.dataset.i);
     });
     $('#rPular').addEventListener('click', () => { turno.itens[emTurno].pulou = true; salvaTurno(); avancaTurno(); });
+    $('#rTodos').addEventListener('click', async () => {
+      // confirma de uma vez o que bate: só o que não é vencido e não exige bipar (vencidos e itens a vencer em até 30 dias continuam um a um)
+      const alvo = rondaItens.filter(i => !rondaFeitos.has(i.id) && i.dias > 0 && !exigeBip(i) && i.endereco_ok !== false);
+      const fica = rondaItens.filter(i => !rondaFeitos.has(i.id)).length - alvo.length;
+      if (!alvo.length) { toast(fica ? 'Os itens que sobraram precisam ser conferidos um a um' : 'Tudo já foi conferido', fica ? 'bad' : 'ok', 3500); return; }
+      if (!confirm('Confirmar que as quantidades de ' + alvo.length + ' ' + (alvo.length === 1 ? 'item batem' : 'itens batem') + ' com a prateleira?' + (fica ? '\n' + fica + ' ' + (fica === 1 ? 'item fica' : 'itens ficam') + ' para conferir um a um (vencido, vence em até 30 dias ou fora do padrão).' : ''))) return;
+      $('#rTodos').disabled = true;
+      try { for (const it of alvo) await registra(it, it.qtd, 'Ronda: confere', 'conf'); toast(alvo.length + ' conferidos', 'ok', 2500); }
+      catch (e) { toast(e.message, 'bad', 5000); }
+      finally { const b = $('#rTodos'); if (b) b.disabled = false; }
+    });
     $('#rConcluir').addEventListener('click', () => {
       const falta = rondaItens.filter(i => !rondaFeitos.has(i.id)).length;
       const semEtiqueta = rondaItens.filter(i => i.etiquetar).length;

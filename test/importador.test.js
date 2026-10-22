@@ -136,3 +136,53 @@ test('demonstração: carrega uma vez, só em banco sem estoque, e tem EANs vál
   await S.leitura(db, { tipo: 'RECEBIMENTO', ean: '7891000000017', lote: 'A', validade: '2030-01-01', endereco: '1-A-1', qtd: 1, operador: 'T' });
   assert.equal((await DEMO.semearUmaVez(db)).pulado, true);          // estoque real: não mistura
 });
+
+test('TXT para o sistema da loja: linha em branco e EAN;quantidade, somando lotes do mesmo EAN', async () => {
+  await novoDb();
+  const v = await CONF.abrir(db, { tipo: 'VALIDADE', operador: 'T', endereco: '3-A-1' });
+  await CONF.adicionarItem(db, v.id, { ean: '7891000000017', qtd: 2, lote: 'A', validade: '2030-01-01' }, 'T');
+  await CONF.adicionarItem(db, v.id, { ean: '7891000000017', qtd: 3, lote: 'B', validade: '2030-02-01' }, 'T');
+  await CONF.adicionarItem(db, v.id, { ean: '7891000000024', qtd: 1, lote: 'C', validade: '2030-03-01' }, 'T');
+  const r = await CONF.txtLoja(db, v.id);
+  const linhas = r.__raw.body.toString('utf8').split('\r\n');
+  assert.equal(linhas[0], ' ');
+  assert.deepEqual(linhas.slice(1, 3), ['7891000000024;1', '7891000000017;5']);          // BOLA antes de RACAO (alfabética)
+  assert.match(r.__raw.headers['Content-Disposition'], /\.txt"/);
+  // o que o app exporta, o importador entende de volta
+  const volta = await I.analisar(db, [{ nome: 'x.txt', base64: r.__raw.body.toString('base64') }]);
+  assert.deepEqual(volta.linhas.map(l => [l.ean, l.qtd]), [['7891000000024', 1], ['7891000000017', 5]]);
+});
+
+test('Finalizada e Processada: só processa depois de fechar, e processar de novo não muda', async () => {
+  await novoDb();
+  const c = await CONF.abrir(db, { tipo: 'RECEBIMENTO', operador: 'T' });
+  await CONF.adicionarItem(db, c.id, { ean: '7891000000017', qtd: 2 }, 'T');
+  await assert.rejects(CONF.processar(db, c.id, 'ANA'), /Finalize a conferência/);
+  assert.equal((await CONF.hoje(db)).a_processar, 0);
+  await CONF.fechar(db, c.id);
+  assert.equal((await CONF.hoje(db)).a_processar, 1);
+  const p = await CONF.processar(db, c.id, 'ANA');
+  assert.deepEqual([p.processada, db && p.processada_por], [true, 'ANA']);
+  const p2 = await CONF.processar(db, c.id, 'BIA');
+  assert.equal(p2.processada_por, 'ANA');
+  assert.equal((await CONF.hoje(db)).a_processar, 0);
+});
+
+test('lista de avaria e RMA: situação Vencido ou Avariado, validade só dos vencidos, soma por lote e causa', async () => {
+  await novoDb();
+  const RMA = require('../lib/rma');
+  const mais = d => U.hojeISO(new Date(Date.now() + d * 864e5));
+  const a = (await S.leitura(db, { tipo: 'RECEBIMENTO', ean: '7891000000017', lote: 'V', validade: mais(-3), endereco: '1-A-1', qtd: 6, operador: 'T' })).lote;
+  const b = (await S.leitura(db, { tipo: 'RECEBIMENTO', ean: '7891000000024', lote: 'B', validade: mais(200), endereco: '1-A-2', qtd: 4, operador: 'T' })).lote;
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: a.id, qtd: 2, motivo: 'RMA', causa: 'Giro baixo', operador: 'T' });
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: a.id, qtd: 3, motivo: 'RMA', causa: 'Giro baixo', operador: 'T' });
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: b.id, qtd: 1, motivo: 'Avaria', causa: 'Ficou escondido ou mal exposto', operador: 'T' });
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: b.id, qtd: 1, motivo: 'Venda', operador: 'T' });        // venda não entra
+  const r = await RMA.lista(db, {});
+  assert.deepEqual(r.itens.map(i => [i.nome, i.lote, i.situacao, i.qtd, i.validade ? 1 : 0, i.causa]),
+    [['BOLA', 'B', 'Avariado', 1, 0, 'Avaria: Ficou escondido ou mal exposto'], ['RACAO TESTE', 'V', 'Vencido', 5, 1, 'RMA: Giro baixo']]);
+  assert.deepEqual([r.totais.vencidos, r.totais.avariados, r.totais.qtd], [1, 1, 6]);
+  const csv = (await RMA.csv(db, {})).__raw.body.toString('utf8');
+  assert.ok(csv.startsWith('﻿Produto;EAN;Lote;Situação'));
+  await assert.rejects(RMA.lista(db, { de: '2020-01-01', ate: '2026-12-31' }), /período grande/);
+});
