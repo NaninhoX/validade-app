@@ -163,6 +163,19 @@ test('layout: valida e persiste a planta', async () => {
   db.apagar();
 });
 
+test('layout: escala (px por cm) é validada e persistida; caixa derivada pode ser fina', async () => {
+  const db = await novoDb();
+  const l = S.layoutPadrao();
+  assert.equal((await S.setLayout(db, l)).escala, undefined);              // layout antigo continua válido, sem escala
+  const fino = { ...l, escala: 0.2503, gondolas: [{ id: 1, x: 0, y: 0, w: 195.2, h: 8, rot: 0 }] };
+  const salvo = await S.setLayout(db, fino);
+  assert.equal(salvo.escala, 0.2503);
+  assert.equal((await S.getLayout(db)).gondolas[0].h, 8);
+  for (const ruim of [0, 0.001, 3, 'abc', -1]) await assert.rejects(S.setLayout(db, { ...fino, escala: ruim }), /escala inválida/);
+  await assert.rejects(S.setLayout(db, { ...fino, gondolas: [{ id: 1, x: 0, y: 0, w: 0, h: 8 }] }), /largura inválido/);
+  db.apagar();
+});
+
 test('login: PIN com hash, bloqueio após 5 erros e papéis', async () => {
   const db = await novoDb();
   await A.salvarUsuario(db, { nome: 'ana', pin: '123456', papel: 'admin' });

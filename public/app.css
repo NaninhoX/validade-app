@@ -528,4 +528,21 @@ button.rg-n:hover { color: var(--accent); }
 .set-ln { font-size: 10.5px; color: var(--muted); }
 .set-tags { display: flex; flex-wrap: wrap; gap: 3px; }
 .tag-nome { min-height: 26px; padding: 0 8px; font-size: 12.5px; font-weight: 600; border-radius: 999px; background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent); }
+/* editores do mapa: seleção múltipla, desfazer, alinhar e organizar */
+.stage.espaco, .stage.espaco .gon { cursor: grab; }
+.flip svg { transform: scaleX(-1); }
+.ctrls button:disabled { opacity: .4; }
+.dica-edit { position: absolute; left: 12px; top: 10px; z-index: 6; max-width: min(520px, calc(100% - 24px)); padding: 5px 10px; border-radius: 9px; background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--line); font-size: 12px; color: var(--muted); pointer-events: none; box-shadow: var(--shadow-1); }
+.dica-edit[hidden], [data-so][hidden] { display: none; }
+.selbloco { display: grid; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.selbloco .editbar { gap: 6px; }
+.selbloco details.org { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--surface-2); }
+.selbloco details.org summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+.org-corpo { display: grid; gap: 10px; margin-top: 10px; }
+.org-corpo .callout { margin: 0; }
+.org-corpo .callout:not(.warn) { background: color-mix(in srgb, var(--good) 14%, transparent); }
+.chk { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.chk input { width: auto; min-height: 0; }
+.gon.edit { touch-action: none; }
+
 .nome-fantasma { position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none; padding: 6px 14px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; box-shadow: var(--shadow-2); }
