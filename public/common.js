@@ -75,6 +75,7 @@ const ICONS = {
   lock: 'M6 11h12v9H6z M8 11V8a4 4 0 0 1 8 0v3',
   trend: 'M3 17l6-6 4 4 8-8 M15 7h6v6',
   more: 'M5 12h.01 M12 12h.01 M19 12h.01',
+  clipboard: 'M9 4h6v3H9z M7 5H5v15h14V5h-2 M9 12h6 M9 16h4',
 };
 const ico = (nome, tam) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"${tam ? ` style="width:${tam}px;height:${tam}px"` : ''}>${ICONS[nome].split(' M').map((d, i) => `<path d="${i ? 'M' : ''}${d}"/>`).join('')}</svg>`;
 

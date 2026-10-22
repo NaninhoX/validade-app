@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Conferência · Controle de Validade</title>
+<link rel="icon" href="icon.svg">
+<style>
+  @font-face { font-family: Roboto; font-weight: 400; src: url(vendor/fonts/roboto-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family: Roboto; font-weight: 500; src: url(vendor/fonts/roboto-latin-500-normal.woff2) format("woff2"); }
+  @font-face { font-family: Roboto; font-weight: 700; src: url(vendor/fonts/roboto-latin-700-normal.woff2) format("woff2"); }
+  @page { size: A4; margin: 10mm 10mm 14mm; @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 400 9px Roboto, sans-serif; color: #627590; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e9edf2; color: #0f2340; font: 400 12px/1.35 Roboto, "Segoe UI", system-ui, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .barra { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; padding: 12px; position: sticky; top: 0; background: #e9edf2; }
+  .barra button, .barra a { font: 500 14px Roboto, sans-serif; min-height: 44px; padding: 0 18px; border-radius: 8px; border: 1px solid #013a7b; background: #fff; color: #013a7b; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+  .barra .p { background: #013a7b; color: #fff; }
+  .folha { width: 210mm; min-height: 297mm; margin: 0 auto 20px; background: #fff; padding: 10mm; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; border-bottom: 2px solid #013a7b; padding-bottom: 6px; }
+  h1 { font: 700 19px Roboto, sans-serif; margin: 0; color: #013a7b; }
+  header .d { text-align: right; font-size: 12px; color: #364a68; }
+  .info { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 10px; margin: 8px 0 10px; }
+  .info div { border: 1px solid #c9d3e0; border-radius: 6px; padding: 4px 8px; }
+  .info small { display: block; color: #627590; font-size: 9.5px; }
+  .info b { font: 700 13px Roboto, sans-serif; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { display: table-header-group; }   /* repete o cabeçalho em cada página impressa */
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  th { text-align: left; font: 500 10px Roboto, sans-serif; color: #627590; border-bottom: 1.5px solid #013a7b; padding: 3px 5px; background: #fff; }
+  td { padding: 4px 5px; border-bottom: 1px solid #e3e9f1; vertical-align: top; }
+  tbody tr:nth-child(even) td { background: #f6f8fb; }
+  td.e { font-variant-numeric: tabular-nums; white-space: nowrap; width: 100px; color: #364a68; }
+  td.p { font-weight: 500; }
+  td.q, th.q { text-align: right; white-space: nowrap; width: 54px; }
+  td.q { font: 700 13px Roboto, sans-serif; font-variant-numeric: tabular-nums; }
+  td.l { width: 78px; word-break: break-all; }
+  td.v { white-space: nowrap; width: 68px; }
+  td.n { white-space: nowrap; width: 60px; }
+  .ok { color: #2f7d02; } .mais { color: #cb1b36; } .menos { color: #b45309; }
+  .dif { display: block; font: 500 9.5px Roboto, sans-serif; }
+  .total { margin-top: 10px; padding-top: 8px; border-top: 2px solid #013a7b; display: flex; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 700; }
+  .total span:last-child { font-weight: 400; font-size: 10px; color: #364a68; }
+  .vazio { color: #627590; padding: 8px 0; }
+  .erro { text-align: center; padding: 40px; color: #cb1b36; }
+  @media (max-width: 800px) { .folha { width: auto; padding: 14px; } .info { grid-template-columns: repeat(2, 1fr); } .tab { overflow-x: auto; } }
+  @media print {
+    body { background: #fff; }
+    .barra { display: none; }
+    .folha { margin: 0; padding: 0; width: auto; min-height: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="barra"><button class="p" id="imprime">Imprimir ou salvar em PDF</button><a id="csv" href="#">Baixar CSV</a><a href="/#/conferencias">Voltar ao app</a></div>
+<main class="folha" id="folha"><p class="vazio">Carregando…</p></main>
+<script src="common.js"></script>
+<script src="conferencia.js"></script>
+</body>
+</html>

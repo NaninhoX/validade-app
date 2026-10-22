@@ -128,6 +128,7 @@ const Coletor = (() => {
   </section>
 
   <section id="m-ronda" hidden>
+    <div id="rTopo" class="rd-topo" hidden></div>
     <div id="rDia"></div>
     <div id="rEscolha" hidden>
       <button id="rVoltaDia" class="sm" style="margin-bottom:12px">${ico('chevron')} Ronda do dia</button>
@@ -328,6 +329,18 @@ const Coletor = (() => {
   function mostraRonda(tela) {
     $('#rDia').hidden = tela !== 'dia'; $('#rEscolha').hidden = tela !== 'escolha'; $('#rCorpo').hidden = tela !== 'corpo';
     if (tela === 'dia') desenhaDia();
+    barraTurno(tela);
+  }
+
+  // "X de N endereços" + barra no topo enquanto a ronda do dia está aberta (a lista do dia já mostra a sua própria)
+  function barraTurno(tela) {
+    const b = $('#rTopo'); if (!b) return;
+    const aberto = turno && !turno.fim && turno.dia === hojeLocal();
+    b.hidden = !aberto || tela === 'dia';
+    if (b.hidden) return;
+    const feitos = turno.itens.filter(i => i.feito).length, pulados = turno.itens.filter(i => i.pulou && !i.feito).length;
+    b.innerHTML = `<div class="rd-head"><b>${feitos} de ${turno.n} endereços</b><span class="muted small">${pulados ? pulados + (pulados > 1 ? ' pulados · ' : ' pulado · ') : ''}ronda do dia</span></div>
+      <div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="${turno.n}" aria-valuenow="${feitos}"><i style="width:${turno.n ? feitos / turno.n * 100 : 0}%"></i></div>`;
   }
 
   async function gerarTurno() {
@@ -435,6 +448,7 @@ const Coletor = (() => {
   function encerraTurno() {
     if (!turno) return;
     turno.fim = Date.now(); salvaTurno(); emTurno = -1; mostraRonda('dia');
+    if (typeof Conferencias !== 'undefined') Conferencias.registrarRonda(turno, nome());   // cria o resumo em Conferências (reenvia sozinho se estiver offline)
   }
 
   function proximoDoTurno(de) {

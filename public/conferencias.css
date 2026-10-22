@@ -1,0 +1,30 @@
+/* Conferências: lista, bipagem em rajada e cartão "Hoje" */
+.cf-head { display: grid; gap: 10px; margin-bottom: 14px; }
+.cf-tit { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.cf-cont { font-size: 20px; color: var(--ink-2); }
+.cf-cont b { font: 700 28px var(--font-display); letter-spacing: -.02em; color: var(--ink); }
+.cf-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.cf-acoes .primary, .cf-acoes .btn { min-height: 44px; }
+.cf-prod { border: 1px solid var(--line); background: var(--accent-soft); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; }
+.cf-prod-n { font: 700 20px/1.2 var(--font-display); overflow-wrap: anywhere; }
+.cf-lista-h { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 2px 8px; }
+.cf-lista-h h2 { font-size: 16px; }
+.cf-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 10px 10px 10px 14px; margin-bottom: 8px; background: var(--surface); border: 1px solid var(--line); border-left: 6px solid var(--line-2); border-radius: 14px; }
+.cf-item .cf-nome { font-weight: 650; overflow-wrap: anywhere; }
+.cf-item.ok { border-left-color: var(--good); background: color-mix(in srgb, var(--good) 9%, var(--surface)); }
+.cf-item.mais { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 9%, var(--surface)); }
+.cf-item.menos { border-left-color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--surface)); }
+.cf-qtd { min-width: 56px; min-height: 48px; font: 700 22px var(--font-display); border-radius: 12px; }
+.cf-qtd.ro { display: grid; place-items: center; cursor: default; }
+.cf-item .icon { width: 44px; height: 44px; }
+.cf-barra { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.cf-barra select, .cf-barra input { width: auto; min-height: 44px; flex: 1 1 150px; }
+.cf-barra .primary { min-height: 44px; flex: 0 0 auto; }
+.cf-tipos { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.cf-tipo { display: grid; gap: 4px; align-content: start; justify-items: start; text-align: left; white-space: normal; height: auto; min-height: 88px; padding: 14px; border-radius: 14px; }
+.cf-tipo b { font-size: 17px; }
+.cf-tipo[aria-pressed=true] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: var(--accent-soft); }
+.cf-row { min-height: 56px; }
+.hoje { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.hoje-c { display: grid; justify-items: center; gap: 2px; padding: 10px 6px; border-radius: 12px; background: var(--surface-2); color: inherit; }
+.hoje-c b { font: 700 28px var(--font-display); letter-spacing: -.02em; }
