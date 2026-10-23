@@ -658,3 +658,13 @@ html.compacto .page { padding-top: 14px; }
   html.trilho .me { justify-content: center; padding: 6px; }
 }
 @media (max-width: 900px) { .nav-grp { display: none; } #menuBtn { display: none !important; } }
+
+/* tendência dos KPIs e ordenação das tabelas */
+.kpi .tend { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi .tend.bom { color: var(--good); } .kpi .tend.mau { color: var(--bad); } .kpi .tend.neutro { color: var(--ink-2); }
+.kpi .tend svg { width: 72px; height: 22px; flex: none; overflow: visible; }
+.kpi .tend polyline { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+th[data-o] { cursor: pointer; user-select: none; }
+th[data-o]:hover { color: var(--ink); background: var(--surface-2); }
+th[aria-sort]::after { content: ' ▲'; font-size: 10px; color: var(--accent); }
+th[aria-sort=descending]::after { content: ' ▼'; }

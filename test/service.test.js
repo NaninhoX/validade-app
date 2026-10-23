@@ -529,3 +529,33 @@ test('ronda: sem preço não inventa valor; endereço fora do padrão sobe; lote
   const r = await S.ronda(db, { n: 5 });
   assert.deepEqual(r.sem_endereco, { lotes: 1, qtd: 5 });
 });
+
+test('ordenaLotes: por coluna, vazios no fim nas duas direções, empate pela validade', () => {
+  const r = (id, o) => ({ id, nome: 'P' + id, lote: String(id), qtd: 1, dias: 10, validade: '2026-12-01', preco: 5, desconto: 0, endereco: '3-A-1', ...o });
+  const rows = [r(1, { qtd: 5, preco: null, nome: 'Zebra', lote: '10' }), r(2, { qtd: 2, preco: 9, nome: 'ábaco', lote: '9' }), r(3, { qtd: 2, preco: 3, nome: 'Cão', lote: '100', validade: '2026-11-01' })];
+  assert.deepEqual(S.ordenaLotes(rows, 'qtd', 'asc').map(x => x.id), [3, 2, 1]);       // empate em 2: validade mais curta primeiro
+  assert.deepEqual(S.ordenaLotes(rows, 'qtd', 'desc').map(x => x.id), [1, 3, 2]);
+  assert.deepEqual(S.ordenaLotes(rows, 'preco', 'asc').map(x => x.id), [3, 2, 1]);     // sem preço no fim
+  assert.deepEqual(S.ordenaLotes(rows, 'preco', 'desc').map(x => x.id), [2, 3, 1]);    // e também no fim
+  assert.deepEqual(S.ordenaLotes(rows, 'produto', 'asc').map(x => x.id), [2, 3, 1]);   // ábaco antes de Cão e Zebra (pt-BR)
+  assert.deepEqual(S.ordenaLotes(rows, 'lote', 'asc').map(x => x.id), [2, 1, 3]);      // 9 < 10 < 100 (numérico)
+  assert.equal(S.ordenaLotes(rows, 'nada', 'asc'), rows);                              // coluna desconhecida: não mexe
+});
+
+test('tendência dos KPIs: ignora fotos de antes da limpeza dos vendidos e termina com hoje ao vivo', async () => {
+  const db = await novoDb();
+  await db.run('DELETE FROM snapshots_diarios');
+  await S.leitura(db, { ...base, tipo: 'RECEBIMENTO', qtd: 3, validade: mais(10) });
+  const hoje = U.hojeISO();
+  const dia = n => U.hojeISO(new Date(Date.now() + n * 864e5));
+  const ins = (d, v) => db.run('INSERT INTO snapshots_diarios VALUES (?,?,?,?,?,?)', [d, 0, 0, v, v + 1, 1]);
+  await ins(dia(-3), 1000); await ins(dia(-2), 900); await ins(dia(-1), 800);
+  let t = await S.tendencia(db, await S.lotesAtivos(db), hoje);
+  assert.deepEqual(t.pontos.map(p => p.data), [dia(-3), dia(-2), dia(-1), hoje]);     // sem migração: usa as fotos dos últimos 30 dias
+  assert.equal(t.pontos.at(-1).valor_total, 60);                                      // 3 un x R$ 20, calculado agora
+  await db.run("INSERT INTO config(chave,valor) VALUES('migracao_vendidos', ?)", [JSON.stringify({ quando: new Date(Date.now() - 2 * 864e5).toISOString() })]);
+  t = await S.tendencia(db, await S.lotesAtivos(db), hoje);
+  assert.deepEqual(t.pontos.map(p => p.data), [dia(-1), hoje]);                       // só depois do dia da limpeza
+  const r = await S.resumo(db);
+  assert.ok(r.tendencia && r.tendencia.pontos.length >= 1);
+});

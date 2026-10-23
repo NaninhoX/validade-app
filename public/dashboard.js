@@ -122,14 +122,14 @@ PAGINAS.geral = async () => {
   const gRisco = [...mapa.gondolas].sort((a, b) => b.risco - a.risco).slice(0, 5);
   const f = cfg.faixas;
   const f30 = f.find(x => x.ate === 30), f90 = f.find(x => x.ate === 90);
-  const kpi = (i, rot, icone, valor, fmt, dica, cls = '', cor = 'var(--accent)') => `<div class="card kpi reveal ${cls}" style="--i:${i}"><div class="glow" style="background:${cor}"></div><div class="lbl">${ico(icone)}${rot}</div><div class="val" data-count="${valor}" data-fmt="${fmt}">0</div><div class="hint">${dica}</div></div>`;
+  const kpi = (i, rot, icone, valor, fmt, dica, cls = '', cor = 'var(--accent)', extra = '') => `<div class="card kpi reveal ${cls}" style="--i:${i}"><div class="glow" style="background:${cor}"></div><div class="lbl">${ico(icone)}${rot}</div><div class="val" data-count="${valor}" data-fmt="${fmt}">0</div><div class="hint">${dica}</div>${extra}</div>`;
   return `
   <div class="kpis">
-    ${kpi(0, 'Valor em estoque', 'box', t.valor, 'brl', `${int(t.itens)} itens · ${t.lotes} lotes`)}
-    ${kpi(1, 'Valor em risco', 'flame', t.valor_em_risco, 'brl', 'em alerta ou vencido', 'bad', '#e11d48')}
+    ${kpi(0, 'Valor em estoque', 'box', t.valor, 'brl', `${int(t.itens)} itens · ${t.lotes} lotes`, '', 'var(--accent)', tendHtml(res, 'valor_total', { descerEBom: null }))}
+    ${kpi(1, 'Valor em risco', 'flame', t.valor_em_risco, 'brl', 'em alerta ou vencido', 'bad', '#e11d48', tendHtml(res, 'valor_risco', { descerEBom: true }))}
     ${kpi(2, 'Perda potencial', 'trend', t.perda_potencial, 'brl', 'se vender com o desconto da regra', '', '#f97316')}
     ${kpi(3, 'Perda potencial evitada', 'check', res.evitada.evitada, 'brl', res.evitada.evitada ? `acumulado desde o início · ${brl(res.evitada.ultimos.evitada)} em ${res.evitada.ultimos.dias} dias` : 'registre as vendas em Baixa → Venda', 'ok', '#16a34a')}
-    ${kpi(4, 'Vencidos em loja', 'alert', por[0].lotes, 'int', por[0].lotes ? `${brl(por[0].valor)} para retirar` : 'nada vencido', por[0].lotes ? 'bad' : '', '#9f1239')}
+    ${kpi(4, 'Vencidos em loja', 'alert', por[0].lotes, 'int', por[0].lotes ? `${brl(por[0].valor)} para retirar` : 'nada vencido', por[0].lotes ? 'bad' : '', '#9f1239', tendHtml(res, 'vencido_lotes', { descerEBom: true, fmt: int, un: ' lotes' }))}
   </div>
   <div class="grid cols-2" style="margin-top:18px">
     <div class="card reveal" style="--i:4"><div class="head"><h2>Validade do estoque</h2><span class="sub">toque numa fatia para filtrar</span></div>
@@ -199,8 +199,26 @@ PAGINAS.folha.ligar = () => Folha.ligar();
 // ---------- mapa ----------
 PAGINAS.mapa = async () => { await Mapa.render(view, { admin: S.admin }); return null; };
 
+// Tendência dos KPIs: usa as fotos diárias registradas (res.tendencia). Com menos de 2 pontos não mostra nada. descerEBom: true, false ou null (neutro).
+function tendKpi(res, campo, { descerEBom = null, fmt = brl, un = '' } = {}) {
+  const p = (res.tendencia && res.tendencia.pontos) || [];
+  if (p.length < 2) return null;
+  const jan = p.slice(-8), a = jan[0], b = jan[jan.length - 1];
+  const d = Number(b[campo]) - Number(a[campo]);
+  const dias = Math.round((Date.parse(b.data) - Date.parse(a.data)) / 864e5);
+  return { v: jan.map(x => Number(x[campo])), cls: !d || descerEBom === null ? 'neutro' : (d < 0) === descerEBom ? 'bom' : 'mau',
+    txt: !d ? `estável há ${dias} d` : `${d > 0 ? '▲' : '▼'} ${fmt(Math.abs(d))}${un} em ${dias} d` };
+}
+function tendHtml(res, campo, o) {
+  const t = tendKpi(res, campo, o);
+  if (!t) return '';
+  const mn = Math.min(...t.v), mx = Math.max(...t.v);
+  const pts = t.v.map((y, i) => `${(i * 72 / (t.v.length - 1)).toFixed(1)},${(mx === mn ? 11 : 20 - (y - mn) / (mx - mn) * 18).toFixed(1)}`).join(' ');
+  return `<div class="tend ${t.cls}"><span>${t.txt}</span><svg viewBox="0 0 72 22" aria-hidden="true"><polyline points="${pts}"/></svg></div>`;
+}
+
 // ---------- estoque ----------
-const E = { q: '', status: '', gondola: '', marca: '', offset: 0, total: 0, marcas: [] };
+const E = { ordem: '', dir: 'asc', q: '', status: '', gondola: '', marca: '', offset: 0, total: 0, marcas: [] };
 PAGINAS.estoque = async q => {
   E.q = q.get('q') || ''; E.status = q.get('status') || ''; E.gondola = q.get('gondola') || ''; E.marca = q.get('marca') || ''; E.sempreco = q.get('sempreco') === '1' ? '1' : '';
   const [res, cfg, todas, gcfg] = await Promise.all([S.resumo ? Promise.resolve(S.resumo) : carregaResumo(), S.cfg ? Promise.resolve(S.cfg) : api('/api/config'), api('/api/lotes?limite=1'), api('/api/gondolas').catch(() => ({}))]);
@@ -215,7 +233,7 @@ PAGINAS.estoque = async q => {
     </div>
     <div class="seg scrollx reveal" style="--i:1" id="fst"><button data-st="" aria-pressed="${E.status === ''}">Todos</button>${res.por_status.map(s => `<button data-st="${esc(s.status)}" aria-pressed="${E.status === s.status}">${esc(s.status)} <span class="faint">${s.lotes}</span></button>`).join('')}</div>
     <div class="card flush reveal" style="--i:2"><div class="head"><h2 id="estTit">Estoque</h2><span class="sub" id="estInfo"></span></div>
-      <div class="scroll" style="max-height:calc(100vh - 330px);margin-top:12px"><table class="resp"><thead><tr><th>Status</th><th>Produto</th><th>Lote</th><th class="num">Qtd</th><th>Validade</th><th class="num">Dias</th><th>Endereço</th><th class="num">Preço</th><th class="num">Oferta</th><th></th></tr></thead><tbody id="est"></tbody></table></div>
+      <div class="scroll" style="max-height:calc(100vh - 330px);margin-top:12px"><table class="resp" id="estTab"><thead><tr><th data-o="status" tabindex="0">Status</th><th data-o="produto" tabindex="0">Produto</th><th data-o="lote" tabindex="0">Lote</th><th class="num" data-o="qtd" tabindex="0">Qtd</th><th data-o="validade" tabindex="0">Validade</th><th class="num" data-o="dias" tabindex="0">Dias</th><th data-o="endereco" tabindex="0">Endereço</th><th class="num" data-o="preco" tabindex="0">Preço</th><th class="num" data-o="oferta" tabindex="0">Oferta</th><th></th></tr></thead><tbody id="est"></tbody></table></div>
       <div style="padding:14px 20px"><button id="maisEst" hidden>Carregar mais</button></div></div>
   </div>`;
 };
@@ -229,6 +247,12 @@ PAGINAS.estoque.ligar = () => {
   $('#fpreco').addEventListener('change', e => { E.sempreco = e.target.value; recarrega(); });
   $('#fst').addEventListener('click', e => { const b = e.target.closest('button[data-st]'); if (!b) return; E.status = b.dataset.st; $$('#fst button').forEach(x => x.setAttribute('aria-pressed', x === b)); recarrega(); });
   $('#maisEst').addEventListener('click', () => carregaEstoque(false));
+  // ordenar clicando no título da coluna: crescente, decrescente e volta à ordem padrão (validade)
+  const marcaOrdem = () => $$('#estTab th[data-o]').forEach(t => { if (t.dataset.o === E.ordem) t.setAttribute('aria-sort', E.dir === 'desc' ? 'descending' : 'ascending'); else t.removeAttribute('aria-sort'); });
+  const ordena = t => { const o = t.dataset.o; if (E.ordem !== o) { E.ordem = o; E.dir = 'asc'; } else if (E.dir === 'asc') E.dir = 'desc'; else { E.ordem = ''; E.dir = 'asc'; } marcaOrdem(); recarrega(); };
+  $('#estTab thead').addEventListener('click', e => { const t = e.target.closest('th[data-o]'); if (t) ordena(t); });
+  $('#estTab thead').addEventListener('keydown', e => { if (e.key !== 'Enter' && e.key !== ' ') return; const t = e.target.closest('th[data-o]'); if (t) { e.preventDefault(); ordena(t); } });
+  marcaOrdem();
   $('#est').addEventListener('click', acaoLote);
   recarrega();
 };
@@ -236,6 +260,7 @@ PAGINAS.estoque.ligar = () => {
 async function carregaEstoque(reset) {
   if (reset) { E.offset = 0; $('#est').innerHTML = ''; }
   const p = new URLSearchParams({ offset: E.offset, limite: 100 });
+  if (E.ordem) { p.set('ordem', E.ordem); p.set('dir', E.dir); }
   for (const k of ['q', 'status', 'gondola', 'marca', 'sempreco']) if (E[k]) p.set(k, E[k]);
   const r = await api('/api/lotes?' + p);
   E.total = r.total;

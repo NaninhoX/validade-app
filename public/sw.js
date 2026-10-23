@@ -1,5 +1,5 @@
 // Guarda a casca do app para abrir sem rede. As chamadas /api nunca passam pelo cache.
-const CACHE = 'validade-v31';
+const CACHE = 'validade-v32';
 const CASCA = ['/', '/app.css', '/coletor.css', '/common.js', '/scanner.js', '/mapa.js', '/geom.js', '/coletor.js', '/causa.js', '/causa.css', '/folha.js', '/folha.css', '/auditoria.js', '/conferencias.js', '/offline.js', '/vendor/zxing.min.js', '/rma.js', '/tv.js', '/tv.css', '/lista-nota.js', '/conferencias.css', '/dashboard.js', '/manifest.webmanifest', '/icon.svg', '/vendor/fonts/roboto-latin-400-normal.woff2', '/vendor/fonts/roboto-latin-500-normal.woff2', '/vendor/fonts/roboto-latin-700-normal.woff2'];
 
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CASCA)).then(() => self.skipWaiting())); });

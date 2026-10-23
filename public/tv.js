@@ -20,10 +20,11 @@
 
   function kpis(d) {
     const t = d.resumo.totais, venc = d.resumo.por_status[0] || { valor: 0, lotes: 0 };
+    const tt = (campo, o) => { const x = tendKpi(d.resumo, campo, o); return x ? ' · ' + x.txt : ''; };
     return `<div class="tv-kpis">
-      ${kpi('Valor em estoque', brl(t.valor), `${int(t.itens)} itens · ${int(t.lotes)} lotes`)}
-      ${kpi('Vencido na loja', brl(venc.valor), `${int(venc.lotes)} lotes para retirar`, venc.lotes ? 'bad' : 'ok')}
-      ${kpi('Em risco (até 90 dias)', brl(t.valor_em_risco), 'valor que vence em breve', 'warn')}
+      ${kpi('Valor em estoque', brl(t.valor), `${int(t.itens)} itens · ${int(t.lotes)} lotes` + tt('valor_total', { descerEBom: null }))}
+      ${kpi('Vencido na loja', brl(venc.valor), `${int(venc.lotes)} lotes para retirar` + tt('vencido_valor', { descerEBom: true }), venc.lotes ? 'bad' : 'ok')}
+      ${kpi('Em risco (até 90 dias)', brl(t.valor_em_risco), 'valor que vence em breve' + tt('valor_risco', { descerEBom: true }), 'warn')}
       ${kpi('Perda potencial', brl(t.perda_potencial), 'se vender com o desconto da regra')}
       ${kpi('Perda potencial evitada', brl(d.resumo.evitada ? d.resumo.evitada.evitada : 0), d.resumo.evitada && d.resumo.evitada.evitada ? 'acumulado · ' + brl(d.resumo.evitada.ultimos.evitada) + ' em ' + d.resumo.evitada.ultimos.dias + ' dias' : 'sem vendas registradas', 'ok')}
     </div>`;
