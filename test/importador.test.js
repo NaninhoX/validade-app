@@ -271,3 +271,29 @@ test('perda potencial evitada é acumulada: conta lotes antigos marcados "✅ Ve
   assert.equal(r2.evitada, 40);                                                                  // venda histórica do lote que já venceu: valor inteiro
   assert.deepEqual([r2.ultimos.evitada, r2.ultimos.unidades], [0, 0]);                           // fora dos últimos 30 dias
 });
+
+test('migração: lotes marcados Vendido viram Venda no histórico, Descartado viram RMA, sai do estoque e roda uma vez', async () => {
+  await novoDb();
+  const { baixarVendidos } = require('../lib/migracao-vendidos');
+  const mais = d => U.hojeISO(new Date(Date.now() + d * 864e5));
+  const mk = async (lote, d, qtd) => (await S.leitura(db, { tipo: 'RECEBIMENTO', ean: '7891000000017', lote, validade: mais(d), endereco: '1-A-1', qtd, operador: 'T' })).lote;
+  const a = await mk('A', -5, 3), b = await mk('B', 20, 2), c = await mk('C', 40, 4), d = await mk('D', 90, 1);
+  await db.run("UPDATE lotes SET acao='✅ Vendido', atualizado_em='2026-05-28T12:00:00.000Z' WHERE id IN (?,?)", [a.id, b.id]);
+  await db.run("UPDATE lotes SET acao='❌ Descartado' WHERE id=?", [c.id]);
+  await db.run("UPDATE lotes SET acao='📝 Verificado' WHERE id=?", [d.id]);
+  const antes = await S.evitada(db, {});
+  const sim = await baixarVendidos(db, { simular: true });
+  assert.deepEqual([sim.vendidos.lotes, sim.vendidos.unidades, sim.descartados.lotes, sim.simulado], [2, 5, 1, true]);
+  assert.equal((await S.lotesAtivos(db)).length, 4);                      // simular não muda nada
+  const r = await baixarVendidos(db, {});
+  assert.deepEqual([r.vendidos.unidades, r.descartados.unidades, r.eventos], [5, 4, 3]);
+  const resto = await S.lotesAtivos(db);
+  assert.deepEqual(resto.map(l => l.lote), ['D']);                        // só o "Verificado" continua em estoque
+  const ev = await db.all("SELECT motivo, delta, historico, ts FROM eventos WHERE operador='MIGRAÇÃO' ORDER BY id");
+  assert.deepEqual(ev.map(e => [e.motivo, e.delta, e.historico]), [['Venda', -3, 1], ['Venda', -2, 1], ['RMA', -4, 1]]);
+  assert.ok(ev[0].ts.startsWith('2026-05-28'));                           // data da planilha, não a de hoje
+  const depois = await S.evitada(db, {});
+  assert.equal(depois.evitada, antes.evitada);                            // a evitada não muda: sai do legado e entra como venda histórica
+  assert.equal(depois.legado.lotes, 0);
+  assert.equal((await baixarVendidos(db, {})).ja_feita, true);            // só roda uma vez
+});

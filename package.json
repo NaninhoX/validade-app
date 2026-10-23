@@ -9,7 +9,8 @@
     "import": "node --env-file-if-exists=.env.local scripts/import.js",
     "usuario": "node --env-file-if-exists=.env.local scripts/usuario.js",
     "test": "node --test test/*.test.js",
-    "inverter-lados": "node --env-file-if-exists=.env.local scripts/inverter-lados.js"
+    "inverter-lados": "node --env-file-if-exists=.env.local scripts/inverter-lados.js",
+    "baixar-vendidos": "node --env-file-if-exists=.env.local scripts/baixar-vendidos.js"
   },
   "type": "commonjs",
   "dependencies": {
