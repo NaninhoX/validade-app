@@ -57,9 +57,9 @@ const Auditoria = (() => {
     raiz.innerHTML = `<button class="sm" id="audVolta" style="margin-bottom:12px">${ico('chevron')} Voltar à lista</button>
       <div class="rd-start"><h2>${esc(c.endereco)}</h2><div class="small muted">${esc(descEndereco(c.endereco))}</div>
       <p class="muted" style="margin-top:8px">Conte o que está na prateleira e digite. Se não achar o lote, digite 0. O saldo do sistema fica escondido de propósito.</p></div>
-      <div style="margin-top:14px">${c.lotes.map(l => `<div class="citem"><div><div class="pname">${esc(l.nome)}</div>
+      <div style="margin-top:14px">${c.lotes.map(l => `<div class="citem" style="grid-template-columns:minmax(0,1fr) 96px"><div><div class="pname">${esc(l.nome)}</div>
         <div class="muted small">lote ${esc(l.lote)} · vence ${esc(brData(l.validade))}</div></div>
-        <div style="min-width:104px"><label class="xs muted" for="aq${l.id}">Encontrei</label><input id="aq${l.id}" data-aud-q="${l.id}" inputmode="numeric" autocomplete="off" style="width:100%;min-height:48px;text-align:center;font-size:20px" placeholder="qtd"></div></div>`).join('')
+        <div style="width:96px"><label class="xs muted" for="aq${l.id}">Encontrei</label><input id="aq${l.id}" data-aud-q="${l.id}" inputmode="numeric" autocomplete="off" style="width:100%;min-height:48px;text-align:center;font-size:20px" placeholder="qtd"></div></div>`).join('')
         || '<p class="muted">O sistema não tem lotes neste endereço. Se encontrar algo, inclua abaixo.</p>'}</div>
       <div id="audExtras">${c.extras.map((x, k) => `<div class="citem"><div><div class="pname">${esc(x.nome || 'EAN ' + x.ean)}</div><div class="muted small">fora da lista · lote ${esc(x.lote)} · vence ${esc(brData(x.validade))} · ${x.qtd} un.</div></div>
         <div><button class="sm" data-aud-rm="${k}" style="min-height:44px">Remover</button></div></div>`).join('')}</div>

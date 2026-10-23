@@ -239,7 +239,7 @@ const Coletor = (() => {
     if (!/^\d+([.,]\d{1,2})?$/.test(preco)) { toast('Preço inválido (ex.: 39,90)', 'bad'); beep(false); return ($('#pPreco').hidden ? $('#cPreco') : $('#pPreco')).focus(); }
     $('#salvar').disabled = true;
     try {
-      await api('/api/produtos', { method: 'POST', body: { ean, nome, preco: preco.replace(',', '.') } });
+      await api('/api/produtos', { method: 'POST', body: { ean, nome, preco } });
       beep(true); precosSalvos++;
       toast('R$ ' + preco + ' · ' + nome, 'ok', 2200);
       ['ean', 'cNome', 'cPreco', 'pPreco'].forEach(id => { $('#' + id).value = ''; });
@@ -307,12 +307,13 @@ const Coletor = (() => {
     if (ilegivel) body.validade_confirmar = true;           // entra com a validade mais curta conhecida e fica "a confirmar"
     if (produtoAtual && !produtoAtual.cadastrado) {
       if (!$('#cNome').value.trim()) { toast('Informe o nome do produto novo', 'bad'); beep(false); return $('#cNome').focus(); }
-      body.nome = $('#cNome').value.trim(); body.preco = $('#cPreco').value.replace(',', '.');
+      body.nome = $('#cNome').value.trim(); body.preco = $('#cPreco').value.trim();
     }
     const pp = $('#pPreco').value.trim();
     if (!$('#precoWrap').hidden && pp) {
-      if (!/^d+([.,]d{1,2})?$/.test(pp)) { toast('Preço inválido (ex.: 39,90)', 'bad'); beep(false); return $('#pPreco').focus(); }
-      body.preco = pp.replace(',', '.');
+      const pv = parsePreco(pp);
+      if (pv === null || Number.isNaN(pv)) { toast('Preço inválido. Digite só números, ex.: 39,90 ou 1.299,90', 'bad', 4000); beep(false); return $('#pPreco').focus(); }
+      body.preco = pv;
     }
     $('#salvar').disabled = true;
     try {
@@ -555,8 +556,9 @@ const Coletor = (() => {
       const d = await dialogo({ titulo: 'Preço de venda', sub: it.nome || it.ean, campos: [{ id: 'p', label: 'Preço (R$)', valor: '', inputmode: 'decimal' }] });
       if (!d) return;
       const p = d.p.trim();
-      if (!/^d+([.,]d{1,2})?$/.test(p)) { toast('Preço inválido (ex.: 39,90)', 'bad'); return; }
-      const r = await api('/api/produtos', { method: 'POST', body: { ean: it.ean, nome: it.nome, preco: p.replace(',', '.') } });
+      const pv = parsePreco(p);
+      if (pv === null || Number.isNaN(pv)) { toast('Preço inválido. Digite só números, ex.: 39,90 ou 1.299,90', 'bad', 4000); return; }
+      const r = await api('/api/produtos', { method: 'POST', body: { ean: it.ean, nome: it.nome, preco: pv } });
       rondaItens.filter(x => x.ean === it.ean).forEach(x => { x.preco = r.preco; });
       toast('Preço salvo', 'ok', 1800);
       return desenhaRonda();

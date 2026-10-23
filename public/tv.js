@@ -25,6 +25,7 @@
       ${kpi('Vencido na loja', brl(venc.valor), `${int(venc.lotes)} lotes para retirar`, venc.lotes ? 'bad' : 'ok')}
       ${kpi('Em risco (até 90 dias)', brl(t.valor_em_risco), 'valor que vence em breve', 'warn')}
       ${kpi('Perda potencial', brl(t.perda_potencial), 'se vender com o desconto da regra')}
+      ${kpi('Perda potencial evitada', brl(d.resumo.evitada ? d.resumo.evitada.evitada : 0), d.resumo.evitada && d.resumo.evitada.unidades ? int(d.resumo.evitada.unidades_risco) + ' un. vendidas em alerta · ' + d.resumo.evitada.dias + ' dias' : 'sem vendas registradas', 'ok')}
     </div>`;
   }
 

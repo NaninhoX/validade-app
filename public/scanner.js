@@ -87,12 +87,26 @@ const Scanner = (() => {
         }
         return t;
       };
-      const naoVi = () => { saiu = true; };
+      // Leitura borrada ou de um pedaço do código passa no dígito verificador de vez em quando e vira um EAN que não existe. Por isso um código só vale
+      // depois de aparecer igual em leituras seguidas por um tempinho (mais longo na câmera contínua, onde o aparelho está em movimento).
+      const CONFIRMA_MS = continuo ? 320 : 200, CONFIRMA_N = 2;
+      let cand = null;
+      const naoVi = () => { saiu = true; if (cand && Date.now() - cand.last > 700) { cand = null; ov.classList.remove('lendo'); } };
+      const confirmado = v => {
+        const agora = Date.now();
+        if (!cand || cand.v !== v || agora - cand.last > 700) cand = { v, n: 0, desde: agora, last: agora };
+        cand.n++; cand.last = agora;
+        ov.classList.add('lendo');                                   // a moldura fica verde enquanto o código está sendo confirmado
+        if (cand.n < CONFIRMA_N || agora - cand.desde < CONFIRMA_MS) return false;
+        cand = null; ov.classList.remove('lendo');
+        return true;
+      };
       const achou = bruto => {
         const v = aceita(bruto);
         if (!v) return;
+        if (continuo && pausado) return;
+        if (!confirmado(v)) return;
         if (continuo) {
-          if (pausado) return;
           const agora = Date.now();
           if (v === ultimoVal && (!saiu || agora - aceitoEm < 700)) return;        // o mesmo código parado na frente da câmera não soma de novo
           ultimoVal = v; saiu = false; aceitoEm = agora;
@@ -111,7 +125,7 @@ const Scanner = (() => {
           stream = await navigator.mediaDevices.getUserMedia(restricoes);
           video.srcObject = stream; await video.play();
           const suportados = await BarcodeDetector.getSupportedFormats();
-          const quer = aceitar === 'ean' ? ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf'] : ['ean_13', 'ean_8', 'upc_a', 'code_128', 'code_39', 'qr_code', 'itf'];
+          const quer = aceitar === 'ean' ? ['ean_13', 'ean_8', 'upc_a'] : ['ean_13', 'ean_8', 'upc_a', 'code_128', 'code_39', 'qr_code', 'itf'];
           const det = new BarcodeDetector({ formats: quer.filter(f => suportados.includes(f)) });
           msg.textContent = 'Centralize o código dentro da moldura';
           let ultimo = 0;
@@ -129,7 +143,7 @@ const Scanner = (() => {
           const Z = window.ZXing;
           const hints = new Map();
           hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, aceitar === 'ean'
-            ? [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E, Z.BarcodeFormat.ITF]
+            ? [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A]
             : [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.CODE_128, Z.BarcodeFormat.CODE_39, Z.BarcodeFormat.QR_CODE, Z.BarcodeFormat.ITF]);
           hints.set(Z.DecodeHintType.TRY_HARDER, true);
           reader = new Z.BrowserMultiFormatReader(hints, 150);

@@ -206,3 +206,47 @@ test('conferência feita offline guarda o horário real do aparelho ao abrir e a
   // reenviar a criação (rede caiu depois de criar) devolve a mesma conferência
   assert.equal((await CONF.abrir(db, { tipo: 'RECEBIMENTO', operador: 'T', client_id: 'off-1', ts: ha(90) })).id, c.id);
 });
+
+test('perda potencial evitada: unidades vendidas (baixa Venda) dentro da faixa de risco, com a regra de desconto do painel', async () => {
+  await novoDb();
+  const mais = d => U.hojeISO(new Date(Date.now() + d * 864e5));
+  await S.upsertProduto(db, { ean: '7891000000031', nome: 'RAÇÃO DE TESTE', preco: 100, categoria: 'RAÇÃO' });
+  await S.upsertProduto(db, { ean: '7891000000048', nome: 'BRINQUEDO', preco: 50, categoria: 'ACESSÓRIO' });
+  const mk = async (ean, lote, d, qtd) => (await S.leitura(db, { tipo: 'RECEBIMENTO', ean, lote, validade: mais(d), endereco: '1-A-1', qtd, operador: 'T' })).lote;
+  const racao20 = await mk('7891000000031', 'R1', 60, 10);        // ração a 60 dias: faixa de 90 dias, 20% de desconto
+  const brinq10 = await mk('7891000000048', 'B1', 20, 10);        // não ração a 20 dias: faixa de 30 dias, 50%
+  const longe = await mk('7891000000048', 'B2', 300, 10);         // longe do vencimento: não conta
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: racao20.id, qtd: 3, motivo: 'Venda', operador: 'T' });     // 3 × 100 × 20% = 60
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: brinq10.id, qtd: 2, motivo: 'Venda', operador: 'T' });     // 2 × 50 × 50% = 50
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: longe.id, qtd: 4, motivo: 'Venda', operador: 'T' });
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: brinq10.id, qtd: 1, motivo: 'Avaria', causa: 'Outro', operador: 'T' });   // não é venda
+  const r = await S.evitada(db, { dias: 30 });
+  assert.equal(r.evitada, 110);
+  assert.deepEqual([r.unidades, r.unidades_risco, r.vendido_em_risco], [9, 5, 400]);
+  assert.equal(r.por_faixa.length, 2);
+  // venda desfeita deixa de contar
+  const v = await S.leitura(db, { tipo: 'BAIXA', lote_id: racao20.id, qtd: 1, motivo: 'Venda', operador: 'T' });
+  assert.equal((await S.evitada(db, {})).evitada, 130);
+  await S.desfazer(db, v.grupo);
+  assert.equal((await S.evitada(db, {})).evitada, 110);
+  assert.equal((await S.resumo(db)).evitada.evitada, 110);       // o painel e o Modo TV leem do resumo
+  // produto sem preço entra nas unidades, não no valor
+  await S.upsertProduto(db, { ean: '7891000000055', nome: 'SEM PRECO' });
+  const sp = await mk('7891000000055', 'S1', 10, 5);
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: sp.id, qtd: 2, motivo: 'Venda', operador: 'T' });
+  const r2 = await S.evitada(db, {});
+  assert.deepEqual([r2.evitada, r2.sem_preco_un], [110, 2]);
+});
+
+test('preço digitado aceita todos os formatos (antes só a letra "d" passava na tela)', async () => {
+  const casos = { '39': 39, '39,90': 39.9, '39.90': 39.9, '1.299,90': 1299.9, '1,299.90': 1299.9, '1299,9': 1299.9, 'R$ 39,90': 39.9, '1.299': 1299, '0,999': 0.999, '12,5': 12.5, '1.299.990': 1299990, '0': 0 };
+  for (const [txt, n] of Object.entries(casos)) assert.equal(U.parsePreco(txt), n, txt);
+  assert.equal(U.parsePreco(''), null);
+  for (const ruim of ['abc', '-5', '12,x', '1,2,3,x']) assert.ok(Number.isNaN(U.parsePreco(ruim)), ruim);
+  await novoDb();
+  await S.upsertProduto(db, { ean: '7891000000062', nome: 'NOVO', preco: '1.299,90' });
+  assert.equal(Number((await S.getProduto(db, '7891000000062')).preco), 1299.9);
+  await S.upsertProduto(db, { ean: '7891000000062', nome: 'NOVO', preco: 49 });
+  assert.equal(Number((await S.getProduto(db, '7891000000062')).preco), 49);
+  await assert.rejects(S.upsertProduto(db, { ean: '7891000000062', nome: 'NOVO', preco: 'abc' }), /preço inválido/);
+});

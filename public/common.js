@@ -8,6 +8,23 @@ const brDataHora = ts => (ts ? new Date(ts).toLocaleString('pt-BR', { dateStyle:
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
+function parsePreco(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'number') return Number.isFinite(v) && v >= 0 ? v : NaN;
+  const s = String(v).replace(/R\$|\s/g, '');
+  if (s === '') return null;
+  if (!/^\d[\d.,]*$/.test(s)) return NaN;
+  const vir = s.lastIndexOf(','), pto = s.lastIndexOf('.'), ult = Math.max(vir, pto);
+  if (ult < 0) return Number(s);
+  const dec = s.slice(ult + 1), ini = s.slice(0, ult);
+  const outro = vir > pto ? '.' : ',';                       // o separador que não é o último
+  const soUm = (s.match(vir > pto ? /,/g : /\./g) || []).length === 1;
+  if (!soUm && !ini.includes(outro) && dec.length === 3) return Number(s.replace(/[.,]/g, ''));      // 1.299.990
+  if (ini.includes(outro)) return Number(ini.replace(/[.,]/g, '') + '.' + dec);                       // 1.299,90 ou 1,299.90
+  if (dec.length === 3 && ini !== '0' && ini.length <= 3) return Number(ini + dec);                   // 1.299 = mil duzentos e noventa e nove
+  return Number(ini + '.' + dec);
+}
+
 function lsGet(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* modo privado */ } }
 

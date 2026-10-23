@@ -405,6 +405,15 @@ const Conferencias = (() => {
 
     const aoLer = ean => {
       const nome = nomeDe(ean);
+      if (!nome && Catalogo.tamanho() > 0) {                 // não está no catálogo do aparelho: quase sempre é leitura errada
+        ctl.beep(false);
+        abreForm(`<div class="gav-fn">Código não encontrado<small>${ean}</small></div><p class="gav-aviso">Pode ser leitura errada. Aponte de novo para o código, ou confirme se é um produto novo.</p>
+          <div class="gav-fb"><button data-x>Ler de novo</button><button class="primary" data-ok>É produto novo</button></div>`, () => { processa(ean, null); }, () => {});
+        return;
+      }
+      processa(ean, nome);
+    };
+    const processa = (ean, nome) => {
       if (tipo === 'VALIDADE') {
         const u = a.ultimo && a.ultimo.ean === ean ? a.ultimo : null;
         const f = abreForm(`<div class="gav-fn">${esc(nome || 'Produto ' + ean)}<small>${ean}${nome ? '' : ' · ainda sem nome neste aparelho'}</small></div>

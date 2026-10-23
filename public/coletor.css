@@ -118,3 +118,6 @@
 .gav-fb { display: flex; gap: 10px; margin-top: 12px; } .gav-fb button { flex: 1; min-height: 52px; font-size: 16px; color: #fff; background: rgba(255, 255, 255, .14); border: 0; } .gav-fb .primary { flex: 2; background: var(--accent); color: var(--accent-ink); }
 
 .off-prep { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 12px; }
+
+.scan-ov.lendo .scan-frame i { border-color: #4ade80; transition: border-color .15s; }
+.gav-aviso { margin: 4px 0 0; font-size: 14px; opacity: .9; }

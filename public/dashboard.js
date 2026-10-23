@@ -128,7 +128,8 @@ PAGINAS.geral = async () => {
     ${kpi(0, 'Valor em estoque', 'box', t.valor, 'brl', `${int(t.itens)} itens · ${t.lotes} lotes`)}
     ${kpi(1, 'Valor em risco', 'flame', t.valor_em_risco, 'brl', 'em alerta ou vencido', 'bad', '#e11d48')}
     ${kpi(2, 'Perda potencial', 'trend', t.perda_potencial, 'brl', 'se vender com o desconto da regra', '', '#f97316')}
-    ${kpi(3, 'Vencidos em loja', 'alert', por[0].lotes, 'int', por[0].lotes ? `${brl(por[0].valor)} para retirar` : 'nada vencido', por[0].lotes ? 'bad' : '', '#9f1239')}
+    ${kpi(3, 'Perda potencial evitada', 'check', res.evitada.evitada, 'brl', res.evitada.unidades ? `${int(res.evitada.unidades_risco)} un. vendidas em alerta · ${res.evitada.dias} dias` : 'registre as vendas em Baixa → Venda', 'ok', '#16a34a')}
+    ${kpi(4, 'Vencidos em loja', 'alert', por[0].lotes, 'int', por[0].lotes ? `${brl(por[0].valor)} para retirar` : 'nada vencido', por[0].lotes ? 'bad' : '', '#9f1239')}
   </div>
   <div class="grid cols-2" style="margin-top:18px">
     <div class="card reveal" style="--i:4"><div class="head"><h2>Validade do estoque</h2><span class="sub">toque numa fatia para filtrar</span></div>
@@ -259,8 +260,9 @@ async function acaoLote(e) {
   if (b.dataset.act === 'preco') {
     const d = await dialogo({ titulo: 'Preço de venda', sub: l.nome || l.ean, campos: [{ id: 'p', label: 'Preço (R$)', inputmode: 'decimal' }] });
     if (!d) return;
-    if (!/^d+([.,]d{1,2})?$/.test(d.p.trim())) return toast('Preço inválido (ex.: 39,90)', 'bad');
-    try { await api('/api/produtos', { method: 'POST', body: { ean: l.ean, nome: l.nome || l.ean, preco: d.p.trim().replace(',', '.') } }); toast('Preço salvo', 'ok'); ok = true; }
+    const pv = parsePreco(d.p);
+    if (pv === null || Number.isNaN(pv)) return toast('Preço inválido. Digite só números, ex.: 39,90 ou 1.299,90', 'bad', 4000);
+    try { await api('/api/produtos', { method: 'POST', body: { ean: l.ean, nome: l.nome || l.ean, preco: pv } }); toast('Preço salvo', 'ok'); ok = true; }
     catch (er) { return toast(er.message, 'bad', 5000); }
   } else if (b.dataset.act === 'baixa') {
     const d = await Causa.dialogoBaixa({ sub: `${nome} — saldo ${l.qtd}`, saldo: l.qtd, motivos: S.cfg.motivos_baixa, vencido: l.dias <= 0 });

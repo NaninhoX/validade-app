@@ -23,12 +23,12 @@ body.modo-tv .page { max-width: none; padding: 0; animation: none !important; tr
 .tv-rel small.off { color: var(--warn); font-weight: 600; }
 .tv-sair { font-size: .8em; min-height: 40px; color: var(--ink-2); background: transparent; border-color: var(--line-2); }
 .tv-corpo { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 1em; }
-.tv-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1em; flex: none; }
+.tv-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1em; flex: none; }
 .tv-kpi { position: relative; display: grid; gap: .15em; padding: .9em 1.2em; border-radius: 1em; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
 .tv-kpi::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: .3em; background: var(--accent); }
 .tv-kpi.bad::before { background: var(--bad); } .tv-kpi.warn::before { background: var(--warn); } .tv-kpi.ok::before { background: var(--good); }
 .tv-kl { color: var(--muted); font-size: 1em; font-weight: 500; }
-.tv-kpi b { font: 700 3em/1.05 var(--font-display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-kpi b { font: 700 2.5em/1.05 var(--font-display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tv-kpi.bad b { color: var(--bad); } .tv-kpi.warn b { color: var(--warn); }
 .tv-kpi small { color: var(--muted); font-size: .9em; }
 .tv-grade { flex: 1 1 0; min-height: 0; display: grid; gap: 1em; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: minmax(0, 1.15fr) minmax(0, 1fr);
