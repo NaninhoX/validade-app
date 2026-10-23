@@ -250,3 +250,24 @@ test('preço digitado aceita todos os formatos (antes só a letra "d" passava na
   assert.equal(Number((await S.getProduto(db, '7891000000062')).preco), 49);
   await assert.rejects(S.upsertProduto(db, { ean: '7891000000062', nome: 'NOVO', preco: 'abc' }), /preço inválido/);
 });
+
+test('perda potencial evitada é acumulada: conta lotes antigos marcados "✅ Vendido" (legado) e vendas de qualquer data, pelo prazo de hoje', async () => {
+  await novoDb();
+  const mais = d => U.hojeISO(new Date(Date.now() + d * 864e5));
+  await S.upsertProduto(db, { ean: '7891000000079', nome: 'BRINQUEDO X', preco: 10, categoria: 'ACESSÓRIO' });
+  // legado da planilha: lote já vencido marcado vendido (vale o valor inteiro), outro a 20 dias (50%), outro longe (nada)
+  const mk = async (lote, d, qtd) => (await S.leitura(db, { tipo: 'RECEBIMENTO', ean: '7891000000079', lote, validade: mais(d), endereco: '1-A-1', qtd, operador: 'T' })).lote;
+  const v1 = await mk('V1', -10, 4), v2 = await mk('V2', 20, 4), v3 = await mk('V3', 300, 4);
+  for (const l of [v1, v2, v3]) await db.run("UPDATE lotes SET acao='✅ Vendido' WHERE id=?", [l.id]);
+  const r = await S.evitada(db, {});
+  assert.deepEqual([r.legado.lotes, r.legado.unidades, r.legado.evitada], [3, 12, 40 + 20]);      // 4×10×100% + 4×10×50%
+  assert.equal(r.evitada, 60);
+  // depois de baixar o lote legado como Venda histórica, não conta duas vezes
+  await db.run("UPDATE lotes SET acao=NULL WHERE id IN (?,?,?)", [v1.id, v2.id, v3.id]);
+  await db.run("INSERT INTO eventos(ts,tipo,lote_id,ean,lote,validade,endereco,delta,operador,motivo,historico) VALUES(?,?,?,?,?,?,?,?,?,?,1)", [mais(-60) + 'T12:00:00.000Z', 'BAIXA', v1.id, '7891000000079', 'V1', mais(-10), '1-A-1', -4, 'T', 'Venda']);
+  await db.run('UPDATE lotes SET qtd=0 WHERE id=?', [v1.id]);
+  const r2 = await S.evitada(db, {});
+  assert.equal(r2.legado.lotes, 0);
+  assert.equal(r2.evitada, 40);                                                                  // venda histórica do lote que já venceu: valor inteiro
+  assert.deepEqual([r2.ultimos.evitada, r2.ultimos.unidades], [0, 0]);                           // fora dos últimos 30 dias
+});

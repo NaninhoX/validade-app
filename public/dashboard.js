@@ -128,7 +128,7 @@ PAGINAS.geral = async () => {
     ${kpi(0, 'Valor em estoque', 'box', t.valor, 'brl', `${int(t.itens)} itens · ${t.lotes} lotes`)}
     ${kpi(1, 'Valor em risco', 'flame', t.valor_em_risco, 'brl', 'em alerta ou vencido', 'bad', '#e11d48')}
     ${kpi(2, 'Perda potencial', 'trend', t.perda_potencial, 'brl', 'se vender com o desconto da regra', '', '#f97316')}
-    ${kpi(3, 'Perda potencial evitada', 'check', res.evitada.evitada, 'brl', res.evitada.unidades ? `${int(res.evitada.unidades_risco)} un. vendidas em alerta · ${res.evitada.dias} dias` : 'registre as vendas em Baixa → Venda', 'ok', '#16a34a')}
+    ${kpi(3, 'Perda potencial evitada', 'check', res.evitada.evitada, 'brl', res.evitada.evitada ? `acumulado desde o início · ${brl(res.evitada.ultimos.evitada)} em ${res.evitada.ultimos.dias} dias` : 'registre as vendas em Baixa → Venda', 'ok', '#16a34a')}
     ${kpi(4, 'Vencidos em loja', 'alert', por[0].lotes, 'int', por[0].lotes ? `${brl(por[0].valor)} para retirar` : 'nada vencido', por[0].lotes ? 'bad' : '', '#9f1239')}
   </div>
   <div class="grid cols-2" style="margin-top:18px">
