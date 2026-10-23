@@ -94,6 +94,8 @@ const ICONS = {
   trend: 'M3 17l6-6 4 4 8-8 M15 7h6v6',
   more: 'M5 12h.01 M12 12h.01 M19 12h.01',
   clipboard: 'M9 4h6v3H9z M7 5H5v15h14V5h-2 M9 12h6 M9 16h4',
+  menu: 'M4 6h16 M4 12h16 M4 18h16',
+  sun: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4',
 };
 const ico = (nome, tam) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"${tam ? ` style="width:${tam}px;height:${tam}px"` : ''}>${ICONS[nome].split(' M').map((d, i) => `<path d="${i ? 'M' : ''}${d}"/>`).join('')}</svg>`;
 

@@ -35,7 +35,7 @@ body.modo-tv .page { max-width: none; padding: 0; animation: none !important; tr
   grid-template-areas: "a a a b b b b b c c c c" "d d d d e e e f f f g g"; }
 .tv-card { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: .9em 1.1em; border-radius: 1em; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
 .tv-card > header { display: flex; justify-content: space-between; align-items: baseline; gap: .6em; margin-bottom: .6em; flex: none; }
-.tv-card h2 { margin: 0; font: 650 1.2em/1.2 var(--font-display); }
+.tv-card h2 { margin: 0; font: 600 1.2em/1.2 var(--font-display); }
 .tv-card > header span { color: var(--muted); font-size: .85em; text-align: right; }
 .tv-card.a { grid-area: a; } .tv-card.b { grid-area: b; } .tv-card.c { grid-area: c; } .tv-card.d { grid-area: d; } .tv-card.e { grid-area: e; } .tv-card.f { grid-area: f; } .tv-card.g { grid-area: g; }
 .tv-vazio { color: var(--muted); padding: 1em 0; }

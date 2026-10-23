@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#013a7b">
+<script>try{var d=document.documentElement,t=JSON.parse(localStorage.getItem("tema")||"null"),n=JSON.parse(localStorage.getItem("densidade")||"null"),l=JSON.parse(localStorage.getItem("lateral")||"null");if(t==="claro")d.dataset.theme="light";else if(t==="escuro")d.dataset.theme="dark";if(n==="compacto")d.classList.add("compacto");if(l==="trilho")d.classList.add("trilho")}catch(e){}</script>
 <link rel="manifest" href="manifest.webmanifest">
 <title>Controle de Validade</title>
 <link rel="icon" href="icon.svg">
@@ -19,13 +20,17 @@
   <aside class="side" aria-label="Navegação">
     <div class="brand"><div class="logo" id="logo"></div><div><b>Validade</b><span>Loja AP52 · São Pedro</span></div></div>
     <nav class="navlist" aria-label="Seções">
+      <div class="nav-grp">Painel</div>
       <a class="nav" href="#/geral" data-r="geral"><span class="ic" id="i-geral"></span><span class="lbl">Visão geral</span><span class="lbl-s">Geral</span></a>
       <a class="nav" href="#/mapa" data-r="mapa"><span class="ic" id="i-mapa"></span><span class="lbl">Mapa da loja</span><span class="lbl-s">Mapa</span></a>
+      <div class="nav-grp">Operação</div>
       <a class="nav destaque" href="#/coletor" data-r="coletor"><span class="ic" id="i-coletor"></span><span class="lbl">Coletor</span><span class="lbl-s">Coletor</span></a>
       <a class="nav" href="#/estoque" data-r="estoque"><span class="ic" id="i-estoque"></span><span class="lbl">Estoque</span><span class="lbl-s">Estoque</span><span class="badge-n" id="nVenc" hidden></span></a>
       <a class="nav sec" href="#/conferencias" data-r="conferencias"><span class="ic" id="i-conferencias"></span><span class="lbl">Conferências</span><span class="lbl-s">Conf.</span></a>
+      <div class="nav-grp">Acompanhamento</div>
       <a class="nav sec" href="#/tv" data-r="tv"><span class="ic" id="i-tv"></span><span class="lbl">Modo TV</span><span class="lbl-s">TV</span></a>
       <a class="nav sec" href="#/mov" data-r="mov"><span class="ic" id="i-mov"></span><span class="lbl">Movimentações</span><span class="lbl-s">Mov.</span></a>
+      <div class="nav-grp">Sistema</div>
       <a class="nav sec" href="#/config" data-r="config"><span class="ic" id="i-config"></span><span class="lbl">Configurações</span><span class="lbl-s">Config.</span></a>
       <button class="nav mais" id="maisBtn" aria-haspopup="true" aria-expanded="false"><span class="ic" id="i-mais"></span><span class="lbl-s">Mais</span></button>
     </nav>
@@ -35,13 +40,28 @@
 
   <div class="main">
     <header class="topbar">
+      <button class="icon subtle" id="menuBtn" aria-label="Recolher menu" title="Recolher menu" aria-expanded="true"></button>
       <button class="icon subtle" id="voltar" aria-label="Voltar" hidden></button>
       <div class="title"><h1 id="tTitulo">Visão geral</h1><p id="tSub"></p></div>
       <button class="sync" id="sync" title="Situação do envio dos lançamentos"><span class="dot-s"></span><span id="syncTxt">Online</span></button>
       <button class="icon hide-m" id="atualiza" title="Atualizar"></button>
-      <a class="btn hide-m" id="brief" href="/briefing" target="_blank" rel="noopener">Briefing do dia</a>
-      <a class="btn hide-m" id="briefS" href="/briefing-semanal" target="_blank" rel="noopener">Briefing semanal</a>
-      <a class="btn primary hide-m" id="export" href="/api/export.xlsx" download></a>
+      <div class="menu-wrap hide-m">
+        <button class="icon subtle" id="aparBtn" title="Aparência" aria-label="Aparência" aria-haspopup="true" aria-expanded="false"></button>
+        <div class="menu" id="aparMenu" hidden>
+          <div class="menu-sec">Tema</div>
+          <div class="seg" id="segTema"><button data-v="auto" aria-pressed="true">Sistema</button><button data-v="claro" aria-pressed="false">Claro</button><button data-v="escuro" aria-pressed="false">Escuro</button></div>
+          <div class="menu-sec">Densidade</div>
+          <div class="seg" id="segDens"><button data-v="confortavel" aria-pressed="true">Confortável</button><button data-v="compacto" aria-pressed="false">Compacto</button></div>
+        </div>
+      </div>
+      <div class="menu-wrap hide-m">
+        <button id="relBtn" aria-haspopup="true" aria-expanded="false"></button>
+        <div class="menu" id="relMenu" hidden>
+          <a class="menu-item" id="brief" href="/briefing" target="_blank" rel="noopener">Briefing do dia</a>
+          <a class="menu-item" id="briefS" href="/briefing-semanal" target="_blank" rel="noopener">Briefing semanal</a>
+          <a class="menu-item" id="export" href="/api/export.xlsx" download></a>
+        </div>
+      </div>
     </header>
     <main class="page" id="view" tabindex="-1"></main>
   </div>

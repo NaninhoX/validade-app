@@ -96,7 +96,7 @@
 .gav.ok::before { background: #4ade80; } .gav.mais::before { background: #fb7185; } .gav.menos::before { background: #fbbf24; }
 .gav-bar { display: flex; align-items: center; gap: 4px; padding: 2px 8px 2px 4px; flex: none; }
 .gav-abre { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 8px 12px; background: transparent !important; border: 0 !important; color: #fff !important; text-align: left; }
-.gav-u { flex: 1; min-width: 0; font-weight: 650; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gav-u { flex: 1; min-width: 0; font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gav-t { opacity: .8; font-size: 13px; white-space: nowrap; }
 .gav-seta { display: inline-flex; transition: transform .2s; } .gav.aberta .gav-seta { transform: rotate(180deg); }
 .gav-des { min-width: 48px; min-height: 48px; border-radius: 12px; background: rgba(255, 255, 255, .14) !important; color: #fff !important; border: 0 !important; }
@@ -110,7 +110,7 @@
 .gav-lista .gi b { display: block; font-size: 14px; font-weight: 600; } .gav-lista .gi small { display: block; opacity: .7; font-size: 12px; } .gav-lista .gi em { font-style: normal; font-weight: 700; font-size: 20px; }
 .gav-vazio { opacity: .7; padding: 8px 2px; }
 .gav-form { padding: 4px 16px 16px; flex: none; }
-.gav-fn { font-weight: 650; font-size: 16px; margin-bottom: 8px; } .gav-fn small { display: block; opacity: .7; font-weight: 400; font-size: 12px; }
+.gav-fn { font-weight: 600; font-size: 16px; margin-bottom: 8px; } .gav-fn small { display: block; opacity: .7; font-weight: 400; font-size: 12px; }
 .gav-fc { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; } .gav-fc label { display: grid; gap: 4px; font-size: 12px; opacity: .95; }
 .gav-fc input { min-height: 52px; font-size: 20px; text-align: center; background: rgba(255, 255, 255, .12); color: #fff; border: 1px solid rgba(255, 255, 255, .25); border-radius: 12px; }
 .gav-fp { min-height: 18px; font-size: 13px; margin-top: 6px; opacity: .9; }

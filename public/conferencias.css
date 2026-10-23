@@ -10,7 +10,7 @@
 .cf-lista-h { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 2px 8px; }
 .cf-lista-h h2 { font-size: 16px; }
 .cf-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 10px 10px 10px 14px; margin-bottom: 8px; background: var(--surface); border: 1px solid var(--line); border-left: 6px solid var(--line-2); border-radius: 14px; }
-.cf-item .cf-nome { font-weight: 650; overflow-wrap: anywhere; }
+.cf-item .cf-nome { font-weight: 600; overflow-wrap: anywhere; }
 .cf-item.ok { border-left-color: var(--good); background: color-mix(in srgb, var(--good) 9%, var(--surface)); }
 .cf-item.mais { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 9%, var(--surface)); }
 .cf-item.menos { border-left-color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--surface)); }

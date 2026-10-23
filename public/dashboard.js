@@ -434,7 +434,37 @@ PAGINAS.config.ligar = () => {
   for (const [id, ic] of [['logo', 'box'], ['i-geral', 'grid'], ['i-mapa', 'map'], ['i-estoque', 'layers'], ['i-mov', 'clock'], ['i-config', 'sliders'], ['i-coletor', 'scan'], ['i-mais', 'more'], ['i-conferencias', 'clipboard'], ['m-conferencias', 'clipboard'],
     ['i-tv', 'tv'], ['m-tv', 'tv'], ['m-mov', 'clock'], ['m-config', 'sliders'], ['m-export', 'download'], ['m-sair', 'logout']]) $('#' + id).innerHTML = ico(ic, 22);
   $('#atualiza').innerHTML = ico('refresh');
-  $('#export').innerHTML = ico('download') + ' Exportar';
+  $('#export').innerHTML = ico('download') + ' Exportar planilha (.xlsx)';
+  $('#brief').innerHTML = ico('clock') + ' Briefing do dia';
+  $('#briefS').innerHTML = ico('trend') + ' Briefing semanal';
+  $('#menuBtn').innerHTML = ico('menu');
+  $('#aparBtn').innerHTML = ico('sun');
+  $('#relBtn').innerHTML = ico('clipboard') + ' Relatórios <span class="caret">' + ico('chevron') + '</span>';
+  // menus suspensos
+  const menus = [['relBtn', 'relMenu'], ['aparBtn', 'aparMenu']];
+  const fechaMenus = () => menus.forEach(([b, m]) => { $('#' + m).hidden = true; $('#' + b).setAttribute('aria-expanded', 'false'); });
+  menus.forEach(([b, m]) => $('#' + b).addEventListener('click', e => { e.stopPropagation(); const abre = $('#' + m).hidden; fechaMenus(); $('#' + m).hidden = !abre; $('#' + b).setAttribute('aria-expanded', String(abre)); }));
+  document.addEventListener('click', e => { if (!e.target.closest('.menu')) fechaMenus(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fechaMenus(); });
+  window.addEventListener('hashchange', fechaMenus);
+  $$('#relMenu a').forEach(a => a.addEventListener('click', fechaMenus));
+  // aparência: tema e densidade (o que a pessoa escolhe fica neste aparelho)
+  const html = document.documentElement;
+  const marca = (id, v) => $$('#' + id + ' button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  const aplicaTema = v => { if (v === 'claro') html.dataset.theme = 'light'; else if (v === 'escuro') html.dataset.theme = 'dark'; else delete html.dataset.theme; marca('segTema', v); };
+  const aplicaDens = v => { html.classList.toggle('compacto', v === 'compacto'); marca('segDens', v); };
+  aplicaTema(lsGet('tema', 'auto')); aplicaDens(lsGet('densidade', 'confortavel'));
+  $('#segTema').addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) { lsSet('tema', b.dataset.v); aplicaTema(b.dataset.v); } });
+  $('#segDens').addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) { lsSet('densidade', b.dataset.v); aplicaDens(b.dataset.v); } });
+  // menu lateral: expandido ou só ícones (no PC)
+  const aplicaLado = v => {
+    const trilho = v === 'trilho';
+    html.classList.toggle('trilho', trilho);
+    const mb = $('#menuBtn'); mb.title = trilho ? 'Expandir menu' : 'Recolher menu'; mb.setAttribute('aria-label', mb.title); mb.setAttribute('aria-expanded', String(!trilho));
+    $$('.side .nav[data-r]').forEach(a => { const l = $('.lbl', a); if (!l) return; if (trilho) a.title = l.textContent; else a.removeAttribute('title'); });
+  };
+  aplicaLado(lsGet('lateral', 'cheia'));
+  $('#menuBtn').addEventListener('click', () => { const v = html.classList.contains('trilho') ? 'cheia' : 'trilho'; lsSet('lateral', v); aplicaLado(v); });
   $('#voltar').innerHTML = ico('chevron');
   $('#voltar').addEventListener('click', () => { if (history.length > 1) history.back(); else location.hash = '#/geral'; });
   $('#maisBtn').addEventListener('click', alternaMais);

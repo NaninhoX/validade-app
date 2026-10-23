@@ -1,9 +1,9 @@
 /* Causa da perda: chips grandes no diálogo de baixa e card "Por que perdemos" */
 .causa-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
-.causa-chip { min-height: 52px; white-space: normal; text-align: left; justify-content: flex-start; padding: 8px 14px; font-size: 15px; font-weight: 560; border-radius: 12px; }
-.causa-chip[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 650; }
+.causa-chip { min-height: 52px; white-space: normal; text-align: left; justify-content: flex-start; padding: 8px 14px; font-size: 15px; font-weight: 500; border-radius: 12px; }
+.causa-chip[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 .field.invalido .causa-chip { border-color: var(--bad); }
-.causa-erro { color: var(--bad); font-size: 13.5px; font-weight: 560; margin: -4px 0 10px; }
+.causa-erro { color: var(--bad); font-size: 13.5px; font-weight: 500; margin: -4px 0 10px; }
 #dlgBaixa { width: min(94vw, 460px); }
 #dlgBaixa .field { margin-bottom: 14px; }
 @media (min-width: 520px) { .causa-grid { grid-template-columns: 1fr 1fr; } }
