@@ -220,7 +220,7 @@ function tendHtml(res, campo, o) {
 // ---------- estoque ----------
 const E = { ordem: '', dir: 'asc', q: '', status: '', gondola: '', marca: '', offset: 0, total: 0, marcas: [] };
 PAGINAS.estoque = async q => {
-  E.q = q.get('q') || ''; E.status = q.get('status') || ''; E.gondola = q.get('gondola') || ''; E.marca = q.get('marca') || ''; E.sempreco = q.get('sempreco') === '1' ? '1' : '';
+  E.q = q.get('q') || ''; E.status = q.get('status') || ''; E.gondola = q.get('gondola') || ''; E.marca = q.get('marca') || ''; E.sempreco = ['1', 'antigo'].includes(q.get('sempreco')) ? q.get('sempreco') : ''; E.vista = lsGet('estVista', 'produto');
   const [res, cfg, todas, gcfg] = await Promise.all([S.resumo ? Promise.resolve(S.resumo) : carregaResumo(), S.cfg ? Promise.resolve(S.cfg) : api('/api/config'), api('/api/lotes?limite=1'), api('/api/gondolas').catch(() => ({}))]);
   S.cfg = cfg; E.marcas = todas.marcas;
   const gond = [...new Set([...Array.from({ length: 19 }, (_, i) => i + 1), ...Object.keys(gcfg).map(Number)])].sort((a, b) => a - b);
@@ -229,17 +229,20 @@ PAGINAS.estoque = async q => {
       <div class="search"><span id="ss"></span><input id="fq" type="search" placeholder="Buscar produto, EAN, lote ou endereço" value="${esc(E.q)}" aria-label="Buscar"></div>
       <select id="fgond" aria-label="Gôndola"><option value="">Todas as gôndolas</option>${gond.map(g => `<option ${E.gondola == g ? 'selected' : ''} value="${g}">${g} · ${esc((gcfg[g] && gcfg[g].nome) || 'Gôndola')}</option>`).join('')}</select>
       <select id="fmarca" aria-label="Marca"><option value="">Todas as marcas</option>${E.marcas.map(m => `<option ${E.marca === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
-      <select id="fpreco" aria-label="Preço"><option value="">Com e sem preço</option><option value="1" ${E.sempreco ? 'selected' : ''}>Só sem preço</option></select>
+      <select id="fpreco" aria-label="Preço"><option value="">Com e sem preço</option><option value="1" ${E.sempreco === '1' ? 'selected' : ''}>Só sem preço</option><option value="antigo" ${E.sempreco === 'antigo' ? 'selected' : ''}>Preço desatualizado (+60 d ou sem data)</option></select>
     </div>
-    <div class="seg scrollx reveal" style="--i:1" id="fst"><button data-st="" aria-pressed="${E.status === ''}">Todos</button>${res.por_status.map(s => `<button data-st="${esc(s.status)}" aria-pressed="${E.status === s.status}">${esc(s.status)} <span class="faint">${s.lotes}</span></button>`).join('')}</div>
-    <div class="card flush reveal" style="--i:2"><div class="head"><h2 id="estTit">Estoque</h2><span class="sub" id="estInfo"></span></div>
+    <div class="reveal" style="--i:1;display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap"><div class="seg scrollx" id="fst"><button data-st="" aria-pressed="${E.status === ''}">Todos</button>${res.por_status.map(s => `<button data-st="${esc(s.status)}" aria-pressed="${E.status === s.status}">${esc(s.status)} <span class="faint">${s.lotes}</span></button>`).join('')}</div><div class="seg" id="vista"><button data-v="produto" aria-pressed="${E.vista === 'produto'}">Por produto</button><button data-v="lote" aria-pressed="${E.vista === 'lote'}">Por lote</button></div></div>
+    <div class="card flush reveal" id="cardGrp" style="--i:2" ${E.vista === 'produto' ? '' : 'hidden'}><div class="head"><h2>Estoque por produto</h2><span class="sub" id="estInfoG"></span><div class="eg-tools"><button class="sm subtle" id="egAbre">Expandir tudo</button><button class="sm subtle" id="egFecha">Recolher tudo</button></div></div>
+      <div class="eg-scroll"><div class="eg" id="eg"><div class="eg-head" id="egHead"><span></span><span data-o="produto" tabindex="0">Produto</span><span data-o="status" tabindex="0">Status</span><span class="num" data-o="qtd" tabindex="0">Qtd</span><span class="c-venc" data-o="validade" tabindex="0">1º vencimento</span><span class="num c-dias" data-o="dias" tabindex="0">Dias</span><span class="num" data-o="preco" tabindex="0">Preço</span><span data-o="atualizado" tabindex="0">Atualizado</span><span class="num c-valor" data-o="valor" tabindex="0">Valor</span><span></span></div><div id="egBody"></div></div></div>
+      <div style="padding:14px 20px"><button id="maisG" hidden>Carregar mais</button></div></div>
+    <div class="card flush reveal" id="cardFlat" style="--i:2" ${E.vista === 'produto' ? 'hidden' : ''}><div class="head"><h2 id="estTit">Estoque</h2><span class="sub" id="estInfo"></span></div>
       <div class="scroll" style="max-height:calc(100vh - 330px);margin-top:12px"><table class="resp" id="estTab"><thead><tr><th data-o="status" tabindex="0">Status</th><th data-o="produto" tabindex="0">Produto</th><th data-o="lote" tabindex="0">Lote</th><th class="num" data-o="qtd" tabindex="0">Qtd</th><th data-o="validade" tabindex="0">Validade</th><th class="num" data-o="dias" tabindex="0">Dias</th><th data-o="endereco" tabindex="0">Endereço</th><th class="num" data-o="preco" tabindex="0">Preço</th><th class="num" data-o="oferta" tabindex="0">Oferta</th><th></th></tr></thead><tbody id="est"></tbody></table></div>
       <div style="padding:14px 20px"><button id="maisEst" hidden>Carregar mais</button></div></div>
   </div>`;
 };
 PAGINAS.estoque.ligar = () => {
   $('#ss').innerHTML = ico('search');
-  const recarrega = () => carregaEstoque(true);
+  const recarrega = () => (E.vista === 'produto' ? EstGrp.carrega(true) : carregaEstoque(true));
   let deb;
   $('#fq').addEventListener('input', e => { clearTimeout(deb); deb = setTimeout(() => { E.q = e.target.value.trim(); recarrega(); }, 250); });
   $('#fgond').addEventListener('change', e => { E.gondola = e.target.value; recarrega(); });
@@ -254,6 +257,15 @@ PAGINAS.estoque.ligar = () => {
   $('#estTab thead').addEventListener('keydown', e => { if (e.key !== 'Enter' && e.key !== ' ') return; const t = e.target.closest('th[data-o]'); if (t) { e.preventDefault(); ordena(t); } });
   marcaOrdem();
   $('#est').addEventListener('click', acaoLote);
+  EstGrp.liga();
+  $('#vista').addEventListener('click', e => {
+    const b = e.target.closest('button[data-v]');
+    if (!b || b.dataset.v === E.vista) return;
+    E.vista = b.dataset.v; lsSet('estVista', E.vista);
+    $$('#vista button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    $('#cardGrp').hidden = E.vista !== 'produto'; $('#cardFlat').hidden = E.vista === 'produto';
+    recarrega();
+  });
   recarrega();
 };
 
@@ -301,7 +313,7 @@ async function acaoLote(e) {
       { id: 'dest', label: 'Endereço de destino (gôndola-lado-prateleira)', dica: v => (parseEndereco(v).valido ? descEndereco(v) : v ? 'Use o padrão 1-B-3 (lado A ou B, prateleira 1–5) ou 1-F / 1-C para pontas' : '') }] });
     if (d) ok = await enviar({ tipo: 'TRANSFERENCIA', lote_id: l.id, qtd: d.qtd, endereco_destino: d.dest }, 'Lote movido');
   }
-  if (ok) { carregaResumo(); const n = E.offset; E.offset = 0; $('#est').innerHTML = ''; do { await carregaEstoque(false); } while (E.offset < Math.min(n, E.total) && E.offset > 0); }
+  if (ok) { carregaResumo(); if (E.vista === 'produto') return EstGrp.recarrega(); const n = E.offset; E.offset = 0; $('#est').innerHTML = ''; do { await carregaEstoque(false); } while (E.offset < Math.min(n, E.total) && E.offset > 0); }
 }
 
 

@@ -559,3 +559,42 @@ test('tendência dos KPIs: ignora fotos de antes da limpeza dos vendidos e termi
   const r = await S.resumo(db);
   assert.ok(r.tendencia && r.tendencia.pontos.length >= 1);
 });
+
+test('preço: mudança grava histórico e data; conferir sem mudar só atualiza a data; carga igual não conta', async () => {
+  const db = await novoDb();
+  await db.run('DELETE FROM precos_historico');
+  const ean = '7891000000017';                                    // preço inicial 20 (criado em novoDb)
+  let p = await S.getProduto(db, ean);
+  assert.ok(p.preco_em, 'produto novo com preço já nasce com data');
+  await db.run('UPDATE produtos SET preco_em = NULL, preco_por = NULL WHERE ean = ?', [ean]);
+  await S.upsertProduto(db, { ean, nome: 'RAÇÃO SECA TESTE 1KG', preco: 20, operador: 'ANA' });          // mesmo preço, sem confirmar: nada muda
+  assert.equal((await S.getProduto(db, ean)).preco_em, null);
+  await S.upsertProduto(db, { ean, nome: 'RAÇÃO SECA TESTE 1KG', preco: 20, operador: 'ANA', confirmar: true });
+  p = await S.getProduto(db, ean);
+  assert.ok(p.preco_em); assert.equal(p.preco_por, 'ANA');
+  assert.equal((await S.historicoPrecos(db, ean)).length, 0);       // conferir não é mudança
+  await S.upsertProduto(db, { ean, nome: 'RAÇÃO SECA TESTE 1KG', preco: '24,90', operador: 'BIA', confirmar: true });
+  p = await S.getProduto(db, ean);
+  assert.equal(p.preco, 24.9);
+  const h = await S.historicoPrecos(db, ean);
+  assert.equal(h.length, 1); assert.equal(h[0].preco_antes, 20); assert.equal(h[0].preco_depois, 24.9); assert.equal(h[0].por, 'BIA');
+});
+
+test('estoque por produto: agrupa lotes, ordena grupos e separa preço antigo', async () => {
+  const db = await novoDb();
+  await S.leitura(db, { ...base, tipo: 'RECEBIMENTO', qtd: 2, validade: mais(70) });
+  await S.leitura(db, { ...base, lote: 'L2', tipo: 'RECEBIMENTO', qtd: 3, validade: mais(20) });
+  await S.leitura(db, { ...base, ean: '7891000000024', tipo: 'RECEBIMENTO', qtd: 1, validade: mais(200), endereco: '4-B-2' });
+  await db.run("UPDATE produtos SET preco_em = ? WHERE ean = '7891000000024'", [new Date(Date.now() - 90 * 864e5).toISOString()]);
+  const rows = await S.lotesAtivos(db);
+  const gs = S.agrupaPorProduto(rows);
+  assert.equal(gs.length, 2);
+  const a = gs.find(g => g.ean === '7891000000017');
+  assert.equal(a.lotes.length, 2); assert.equal(a.qtd, 5); assert.equal(a.valor, 100);          // 5 un x R$ 20
+  assert.equal(a.dias_min, 20);                                                                   // o lote que vence primeiro manda no status
+  assert.deepEqual(S.ordenaGrupos(gs, '', 'asc').map(g => g.ean), ['7891000000017', '7891000000024']);
+  assert.deepEqual(S.ordenaGrupos(gs, 'preco', 'desc').map(g => g.ean), ['7891000000017', '7891000000024']);
+  assert.deepEqual(S.ordenaGrupos(gs, 'atualizado', 'desc').map(g => g.ean), ['7891000000024', '7891000000017']);
+  const antigos = rows.filter(r => S.precoAntigo(r)).map(r => r.ean);
+  assert.deepEqual([...new Set(antigos)], ['7891000000024']);                                      // 90 dias: antigo; o outro foi conferido agora
+});

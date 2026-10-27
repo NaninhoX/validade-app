@@ -668,3 +668,50 @@ th[data-o] { cursor: pointer; user-select: none; }
 th[data-o]:hover { color: var(--ink); background: var(--surface-2); }
 th[aria-sort]::after { content: ' ▲'; font-size: 10px; color: var(--accent); }
 th[aria-sort=descending]::after { content: ' ▼'; }
+
+/* estoque por produto (lista que abre) */
+.eg { --eg: 28px minmax(0, 1fr) 118px 64px 100px 54px 104px 104px 104px 36px; }
+.eg-scroll { max-height: calc(100vh - 300px); overflow: auto; margin-top: 8px; }
+.eg-tools { display: flex; gap: 4px; }
+.eg-head, .eg-r { display: grid; grid-template-columns: var(--eg); align-items: center; column-gap: 8px; padding: 0 16px; }
+.eg-head { position: sticky; top: 0; z-index: 2; background: var(--surface); min-height: 36px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.eg-head [data-o] { cursor: pointer; user-select: none; } .eg-head [data-o]:hover { color: var(--ink); }
+.eg-head [aria-sort]::after { content: ' ▲'; font-size: 10px; color: var(--accent); } .eg-head [aria-sort=descending]::after { content: ' ▼'; }
+.eg-g { border-bottom: 1px solid var(--line); }
+.eg-g > summary { list-style: none; } .eg-g > summary::-webkit-details-marker { display: none; }
+.eg-r { min-height: 52px; padding-block: 6px; cursor: pointer; }
+.eg-r:hover { background: var(--surface-2); }
+.eg-g[open] > .eg-r { background: var(--surface-2); }
+.eg-chev svg { width: 16px; height: 16px; transition: transform .15s var(--ease); color: var(--muted); }
+.eg-g[open] .eg-chev svg { transform: rotate(90deg); }
+.eg-p { display: grid; min-width: 0; }
+.eg-p .pname, .eg-p .xs { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eg-at { display: flex; align-items: center; gap: 2px; white-space: nowrap; }
+.eg-r .addr, .eg-l .addr { white-space: nowrap; }
+.preco-b { min-height: 28px; padding: 0 8px; border: 1px solid transparent; background: transparent; font-weight: 600; font-variant-numeric: tabular-nums; }
+.preco-b:hover { background: var(--accent-soft); border-color: var(--line-2); }
+.preco-in { width: 100px; min-height: 28px; text-align: right; }
+.ped { font-size: 12px; color: var(--muted); } .ped.velho { color: var(--warn); font-weight: 600; }
+.eg-lotes { padding: 4px 16px 12px 52px; background: var(--surface-2); }
+.eg-lh, .eg-l { display: grid; grid-template-columns: 116px minmax(90px, 1.2fr) 56px 96px 54px 96px 110px auto; align-items: center; column-gap: 8px; }
+.eg-lh { font-size: 12px; font-weight: 600; color: var(--muted); padding: 6px 0; }
+.eg-l { min-height: 40px; border-top: 1px solid var(--line); }
+.eg-lac { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.eg-hist { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; padding: 5px 10px; font-size: 12.5px; white-space: nowrap; }
+.tip-i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 6px; }
+.tip { max-width: 320px; }
+html.compacto .eg-r { min-height: 40px; padding-block: 2px; } html.compacto .eg-l { min-height: 34px; }
+@media (max-width: 1380px) { .eg { --eg: 28px minmax(0, 1fr) 112px 60px 96px 54px 104px 104px 36px; } .c-valor { display: none; } }
+@media (max-width: 700px) {
+  .eg-head { display: none; }
+  .eg-r { grid-template-columns: 22px minmax(0, 1fr) auto auto; grid-template-areas: "chev p pr ac" "chev st q at"; row-gap: 4px; padding: 10px 12px; }
+  .eg-chev { grid-area: chev; } .eg-p { grid-area: p; } .eg-st { grid-area: st; } .eg-q { grid-area: q; text-align: left; } .eg-q::after { content: ' un'; color: var(--muted); }
+  .eg-preco { grid-area: pr; } .eg-at { grid-area: at; justify-content: flex-end; } .eg-ac { grid-area: ac; }
+  .c-valor, .c-venc, .c-dias { display: none; }
+  .eg-scroll { max-height: none; }
+  .eg-lotes { padding: 4px 12px 12px; }
+  .eg-lh { display: none; }
+  .eg-l { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 0; }
+  .eg-l [data-l]::before { content: attr(data-l) ': '; color: var(--muted); }
+  .eg-lac { flex: 1 1 100%; justify-content: flex-start; }
+}

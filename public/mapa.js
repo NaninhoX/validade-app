@@ -906,6 +906,15 @@ const Mapa = (() => {
     if (mudou) focaGondola(id); else desenhaPalco();
   }
 
+  // Dica do módulo (prateleira) sob o mouse: o que está ali, do que vence primeiro ao último
+  function tipCelula(id, c, r) {
+    const itens = (c.itens || []).slice(0, 4), resto = (c.itens || []).length - itens.length;
+    return `<b>${esc(enderecoDe(id, c.chave))}</b> · ${esc(rotuloG(id))}${r ? ' · ' + esc(r) : ''}<br>${c.lotes} lote${c.lotes > 1 ? 's' : ''} · ${int(c.qtd)} ${c.qtd > 1 ? 'itens' : 'item'}${c.valor ? ' · ' + brl(c.valor) : ''}${c.risco ? '<br>Em risco ' + brl(c.risco) : ''}`
+      + itens.map(i => `<br><span class="tip-i" style="--c:${esc(i.cor || '#888')}"></span>${esc((i.nome || i.ean).slice(0, 34))} · ${i.qtd} un · ${i.dias <= 0 ? 'vencido' : 'em ' + i.dias + ' d'}`).join('')
+      + (resto > 0 ? `<br><span class="faint">+ ${resto} lote${resto > 1 ? 's' : ''}</span>` : '')
+      + (c.dias_sem_ronda === null ? '<br>Nunca contada' : '<br>Ronda há ' + c.dias_sem_ronda + ' d');
+  }
+
   function ligaPalco() {
     const tip = $('#tip');
     $$('#canvas .gon').forEach(el => {
@@ -930,7 +939,10 @@ const Mapa = (() => {
         if (M.edit || M.editG) return;
         const d = M.data.gondolas.find(g => g.id === id);
         const r = respGondola(id);
-        tip.innerHTML = d ? `<b>${esc(rotuloG(id))}</b>${r ? ' · ' + esc(r) : ''}<br>${d.lotes} lotes · ${int(d.qtd)} itens<br>Valor ${brl(d.valor)}<br>${d.risco ? 'Em risco ' + brl(d.risco) + '<br>' : ''}Pior: ${esc(d.pior || '—')}${d.nunca_contada ? '<br>Nunca contada' : d.dias_sem_ronda !== null ? '<br>Ronda há ' + d.dias_sem_ronda + ' d' : ''}` : `<b>${esc(rotuloG(id))}</b><br>sem estoque`;
+        const cel = e.target.closest('.mp-cel[data-chave]');
+        const c = d && cel ? d.celulas.find(x => x.chave === cel.dataset.chave) : null;
+        if (c) tip.innerHTML = tipCelula(id, c, r);
+        else tip.innerHTML = d ? `<b>${esc(rotuloG(id))}</b>${r ? ' · ' + esc(r) : ''}<br>${d.lotes} lotes · ${int(d.qtd)} itens<br>Valor ${brl(d.valor)}<br>${d.risco ? 'Em risco ' + brl(d.risco) + '<br>' : ''}Pior: ${esc(d.pior || '—')}${d.nunca_contada ? '<br>Nunca contada' : d.dias_sem_ronda !== null ? '<br>Ronda há ' + d.dias_sem_ronda + ' d' : ''}` : `<b>${esc(rotuloG(id))}</b><br>sem estoque`;
         tip.style.left = Math.min(innerWidth - 250, e.clientX + 16) + 'px'; tip.style.top = (e.clientY + 16) + 'px'; tip.classList.add('on');
       });
       el.addEventListener('mouseleave', () => tip.classList.remove('on'));
