@@ -715,3 +715,14 @@ html.compacto .eg-r { min-height: 40px; padding-block: 2px; } html.compacto .eg-
   .eg-l [data-l]::before { content: attr(data-l) ': '; color: var(--muted); }
   .eg-lac { flex: 1 1 100%; justify-content: flex-start; }
 }
+
+/* cadastro na hora / produto parecido */
+dialog.cad { width: min(94vw, 540px); max-height: 92vh; overflow: auto; }
+.cad-sec { margin-bottom: 18px; }
+.cad-sec > input { margin-top: 2px; }
+.cad-lista { display: grid; gap: 6px; margin-top: 10px; max-height: 230px; overflow: auto; }
+.cad-c { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.cad-n { min-width: 0; } .cad-n b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cad-cb { display: flex; gap: 4px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+.cad-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+@media (max-width: 560px) { .cad-c { flex-direction: column; align-items: stretch; } .cad-cb { justify-content: stretch; } .cad-cb button { flex: 1; } }

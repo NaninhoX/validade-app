@@ -220,7 +220,7 @@ function tendHtml(res, campo, o) {
 // ---------- estoque ----------
 const E = { ordem: '', dir: 'asc', q: '', status: '', gondola: '', marca: '', offset: 0, total: 0, marcas: [] };
 PAGINAS.estoque = async q => {
-  E.q = q.get('q') || ''; E.status = q.get('status') || ''; E.gondola = q.get('gondola') || ''; E.marca = q.get('marca') || ''; E.sempreco = ['1', 'antigo'].includes(q.get('sempreco')) ? q.get('sempreco') : ''; E.vista = lsGet('estVista', 'produto');
+  E.q = q.get('q') || ''; E.status = q.get('status') || ''; E.gondola = q.get('gondola') || ''; E.marca = q.get('marca') || ''; E.sempreco = ['1', 'antigo', 'semcad'].includes(q.get('sempreco')) ? q.get('sempreco') : ''; E.vista = lsGet('estVista', 'produto');
   const [res, cfg, todas, gcfg] = await Promise.all([S.resumo ? Promise.resolve(S.resumo) : carregaResumo(), S.cfg ? Promise.resolve(S.cfg) : api('/api/config'), api('/api/lotes?limite=1'), api('/api/gondolas').catch(() => ({}))]);
   S.cfg = cfg; E.marcas = todas.marcas;
   const gond = [...new Set([...Array.from({ length: 19 }, (_, i) => i + 1), ...Object.keys(gcfg).map(Number)])].sort((a, b) => a - b);
@@ -229,7 +229,7 @@ PAGINAS.estoque = async q => {
       <div class="search"><span id="ss"></span><input id="fq" type="search" placeholder="Buscar produto, EAN, lote ou endereço" value="${esc(E.q)}" aria-label="Buscar"></div>
       <select id="fgond" aria-label="Gôndola"><option value="">Todas as gôndolas</option>${gond.map(g => `<option ${E.gondola == g ? 'selected' : ''} value="${g}">${g} · ${esc((gcfg[g] && gcfg[g].nome) || 'Gôndola')}</option>`).join('')}</select>
       <select id="fmarca" aria-label="Marca"><option value="">Todas as marcas</option>${E.marcas.map(m => `<option ${E.marca === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
-      <select id="fpreco" aria-label="Preço"><option value="">Com e sem preço</option><option value="1" ${E.sempreco === '1' ? 'selected' : ''}>Só sem preço</option><option value="antigo" ${E.sempreco === 'antigo' ? 'selected' : ''}>Preço desatualizado (+60 d ou sem data)</option></select>
+      <select id="fpreco" aria-label="Preço"><option value="">Com e sem preço</option><option value="1" ${E.sempreco === '1' ? 'selected' : ''}>Só sem preço</option><option value="antigo" ${E.sempreco === 'antigo' ? 'selected' : ''}>Preço desatualizado (+60 d ou sem data)</option><option value="semcad" ${E.sempreco === 'semcad' ? 'selected' : ''}>Produto sem cadastro</option></select>
     </div>
     <div class="reveal" style="--i:1;display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap"><div class="seg scrollx" id="fst"><button data-st="" aria-pressed="${E.status === ''}">Todos</button>${res.por_status.map(s => `<button data-st="${esc(s.status)}" aria-pressed="${E.status === s.status}">${esc(s.status)} <span class="faint">${s.lotes}</span></button>`).join('')}</div><div class="seg" id="vista"><button data-v="produto" aria-pressed="${E.vista === 'produto'}">Por produto</button><button data-v="lote" aria-pressed="${E.vista === 'lote'}">Por lote</button></div></div>
     <div class="card flush reveal" id="cardGrp" style="--i:2" ${E.vista === 'produto' ? '' : 'hidden'}><div class="head"><h2>Estoque por produto</h2><span class="sub" id="estInfoG"></span><div class="eg-tools"><button class="sm subtle" id="egAbre">Expandir tudo</button><button class="sm subtle" id="egFecha">Recolher tudo</button></div></div>

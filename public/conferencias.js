@@ -29,6 +29,12 @@ const Conferencias = (() => {
   const idServidor = id => (ehLocal(id) ? mapaIds()[id] || null : id);
   const temPend = id => fila().some(o => String(o.conf) === String(id));
   const nomeDe = ean => (ativo && ativo.nomes[ean]) || (Catalogo.get(ean) || {}).nome || null;
+  // leituras de produto sem cadastro e leituras recusadas ficam guardadas à parte: nunca travam as leituras seguintes nem se perdem
+  const pendCad = () => lsGet('confPendCad', []);
+  const salvaPendCad = l => lsSet('confPendCad', l);
+  const recusadas = () => lsGet('confRecusadas', []);
+  const salvaRecusadas = l => lsSet('confRecusadas', l);
+  const pendDe = id => pendCad().filter(o => String(o.conf) === String(id));
 
   // guarda a conferência aberta no aparelho (rascunho e índice): é o que deixa abrir, bipar e finalizar sem internet
   function salvaCache() {
@@ -41,9 +47,16 @@ const Conferencias = (() => {
     lsSet('confIndex', ix.slice(0, 40));
   }
 
-  function pedeNome(ean) {
-    return dialogo({ titulo: 'Produto novo', sub: `EAN ${ean}: informe o nome uma vez para cadastrar`, campos: [{ id: 'nome', label: 'Nome do produto' }], ok: 'Cadastrar' })
-      .then(d => (d && d.nome.trim() ? d.nome.trim() : null));
+  // editar ou remover uma leitura que ainda espera cadastro acontece na própria lista de espera (o servidor ainda não a conhece)
+  function aplicaNaPend(o) {
+    if (o.metodo === 'POST') return false;
+    const cid = decodeURIComponent(String(o.url).split('/').pop());
+    const l = pendCad(), i = l.findIndex(x => String(x.conf) === String(o.conf) && x.body && x.body.client_id === cid);
+    if (i < 0) return false;
+    if (o.metodo === 'DELETE') l.splice(i, 1);
+    else for (const k of ['qtd', 'lote', 'validade', 'endereco']) if (o.body && o.body[k] !== undefined) l[i].body[k] = o.body[k];
+    salvaPendCad(l);
+    return true;
   }
 
   async function drena() {
@@ -54,6 +67,7 @@ const Conferencias = (() => {
         const f = fila();
         if (!f.length) break;
         const o = f[0];
+        if (aplicaNaPend(o)) { salvaFila(fila().slice(1)); continue; }
         let url = o.url;
         if (ehLocal(o.conf) && !o.criar) {
           const sid = mapaIds()[o.conf];
@@ -71,13 +85,13 @@ const Conferencias = (() => {
           }
         } catch (e) {
           if (!e.status) break;                                               // sem rede: tenta de novo depois
-          if (e.status === 422 && o.metodo === 'POST' && o.body && !o.body.nome) {   // EAN novo: pergunta o nome uma vez
-            if (cameraAberta) break;                                              // com a câmera aberta não interrompe: pergunta quando ela fechar
-            const nome = await pedeNome(o.body.ean);
-            if (nome) { const l = fila(); l[0].body.nome = nome; salvaFila(l); continue; }
-          }
           salvaFila(fila().slice(1));
-          toast(e.message, 'bad', 6000);
+          if (e.status === 422 && o.metodo === 'POST' && o.body && !o.body.nome) {   // EAN novo: sai da fila (não trava as seguintes) e espera o cadastro
+            const l = pendCad(); l.push(o); salvaPendCad(l);
+          } else {
+            const l = recusadas(); l.push({ o, motivo: e.message, em: Date.now() }); salvaRecusadas(l);
+            toast(e.message, 'bad', 6000);
+          }
           if (ativo && ativo.id === o.conf) ativo.sujo = true;
         }
         if (ativo) desenha();
@@ -90,6 +104,42 @@ const Conferencias = (() => {
         if (!temPend(ativo.id) && !ehLocal(ativo.id)) recarrega();
       }
     }
+  }
+
+  // cadastrar na hora os produtos novos lidos nesta conferência (ou ligar ao produto certo) e mandar as leituras de novo
+  async function cadastraPendentes() {
+    const a = ativo;
+    if (!a) return;
+    for (const ean of [...new Set(pendDe(a.id).map(o => o.body.ean))]) {
+      const r = await CadProduto.abre({ ean });
+      if (!r) continue;
+      try {
+        let ean2 = ean;
+        if (r.tipo === 'mesmo') await api('/api/produtos/vincular', { method: 'POST', body: { de: ean, para: r.para, alias: true } });
+        else if (r.tipo === 'erro') ean2 = r.para;
+        const resto = [];
+        for (const o of pendCad()) {
+          if (String(o.conf) !== String(a.id) || o.body.ean !== ean) { resto.push(o); continue; }
+          if (r.tipo === 'novo') Object.assign(o.body, { nome: r.nome, marca: r.marca, preco: r.preco });
+          o.body.ean = ean2; empilha(o);
+        }
+        salvaPendCad(resto);
+        const nome = r.nome || null;
+        a.rows.filter(x => x.ean === ean).forEach(x => { x.ean = ean2; if (nome) x.nome = nome; });
+        if (nome) a.nomes[ean2] = nome;
+      } catch (e) { toast(e.message, 'bad', 6000); }
+    }
+    await drena();
+    if (ativo === a) { desenha(); if (!pendDe(a.id).length && !recusadas().some(x => String(x.o.conf) === String(a.id))) recarrega(); }
+  }
+  const tentaRecusadas = () => { const a = ativo; if (!a) return; const resto = []; for (const x of recusadas()) { if (String(x.o.conf) === String(a.id)) empilha(x.o); else resto.push(x); } salvaRecusadas(resto); drena(); };
+  const descartaRecusadas = () => { const a = ativo; if (!a) return; salvaRecusadas(recusadas().filter(x => String(x.o.conf) !== String(a.id))); a.sujo = true; desenha(); recarrega(); };
+  function alertas() {
+    const el = $('#cfAlertas');
+    if (!el || !ativo) return;
+    const pc = pendDe(ativo.id), rc = recusadas().filter(x => String(x.o.conf) === String(ativo.id)), eans = new Set(pc.map(o => o.body.ean)).size;
+    el.innerHTML = (pc.length ? `<div class="callout warn" style="margin-bottom:12px">${ico('alert')}<div><b>${pl(eans, 'produto sem cadastro', 'produtos sem cadastro')}</b> (${pl(pc.length, 'leitura', 'leituras')}). Enquanto não forem cadastrados, ${ativo.c.tipo === 'VALIDADE' ? 'nada disso entra no estoque' : 'a leitura não é registrada'}.<div style="margin-top:8px"><button class="sm primary" id="cfCad">Cadastrar agora</button></div></div></div>` : '')
+      + (rc.length ? `<div class="callout warn" style="margin-bottom:12px">${ico('alert')}<div><b>${pl(rc.length, 'leitura recusada', 'leituras recusadas')}</b>: ${esc([...new Set(rc.map(x => x.motivo))].join(' · '))}.<div style="margin-top:8px"><button class="sm" id="cfRetry">Tentar de novo</button> <button class="sm subtle" id="cfDescarta">Descartar</button></div></div></div>` : '');
   }
 
   // ---------- tela de bipagem ----------
@@ -138,6 +188,7 @@ const Conferencias = (() => {
           ${editavel ? `<button class="primary" id="cfFechar">${ico('check')} Fechar conferência</button><button class="sm subtle" id="cfApagar">Descartar</button>`
     : `<a class="btn primary" href="/conferencia?id=${c.id}" target="_blank" rel="noopener">${ico('printer')} Imprimir ou salvar em PDF</a><a class="btn" href="/api/conferencias/${c.id}.csv" download>${ico('download')} CSV</a><a class="btn" href="/api/conferencias/${c.id}.txt" download title="Primeira linha em branco e EAN;quantidade em cada linha, para o Importar de coletor do sistema da loja">TXT para o sistema da loja</a>${c.tipo !== 'RONDA' && !c.processada ? `<button id="cfProc">${ico('check')} Marcar como processada</button>` : ''}`}
         </div><div class="xs muted" id="cfSync">${c.processada ? `Processada${c.processada_por ? ' por ' + esc(c.processada_por) : ''} em ${dataBr(c.processada_em)} às ${hora(c.processada_em)}${c.min_ate_processar !== null ? ' (' + durTxt(c.min_ate_processar) + ' depois de finalizar)' : ''}` : ''}</div></div>
+      <div id="cfAlertas"></div>
       ${c.tipo === 'RONDA' ? `<div class="callout" style="margin-bottom:14px">${ico('info')}<div>Resumo da ronda do dia${c.obs ? ': ' + esc(c.obs) : ''}. Mostra o que foi contado; “sistema” é o saldo antes da contagem. Somente leitura.</div></div>` : ''}
       ${editavel ? `
       ${eEnd ? `<div class="f-wrap"><label class="f" for="cfEnd">Endereço (opcional)</label><div class="in"><input id="cfEnd" autocomplete="off" autocapitalize="characters" placeholder="ex.: 3-B-2" value="${esc(c.endereco || '')}"><button class="cam" id="cfCamEnd" aria-label="Ler etiqueta do endereço">${ico('camera', 24)}</button></div></div>` : ''}
@@ -161,6 +212,11 @@ const Conferencias = (() => {
       const ed = e.target.closest('[data-ed]'), del = e.target.closest('[data-del]');
       if (ed) editaLinha(ed.dataset.ed);
       if (del) removeLinha(del.dataset.del);
+    });
+    $('#cfAlertas').addEventListener('click', e => {
+      if (e.target.closest('#cfCad')) cadastraPendentes();
+      else if (e.target.closest('#cfRetry')) tentaRecusadas();
+      else if (e.target.closest('#cfDescarta')) descartaRecusadas();
     });
     const pr = $('#cfProc');
     if (pr) pr.addEventListener('click', async () => {
@@ -226,6 +282,7 @@ const Conferencias = (() => {
     salvaCache();
     contador();
     const pend = fila().filter(o => o.conf === ativo.id).length;
+    alertas();
     $('#cfSync').textContent = pend ? (navigator.onLine ? `Enviando ${pend}…` : `Sem conexão: ${pend} leitura(s) guardada(s) neste aparelho`) : '';
     const aberta = ativo.c.aberta && ativo.c.tipo !== 'RONDA';
     const lista = [...ativo.rows].sort((a, b) => b.t - a.t);
@@ -254,7 +311,8 @@ const Conferencias = (() => {
       return soma({ ean: u.ean, lote: u.lote, validade: u.validade, endereco: u.endereco }, +m[1]);
     }
     const ean = t.replace(/\D/g, '');
-    if (ean.length < 8 || ean.length > 14 || ean !== t) { toast('Código inválido: confira os números', 'bad'); return; }
+    if (ean !== t || ean.length < 4 || ean.length > 14) { toast('Código inválido: confira os números', 'bad'); return; }
+    if (ean.length < 8) return achaPeloFinal(ean);                       // o "macete" da loja: só os últimos dígitos do código
     if (ativo.c.tipo !== 'VALIDADE') return soma({ ean }, 1);
     // validade: pede lote e validade; repetindo o EAN já vêm preenchidos com os da leitura anterior
     ativo.pendente = ean;
@@ -263,6 +321,13 @@ const Conferencias = (() => {
     $('#cfLote').value = u ? u.lote || '' : ''; $('#cfValid').value = u ? brData(u.validade) : ''; $('#cfValid').dispatchEvent(new Event('input'));
     mostraProduto(ean, nomeDe(ean), null, 'Informe lote e validade');
     $('#cfLote').focus(); $('#cfLote').select();
+  }
+
+  async function achaPeloFinal(d) {
+    const r = (await CadProduto.procura(d)) || [];
+    if (!r.length) { toast('Nenhum produto com código terminado em ' + d, 'bad', 3500); return; }
+    const p = r.length === 1 && d.length >= 6 ? r[0] : await CadProduto.escolher(r, { titulo: 'Qual é o produto?', sub: 'Código terminado em ' + d });
+    if (p) { ativo.nomes[p.ean] = p.nome; entrada(p.ean); }
   }
 
   function confirmaValidade() {
@@ -356,7 +421,11 @@ const Conferencias = (() => {
   async function fechar() {
     const a = ativo;
     const itens = a.rows.reduce((s, r) => s + r.qtd, 0), eans = new Set(a.rows.map(r => r.ean)).size;
-    if (!a.rows.length) { toast('Nenhum item lido', 'bad'); return; }
+    if (!a.rows.length && !pendDe(a.id).length) { toast('Nenhum item lido', 'bad'); return; }
+    if (pendDe(a.id).length) {
+      if (confirm(`Há ${pendDe(a.id).length} leitura(s) de produto(s) sem cadastro que ainda NÃO foram registradas.\n\nCadastrar agora?`)) await cadastraPendentes();
+      if (pendDe(a.id).length && !confirm('Ainda há leituras sem cadastro. Fechar mesmo assim? Elas não serão registradas.')) return;
+    }
     if (!confirm(`Fechar a conferência de ${nomeTipo(a.c.tipo).toLowerCase()}?\n\n${pl(itens, 'item', 'itens')} em ${pl(eans, 'EAN', 'EANs')}. Depois de fechada não dá para alterar. Você poderá imprimir a lista em ordem alfabética.`)) return;
     if (navigator.onLine) {
       await drena();
@@ -407,8 +476,11 @@ const Conferencias = (() => {
       const nome = nomeDe(ean);
       if (!nome && Catalogo.tamanho() > 0) {                 // não está no catálogo do aparelho: quase sempre é leitura errada
         ctl.beep(false);
-        abreForm(`<div class="gav-fn">Código não encontrado<small>${ean}</small></div><p class="gav-aviso">Pode ser leitura errada. Aponte de novo para o código, ou confirme se é um produto novo.</p>
+        const sug = Catalogo.porFinal(ean, 3);                  // mesmos últimos 6 dígitos: pode ser o mesmo produto com o código lido errado
+        const f = abreForm(`<div class="gav-fn">Código não encontrado<small>${ean}</small></div><p class="gav-aviso">Pode ser leitura errada. Aponte de novo, ou confirme se é um produto novo.</p>
+          ${sug.length ? `<div class="gav-sug"><small>Parece com:</small>${sug.map((s, i) => `<button type="button" data-sug="${i}">${esc((s.nome || s.ean).slice(0, 44))}</button>`).join('')}</div>` : ''}
           <div class="gav-fb"><button data-x>Ler de novo</button><button class="primary" data-ok>É produto novo</button></div>`, () => { processa(ean, null); }, () => {});
+        f.querySelectorAll('[data-sug]').forEach(b => b.addEventListener('click', () => { const s = sug[+b.dataset.sug]; f.querySelector('[data-x]').click(); ativo.nomes[s.ean] = s.nome; processa(s.ean, s.nome); }));
         return;
       }
       processa(ean, nome);
@@ -483,7 +555,7 @@ const Conferencias = (() => {
     cameraAberta = true;
     try { await Scanner.abrir({ titulo: nomeTipo(tipo), aceitar: 'ean', continuo: { montar, aoLer } }); }
     catch (er) { toast(er.message, 'bad', 6000); }
-    finally { cameraAberta = false; desenha(); drena(); }
+    finally { cameraAberta = false; desenha(); drena().then(() => { if (ativo && ativo.id === a.id && pendDe(a.id).length) cadastraPendentes(); }); }
   }
 
   // ---------- lista ----------

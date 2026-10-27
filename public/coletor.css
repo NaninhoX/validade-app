@@ -121,3 +121,7 @@
 
 .scan-ov.lendo .scan-frame i { border-color: #4ade80; transition: border-color .15s; }
 .gav-aviso { margin: 4px 0 0; font-size: 14px; opacity: .9; }
+
+/* sugestões de produto na câmera contínua */
+.gav-sug { display: grid; gap: 6px; margin-top: 10px; } .gav-sug small { opacity: .8; font-size: 13px; }
+.gav-sug button { min-height: 46px; font-size: 15px; text-align: left; color: #fff; background: rgba(255, 255, 255, .14); border: 0; padding: 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -1,6 +1,6 @@
 // Guarda a casca do app para abrir sem rede. As chamadas /api nunca passam pelo cache.
-const CACHE = 'validade-v33';
-const CASCA = ['/', '/app.css', '/coletor.css', '/common.js', '/scanner.js', '/mapa.js', '/geom.js', '/coletor.js', '/causa.js', '/causa.css', '/folha.js', '/folha.css', '/auditoria.js', '/conferencias.js', '/offline.js', '/vendor/zxing.min.js', '/rma.js', '/tv.js', '/tv.css', '/lista-nota.js', '/conferencias.css', '/estoque.js', '/dashboard.js', '/manifest.webmanifest', '/icon.svg', '/vendor/fonts/roboto-latin-400-normal.woff2', '/vendor/fonts/roboto-latin-500-normal.woff2', '/vendor/fonts/roboto-latin-700-normal.woff2'];
+const CACHE = 'validade-v34';
+const CASCA = ['/', '/app.css', '/coletor.css', '/common.js', '/scanner.js', '/mapa.js', '/geom.js', '/coletor.js', '/causa.js', '/causa.css', '/folha.js', '/folha.css', '/auditoria.js', '/conferencias.js', '/offline.js', '/vendor/zxing.min.js', '/rma.js', '/tv.js', '/tv.css', '/lista-nota.js', '/conferencias.css', '/cadastro.js', '/estoque.js', '/dashboard.js', '/manifest.webmanifest', '/icon.svg', '/vendor/fonts/roboto-latin-400-normal.woff2', '/vendor/fonts/roboto-latin-500-normal.woff2', '/vendor/fonts/roboto-latin-700-normal.woff2'];
 
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CASCA)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {

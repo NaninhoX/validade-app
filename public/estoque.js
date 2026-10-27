@@ -33,7 +33,7 @@ const EstGrp = (() => {
       <span class="nowrap c-venc">${brData(g.validade_min)}</span>
       <span class="num c-dias">${g.dias_min}</span>
       <span class="num eg-preco">${precoCel(g)}</span>
-      <span class="eg-at">${idade(g)}${confirma(g)}</span>
+      <span class="eg-at">${g.nome ? idade(g) + confirma(g) : '<button class="sm" data-g="cad">Cadastrar…</button>'}</span>
       <span class="num c-valor">${g.valor === null ? '—' : brl(g.valor)}</span>
       <span class="eg-ac"><button class="icon subtle sm" data-g="menu" title="Mais ações do produto" aria-label="Mais ações do produto">${ico('more')}</button></span>
     </summary>
@@ -103,7 +103,8 @@ const EstGrp = (() => {
     return m;
   }
   function menuProduto(g, btn) {
-    menuFlutuante(btn, `<button class="menu-item" data-m="cad">${ico('edit')} Editar nome e marca</button><button class="menu-item" data-m="hist">${ico('clock')} Histórico de preços</button>`, async acao => {
+    menuFlutuante(btn, `${g.nome ? '' : `<button class="menu-item" data-m="cadastra">${ico('plus')} Cadastrar ou vincular…</button>`}<button class="menu-item" data-m="cad">${ico('edit')} Editar nome e marca</button><button class="menu-item" data-m="hist">${ico('clock')} Histórico de preços</button>`, async acao => {
+      if (acao === 'cadastra') return cadastra(g);
       if (acao === 'cad') {
         const d = await dialogo({ titulo: 'Cadastro do produto', sub: g.ean, campos: [{ id: 'nome', label: 'Nome', valor: g.nome || '' }, { id: 'marca', label: 'Marca', valor: g.marca || '' }], ok: 'Salvar' });
         if (!d) return;
@@ -121,6 +122,17 @@ const EstGrp = (() => {
     });
   }
 
+  // produto no estoque sem cadastro: cadastrar na hora, ou ligar a outro produto (mesmo item com outro código, ou código lido errado)
+  async function cadastra(g) {
+    const r = await CadProduto.abre({ ean: g.ean, aviso: 'está no estoque sem cadastro' });
+    if (!r) return;
+    try {
+      if (r.tipo === 'novo') { await api('/api/produtos', { method: 'POST', body: { ean: g.ean, nome: r.nome, marca: r.marca, preco: r.preco, confirmar: r.preco !== undefined } }); toast('Produto cadastrado', 'ok', 2500); }
+      else { await api('/api/produtos/vincular', { method: 'POST', body: { de: g.ean, para: r.para, alias: r.tipo === 'mesmo' } }); toast('Lotes passados para ' + (r.nome || '').slice(0, 40), 'ok', 3500); }
+      carregaResumo(); recarrega();
+    } catch (e) { toast(e.message, 'bad', 5000); }
+  }
+
   // ---------- ligação ----------
   function liga() {
     const corpo = $('#egBody'), cab = $('#egHead');
@@ -132,6 +144,7 @@ const EstGrp = (() => {
       if (!b) return;
       const g = G.grupos.find(x => x.ean === b.closest('details').dataset.ean);
       if (!g) return;
+      if (!g.nome && (b.dataset.g === 'preco' || b.dataset.g === 'cad')) return cadastra(g);
       if (b.dataset.g === 'preco') editaPreco(g, b.closest('.eg-preco'));
       else if (b.dataset.g === 'conf') salvaPreco(g, g.preco);
       else if (b.dataset.g === 'menu') menuProduto(g, b);

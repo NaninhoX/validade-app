@@ -52,7 +52,21 @@ const Catalogo = (() => {
     monta(r.itens);
     return { ok: true, igual: false, total: r.itens.length };
   }
-  return { carrega, get, tamanho, atualiza };
+  // produtos parecidos pelo catálogo do aparelho (sem internet): só números = mesmos últimos 6 dígitos; com letras = parte do nome
+  function porFinal(q, limite = 8) {
+    if (!mapa) return [];
+    const t = String(q || '').trim(), so = t.replace(/\D/g, ''), out = [];
+    if (so.length === t.replace(/[\s.-]/g, '').length) {
+      if (so.length < 4) return [];
+      const fim = so.slice(-6);
+      for (const v of mapa.values()) { if (String(v.ean).endsWith(fim) && chave(v.ean) !== chave(so)) { out.push(v); if (out.length >= limite) break; } }
+    } else if (t.length >= 3) {
+      const n = t.toLowerCase();
+      for (const v of mapa.values()) { if ((v.nome || '').toLowerCase().includes(n)) { out.push(v); if (out.length >= limite) break; } }
+    }
+    return out.map(v => ({ ean: v.ean, nome: v.nome, marca: null, preco: v.preco, lotes: null }));
+  }
+  return { carrega, get, tamanho, atualiza, porFinal };
 })();
 
 const Offline = (() => {

@@ -598,3 +598,30 @@ test('estoque por produto: agrupa lotes, ordena grupos e separa preço antigo', 
   const antigos = rows.filter(r => S.precoAntigo(r)).map(r => r.ean);
   assert.deepEqual([...new Set(antigos)], ['7891000000024']);                                      // 90 dias: antigo; o outro foi conferido agora
 });
+
+test('código trocado: candidatos pelos últimos 6 dígitos e por nome; vincular move o estoque e vira alias', async () => {
+  const db = await novoDb();
+  await db.run('DELETE FROM produto_codigos');
+  await S.upsertProduto(db, { ean: '7891000123456', nome: 'RAÇÃO PREMIER GATOS 1KG', preco: 50 });
+  const errado = '7899999123456';                                                  // mesmo final, prefixo diferente
+  const c = await S.candidatosProduto(db, errado);
+  assert.deepEqual(c.map(x => x.ean), ['7891000123456']);
+  assert.deepEqual((await S.candidatosProduto(db, '123456')).map(x => x.ean), ['7891000123456']);   // digitando só o final
+  assert.deepEqual((await S.candidatosProduto(db, 'premier')).map(x => x.ean), ['7891000123456']);
+  assert.deepEqual(await S.candidatosProduto(db, '12'), []);                      // curto demais
+  // estoque com o código errado, sem cadastro
+  await S.leitura(db, { tipo: 'RECEBIMENTO', ean: errado, nome: 'PROVISÓRIO', lote: 'A1', validade: mais(60), qtd: 4, endereco: '3-A-1', operador: 'T' });
+  await S.leitura(db, { tipo: 'RECEBIMENTO', ean: '7891000123456', lote: 'A1', validade: mais(60), qtd: 2, endereco: '3-A-1', operador: 'T' });
+  const r = await S.vincularCodigo(db, { de: errado, para: '7891000123456', alias: true, operador: 'T' });
+  assert.equal(r.lotes, 1);
+  const l = (await S.lotesAtivos(db)).filter(x => x.ean === '7891000123456');
+  assert.equal(l.length, 1); assert.equal(l[0].qtd, 6);                            // somou no lote que já existia
+  assert.equal((await S.lotesAtivos(db)).filter(x => x.ean === errado).length, 0);
+  assert.equal((await S.getProduto(db, errado)).ean, '7891000123456');            // bipar o código antigo cai no produto certo
+  assert.equal((await db.get('SELECT COUNT(*) n FROM produtos WHERE ean = ?', [errado])).n, 0);
+  // leitura errada (sem alias): corrige o estoque mas não guarda o código
+  await S.leitura(db, { tipo: 'RECEBIMENTO', ean: '7891000555555', nome: 'LIXO', lote: 'B', validade: mais(30), qtd: 1, endereco: '3-A-2', operador: 'T' });
+  await S.vincularCodigo(db, { de: '7891000555555', para: '7891000123456', alias: false, operador: 'T' });
+  assert.equal(await S.getProduto(db, '7891000555555'), null);
+  await assert.rejects(S.vincularCodigo(db, { de: '7891000123456', para: '7891000123456' }), /mesmo código/);
+});
