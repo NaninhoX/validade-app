@@ -2,7 +2,7 @@
 // Hierarquia de ações: o preço se edita na própria linha (é do produto); no lote, "Dar baixa" é a decisão principal
 // (vira "Retirar" quando venceu) e ajustar/mover ficam como ícones; cadastro e histórico ficam no menu "⋯" do produto.
 const EstGrp = (() => {
-  const G = { grupos: [], offset: 0, total: 0, totalLotes: 0, abertos: new Set(), ordem: '', dir: 'asc' };
+  const G = { grupos: [], offset: 0, total: 0, totalLotes: 0, abertos: new Set(), sel: new Set(), ordem: '', dir: 'asc' };
   const ANTIGO = 60;                                        // dias; igual a PRECO_ANTIGO_DIAS no servidor
 
   const velho = g => g.preco !== null && (g.preco_dias === null || g.preco_dias > ANTIGO);
@@ -13,6 +13,7 @@ const EstGrp = (() => {
   const confirma = g => (velho(g) ? `<button class="icon subtle sm" data-g="conf" title="Confirmar que o preço está correto" aria-label="Confirmar preço">${ico('check')}</button>` : '');
 
   const linhaL = l => `<div class="eg-l">
+    <span class="eg-ck"><input type="checkbox" class="ck-l" data-id="${l.id}" aria-label="Selecionar o lote ${esc(l.lote)}"${G.sel.has(l.id) ? ' checked' : ''}></span>
     <span class="eg-ls">${pill(l.status, l.cor)}</span>
     <span class="eg-lt" data-l="Lote">${esc(l.lote)}${l.colocado_tipo ? `<span class="eg-quem" title="${esc(l.ultimo_tipo ? 'Último movimento: ' + l.ultimo_tipo.toLowerCase().replace('_', ' ') + ' por ' + (l.ultimo_por || '?') + ' em ' + quandoCurto(l.ultimo_em) : '')}">${esc(colocadoTxt(l.colocado_por, l.colocado_em, l.colocado_tipo))}</span>` : ''}</span>
     <span class="num" data-l="Qtd">${l.qtd}</span>
@@ -26,6 +27,7 @@ const EstGrp = (() => {
 
   const linhaG = g => `<details class="eg-g" data-ean="${esc(g.ean)}"${G.abertos.has(g.ean) ? ' open' : ''}>
     <summary class="eg-r">
+      <span class="eg-ck"><input type="checkbox" class="ck-p" data-ean="${esc(g.ean)}" aria-label="Selecionar todos os lotes de ${esc(g.nome || g.ean)}"></span>
       <span class="eg-chev">${ico('chevron')}</span>
       <span class="eg-p"><span class="pname" title="${esc(g.nome || '')}">${esc(g.nome || '(sem cadastro)')}</span><span class="xs muted">${esc(g.ean)}${g.marca ? ' · ' + esc(g.marca) : ''} · ${g.lotes.length} lote${g.lotes.length > 1 ? 's' : ''}</span></span>
       <span class="eg-st">${pill(g.status, g.cor)}</span>
@@ -37,17 +39,18 @@ const EstGrp = (() => {
       <span class="num c-valor">${g.valor === null ? '—' : brl(g.valor)}</span>
       <span class="eg-ac"><button class="icon subtle sm" data-g="menu" title="Mais ações do produto" aria-label="Mais ações do produto">${ico('more')}</button></span>
     </summary>
-    <div class="eg-lotes"><div class="eg-lh"><span>Status</span><span>Lote</span><span class="num">Qtd</span><span>Validade</span><span class="num">Dias</span><span>Endereço</span><span class="num">Oferta</span><span></span></div>${g.lotes.map(linhaL).join('')}</div></details>`;
+    <div class="eg-lotes"><div class="eg-lh"><span></span><span>Status</span><span>Lote</span><span class="num">Qtd</span><span>Validade</span><span class="num">Dias</span><span>Endereço</span><span class="num">Oferta</span><span></span></div>${g.lotes.map(linhaL).join('')}</div></details>`;
 
   const achaEl = g => $(`details[data-ean="${CSS.escape(g.ean)}"]`);
-  const renderUm = g => { const el = achaEl(g); if (el) el.outerHTML = linhaG(g); };
+  const renderUm = g => { const el = achaEl(g); if (el) { el.outerHTML = linhaG(g); marcaSel(); } };
 
   async function carrega(reset, limite = 50) {
     if (reset) { G.offset = 0; G.grupos = []; $('#egBody').innerHTML = ''; }
     const p = new URLSearchParams({ agrupar: 1, offset: G.offset, limite });
     if (G.ordem) { p.set('ordem', G.ordem); p.set('dir', G.dir); }
-    for (const k of ['q', 'status', 'gondola', 'marca', 'sempreco']) if (E[k]) p.set(k, E[k]);
+    for (const k of ['q', 'status', 'gondola', 'marca', 'sempreco', 'por', 'desde']) if (E[k]) p.set(k, E[k]);
     const r = await api('/api/lotes?' + p);
+    preencheQuem(r.quem);
     G.total = r.total; G.totalLotes = r.total_lotes;
     if (reset && E.q && r.total <= 2) r.itens.forEach(g => G.abertos.add(g.ean));        // busca bem específica: já abre os lotes
     G.grupos.push(...r.itens);
@@ -56,6 +59,68 @@ const EstGrp = (() => {
     $('#estInfoG').textContent = `${int(Math.min(G.offset, G.total))} de ${int(G.total)} produtos · ${int(G.totalLotes)} lotes`;
     $('#maisG').hidden = G.offset >= G.total;
     window.__lotes = Object.assign(window.__lotes || {}, Object.fromEntries(r.itens.flatMap(g => g.lotes.map(l => [l.id, l]))));
+    if (reset) { const ids = new Set(G.grupos.flatMap(g => g.lotes.map(l => l.id))); for (const id of [...G.sel]) if (!ids.has(id)) G.sel.delete(id); }   // só fica selecionado o que ainda está na lista
+    marcaSel();
+  }
+
+  // ---------- seleção de vários e ações em lote ----------
+  const lotesSel = () => G.grupos.flatMap(g => g.lotes.filter(l => G.sel.has(l.id)));
+  function marcaSel() {
+    for (const g of G.grupos) {
+      const el = $(`details[data-ean="${CSS.escape(g.ean)}"] .ck-p`); if (!el) continue;
+      const n = g.lotes.filter(l => G.sel.has(l.id)).length;
+      el.checked = n > 0 && n === g.lotes.length; el.indeterminate = n > 0 && n < g.lotes.length;
+    }
+    $$('#egBody .ck-l').forEach(i => { i.checked = G.sel.has(Number(i.dataset.id)); });
+    const total = G.grupos.reduce((s, g) => s + g.lotes.length, 0), t = $('#egTodos');
+    if (t) { t.checked = total > 0 && G.sel.size >= total; t.indeterminate = G.sel.size > 0 && G.sel.size < total; }
+    const ls = lotesSel(), bar = $('#selBar');
+    if (!bar) return;
+    bar.hidden = !ls.length;
+    if (!ls.length) return;
+    const un = ls.reduce((s, l) => s + l.qtd, 0), pr = new Set(ls.map(l => l.ean)).size, val = ls.reduce((s, l) => s + (l.valor || 0), 0);
+    $('#selTxt').innerHTML = `<b>${ls.length}</b> ${ls.length === 1 ? 'lote' : 'lotes'} · ${pr} ${pr === 1 ? 'produto' : 'produtos'} · ${int(un)} un${val ? ' · ' + brl(val) : ''}`;
+  }
+  async function executa(ls, corpoDe, rotulo) {
+    let ok = 0; const falhas = [];
+    for (let i = 0; i < ls.length; i++) {
+      toast(`${rotulo}: ${i + 1} de ${ls.length}…`, '', 1500);
+      try { await api('/api/leituras', { method: 'POST', body: { client_id: uuid(), operador: S.op, ...corpoDe(ls[i]) } }); ok++; G.sel.delete(ls[i].id); }
+      catch (e) { falhas.push(`${(ls[i].nome || ls[i].ean).slice(0, 28)} (lote ${ls[i].lote}): ${e.message}`); }
+    }
+    toast(falhas.length ? `${ok} de ${ls.length} concluídos. Não deu: ${falhas.slice(0, 3).join(' · ')}` : `${rotulo} concluída em ${ok} ${ok === 1 ? 'lote' : 'lotes'}`, falhas.length ? 'bad' : 'ok', falhas.length ? 9000 : 4000);
+    carregaResumo(); await recarrega();
+  }
+  async function baixaLote() {
+    const ls = lotesSel(); if (!ls.length) return;
+    const un = ls.reduce((s, l) => s + l.qtd, 0);
+    const d = await Causa.dialogoBaixa({ titulo: `Dar baixa em ${ls.length} ${ls.length === 1 ? 'lote' : 'lotes'}`, sub: `Todo o saldo de cada lote: ${int(un)} un.`, semQtd: true, motivos: S.cfg.motivos_baixa, vencido: ls.every(l => l.dias <= 0) });
+    if (!d) return;
+    if (!confirm(`Dar baixa de ${int(un)} un. em ${ls.length} ${ls.length === 1 ? 'lote' : 'lotes'}, motivo "${d.motivo}"?`)) return;
+    await executa(ls, l => ({ tipo: 'BAIXA', lote_id: l.id, qtd: l.qtd, motivo: d.motivo, causa: d.causa }), 'Baixa');
+  }
+  async function moveLote() {
+    const ls = lotesSel(); if (!ls.length) return;
+    const d = await dialogo({ titulo: `Mover ${ls.length} ${ls.length === 1 ? 'lote' : 'lotes'}`, sub: 'Todo o saldo de cada lote vai para o endereço informado', ok: 'Mover',
+      campos: [{ id: 'dest', label: 'Endereço de destino (gôndola-lado-prateleira)', dica: v => (parseEndereco(v).valido ? descEndereco(v) : v ? 'Use o padrão 1-B-3 (lado A ou B, prateleira 1–5) ou 1-F / 1-C para pontas' : '') }] });
+    if (!d) return;
+    const dest = d.dest.trim().toUpperCase();
+    if (!parseEndereco(dest).valido) { toast('Endereço fora do padrão (ex.: 3-B-2)', 'bad', 3500); return; }
+    const mover = ls.filter(l => l.endereco !== dest);
+    if (!mover.length) { toast('Os lotes selecionados já estão nesse endereço', 'bad', 3500); return; }
+    if (!confirm(`Mover ${mover.length} ${mover.length === 1 ? 'lote' : 'lotes'} para ${dest}?`)) return;
+    await executa(mover, l => ({ tipo: 'TRANSFERENCIA', lote_id: l.id, qtd: l.qtd, endereco_destino: dest }), 'Transferência');
+  }
+  function exportaCsv() {
+    const ls = lotesSel(); if (!ls.length) return;
+    const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`, num = v => (v === null || v === undefined ? '' : String(v).replace('.', ','));
+    const cab = ['Produto', 'EAN', 'Lote', 'Qtd', 'Validade', 'Dias', 'Status', 'Endereço', 'Preço', 'Valor', 'Colocado por', 'Colocado em'];
+    const lin = ls.map(l => [l.nome || '', l.ean, l.lote, l.qtd, l.validade_efetiva || l.validade, l.dias, l.status, l.endereco, num(l.preco), num(l.valor), l.colocado_por || '', l.colocado_em || ''].map(q).join(';'));
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff' + [cab.map(q).join(';'), ...lin].join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    a.download = `estoque-selecao-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast(`${ls.length} ${ls.length === 1 ? 'lote exportado' : 'lotes exportados'}`, 'ok', 2500);
   }
   const recarrega = () => carrega(true, Math.max(50, G.offset));
 
@@ -138,7 +203,7 @@ const EstGrp = (() => {
     const corpo = $('#egBody'), cab = $('#egHead');
     corpo.addEventListener('click', e => {
       const sum = e.target.closest('summary');
-      if (sum && e.target.closest('button, input')) e.preventDefault();      // botões e campos dentro da linha não abrem nem fecham
+      if (sum && e.target.closest('button, input:not([type=checkbox])')) e.preventDefault();      // botões e campos dentro da linha não abrem nem fecham
       if (e.target.closest('button[data-act]')) return acaoLote(e);
       const b = e.target.closest('button[data-g]');
       if (!b) return;
@@ -148,6 +213,23 @@ const EstGrp = (() => {
       if (b.dataset.g === 'preco') editaPreco(g, b.closest('.eg-preco'));
       else if (b.dataset.g === 'conf') salvaPreco(g, g.preco);
       else if (b.dataset.g === 'menu') menuProduto(g, b);
+    });
+    corpo.addEventListener('change', e => {
+      const p = e.target.closest('.ck-p'), l = e.target.closest('.ck-l');
+      if (p) { const g = G.grupos.find(x => x.ean === p.dataset.ean); if (g) for (const x of g.lotes) { if (p.checked) G.sel.add(x.id); else G.sel.delete(x.id); } }
+      else if (l) { const id = Number(l.dataset.id); if (l.checked) G.sel.add(id); else G.sel.delete(id); }
+      else return;
+      marcaSel();
+    });
+    $('#egTodos').addEventListener('change', e => { G.sel.clear(); if (e.target.checked) G.grupos.forEach(g => g.lotes.forEach(l => G.sel.add(l.id))); marcaSel(); });
+    $('#egSel').addEventListener('click', () => { const on = $('#eg').classList.toggle('selmodo'); $('#egSel').setAttribute('aria-pressed', String(on)); $('#egSel').textContent = on ? 'Concluir seleção' : 'Selecionar'; });
+    $('#selBar').addEventListener('click', e => {
+      const b = e.target.closest('[data-s]'); if (!b) return;
+      if (b.dataset.s === 'limpar') { G.sel.clear(); marcaSel(); }
+      else if (b.dataset.s === 'todos') { G.grupos.forEach(g => g.lotes.forEach(l => G.sel.add(l.id))); marcaSel(); }
+      else if (b.dataset.s === 'csv') exportaCsv();
+      else if (b.dataset.s === 'baixa') baixaLote();
+      else if (b.dataset.s === 'mover') moveLote();
     });
     corpo.addEventListener('toggle', ev => { const d = ev.target; if (d.tagName === 'DETAILS') { if (d.open) G.abertos.add(d.dataset.ean); else G.abertos.delete(d.dataset.ean); } }, true);
     $('#maisG').addEventListener('click', () => carrega(false));

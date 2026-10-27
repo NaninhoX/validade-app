@@ -41,31 +41,32 @@ const Causa = (() => {
 
   // Baixa com causa. Devolve { qtd, motivo, causa } ou null se cancelou.
   // opcoes: { titulo, sub, saldo, motivos, vencido }
-  function dialogoBaixa({ titulo = 'Dar baixa', sub = '', saldo = 1, motivos = MOTIVOS_PADRAO, vencido = false } = {}) {
+  function dialogoBaixa({ titulo = 'Dar baixa', sub = '', saldo = 1, motivos = MOTIVOS_PADRAO, vencido = false, semQtd = false } = {}) {
     return new Promise(resolve => {
       const dlg = criaDialogo();
       const lista = vencido ? ['RMA', ...motivos.filter(x => x !== 'RMA')] : motivos;
       $('#dbTitulo').textContent = titulo; $('#dbSub').textContent = sub;
       $('#dbQtd').value = saldo;
+      $('#dbQtdBox').hidden = !!semQtd;                    // baixa em lote: sempre o saldo inteiro de cada lote
       $('#dbMotivo').innerHTML = lista.map(o => `<option>${esc(o)}</option>`).join('');
       const erro = $('#dbErro'), box = $('#dbCausaBox');
       const mostraErro = t => { erro.textContent = t || ''; erro.hidden = !t; box.classList.toggle('invalido', !!t && /causa/i.test(t)); };
       const ch = chips($('#dbCausas'), () => mostraErro(''));
       const atualiza = () => { box.hidden = !exige($('#dbMotivo').value); mostraErro(''); };
       $('#dbMotivo').onchange = atualiza; atualiza();
-      const fim = v => { dlg.close(); resolve(v); };
+      const fim = v => { $('#dbQtdBox').hidden = false; dlg.close(); resolve(v); };
       $('#dbCancel').onclick = () => fim(null);
-      dlg.oncancel = () => resolve(null);
+      dlg.oncancel = () => { $('#dbQtdBox').hidden = false; resolve(null); };
       $('#dbForm').onsubmit = e => {
         e.preventDefault();
-        const q = $('#dbQtd').value.trim();
+        const q = semQtd ? '1' : $('#dbQtd').value.trim();
         if (!/^\d+$/.test(q) || +q < 1) { mostraErro('Informe a quantidade (1 ou mais).'); return; }
         const motivo = $('#dbMotivo').value;
         if (exige(motivo) && !ch.get()) { mostraErro('Escolha a causa da perda para registrar a baixa.'); box.scrollIntoView({ block: 'nearest' }); return; }
         fim({ qtd: +q, motivo, causa: exige(motivo) ? ch.get() : null });
       };
       dlg.showModal();
-      $('#dbQtd').focus(); $('#dbQtd').select();
+      if (semQtd) $('#dbMotivo').focus(); else { $('#dbQtd').focus(); $('#dbQtd').select(); }
     });
   }
 

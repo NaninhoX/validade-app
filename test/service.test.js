@@ -639,3 +639,15 @@ test('rastro: quem colocou o lote e quando, e o último movimento', async () => 
   const novo = (await S.lotesAtivos(db, { rastro: true })).find(x => x.endereco === '4-B-2');
   assert.equal(novo.colocado_por, 'BIA'); assert.equal(novo.colocado_tipo, 'TRANSF_ENTRADA');   // quem moveu é quem colocou no endereço novo
 });
+
+test('filtro por quem colocou e por período', async () => {
+  const db = await novoDb();
+  await S.leitura(db, { ...base, tipo: 'RECEBIMENTO', qtd: 3, validade: mais(60), operador: 'DAVI' });
+  await S.leitura(db, { ...base, lote: 'L2', tipo: 'RECEBIMENTO', qtd: 1, validade: mais(90), operador: 'ANA', ts: new Date(Date.now() - 10 * 864e5).toISOString() });
+  const rows = await S.lotesAtivos(db, { rastro: true });
+  assert.deepEqual(S.quemColocou(rows), ['ANA', 'DAVI']);
+  assert.deepEqual(S.filtraRastro(rows, { por: 'davi' }).map(r => r.lote), ['L1']);
+  assert.deepEqual(S.filtraRastro(rows, { desde: '7' }).map(r => r.lote), ['L1']);               // a da Ana é de 10 dias atrás
+  assert.deepEqual(S.filtraRastro(rows, { desde: '30', por: 'ANA' }).map(r => r.lote), ['L2']);
+  assert.equal(S.filtraRastro(rows, {}).length, 2);
+});
