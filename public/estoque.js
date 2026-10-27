@@ -14,7 +14,7 @@ const EstGrp = (() => {
 
   const linhaL = l => `<div class="eg-l">
     <span class="eg-ls">${pill(l.status, l.cor)}</span>
-    <span class="eg-lt" data-l="Lote">${esc(l.lote)}</span>
+    <span class="eg-lt" data-l="Lote">${esc(l.lote)}${l.colocado_tipo ? `<span class="eg-quem" title="${esc(l.ultimo_tipo ? 'Último movimento: ' + l.ultimo_tipo.toLowerCase().replace('_', ' ') + ' por ' + (l.ultimo_por || '?') + ' em ' + quandoCurto(l.ultimo_em) : '')}">${esc(colocadoTxt(l.colocado_por, l.colocado_em, l.colocado_tipo))}</span>` : ''}</span>
     <span class="num" data-l="Qtd">${l.qtd}</span>
     <span class="nowrap" data-l="Validade">${brData(l.validade_efetiva || l.validade)}</span>
     <span class="num" data-l="Dias">${l.dias}</span>

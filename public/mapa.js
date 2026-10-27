@@ -910,7 +910,7 @@ const Mapa = (() => {
   function tipCelula(id, c, r) {
     const itens = (c.itens || []).slice(0, 4), resto = (c.itens || []).length - itens.length;
     return `<b>${esc(enderecoDe(id, c.chave))}</b> · ${esc(rotuloG(id))}${r ? ' · ' + esc(r) : ''}<br>${c.lotes} lote${c.lotes > 1 ? 's' : ''} · ${int(c.qtd)} ${c.qtd > 1 ? 'itens' : 'item'}${c.valor ? ' · ' + brl(c.valor) : ''}${c.risco ? '<br>Em risco ' + brl(c.risco) : ''}`
-      + itens.map(i => `<br><span class="tip-i" style="--c:${esc(i.cor || '#888')}"></span>${esc((i.nome || i.ean).slice(0, 34))} · ${i.qtd} un · ${i.dias <= 0 ? 'vencido' : 'em ' + i.dias + ' d'}`).join('')
+      + itens.map(i => `<br><span class="tip-i" style="--c:${esc(i.cor || '#888')}"></span>${esc((i.nome || i.ean).slice(0, 34))} · ${i.qtd} un · ${i.dias <= 0 ? 'vencido' : 'em ' + i.dias + ' d'}${i.tp && i.tp !== 'IMPORT' ? ' · ' + esc(i.por || '?') + ' ' + esc(quandoCurto(i.em).slice(0, 5)) : ''}`).join('')
       + (resto > 0 ? `<br><span class="faint">+ ${resto} lote${resto > 1 ? 's' : ''}</span>` : '')
       + (c.dias_sem_ronda === null ? '<br>Nunca contada' : '<br>Ronda há ' + c.dias_sem_ronda + ' d');
   }

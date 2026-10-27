@@ -625,3 +625,17 @@ test('código trocado: candidatos pelos últimos 6 dígitos e por nome; vincular
   assert.equal(await S.getProduto(db, '7891000555555'), null);
   await assert.rejects(S.vincularCodigo(db, { de: '7891000123456', para: '7891000123456' }), /mesmo código/);
 });
+
+test('rastro: quem colocou o lote e quando, e o último movimento', async () => {
+  const db = await novoDb();
+  await S.leitura(db, { ...base, tipo: 'RECEBIMENTO', qtd: 5, validade: mais(60), operador: 'DAVI' });
+  const lote = (await S.lotesAtivos(db))[0];
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: lote.id, qtd: 1, motivo: 'Venda', operador: 'ANA' });
+  const r = (await S.lotesAtivos(db, { rastro: true }))[0];
+  assert.equal(r.colocado_por, 'DAVI'); assert.equal(r.colocado_tipo, 'RECEBIMENTO'); assert.ok(r.colocado_em);
+  assert.equal(r.ultimo_por, 'ANA'); assert.equal(r.ultimo_tipo, 'BAIXA');
+  assert.equal((await S.lotesAtivos(db))[0].colocado_por, undefined);          // sem rastro, não paga a consulta
+  await S.leitura(db, { tipo: 'TRANSFERENCIA', lote_id: lote.id, qtd: 2, endereco_destino: '4-B-2', operador: 'BIA' });
+  const novo = (await S.lotesAtivos(db, { rastro: true })).find(x => x.endereco === '4-B-2');
+  assert.equal(novo.colocado_por, 'BIA'); assert.equal(novo.colocado_tipo, 'TRANSF_ENTRADA');   // quem moveu é quem colocou no endereço novo
+});

@@ -175,5 +175,9 @@ function descEndereco(e) {
   return `Gôndola ${p.gondola}${p.lado ? " · " + LADO_TXT[p.lado] : ""}${p.nivel ? (p.lado === 'P' ? ' ' : ' · prateleira ') + p.nivel : ''}`;
 }
 
+// "quem colocou o lote aí e quando": texto curto para a lista e o mapa
+const ROTULO_COLOCADO = { RECEBIMENTO: 'Recebido por', TRANSF_ENTRADA: 'Movido por', CONTAGEM: 'Contado por', AJUSTE: 'Ajustado por' };
+const quandoCurto = ts => { if (!ts) return ''; const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+const colocadoTxt = (por, em, tipo) => (!tipo ? '' : tipo === 'IMPORT' ? 'Carga inicial da planilha' : `${ROTULO_COLOCADO[tipo] || 'Colocado por'} ${por || '?'} · ${quandoCurto(em)}`);
 const pill = (status, cor) => `<span class="pill" style="--c:${esc(cor || '#6e6e73')}">${esc(status)}</span>`;
 const addr = (e, ok = true) => `<span class="addr${ok === false ? ' bad' : ''}" title="${esc(descEndereco(e) || 'fora do padrão')}">${esc(e || 'sem endereço')}</span>`;
