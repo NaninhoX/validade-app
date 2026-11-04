@@ -84,5 +84,30 @@ const CadProduto = (() => {
     });
   }
 
-  return { abre, escolher, procura };
+  // Conferência de Validade: o que bipei não bate com um lote do app. Devolve { modo: 'novo' } | { modo: 'corrigir', lote_id } | null.
+  function decide({ nome, dados }) {
+    return new Promise(resolve => {
+      $$('#dlgCad').forEach(d => d.remove());
+      const novoLote = dados.pergunta === 'novo_lote', cands = dados.candidatos || [];
+      const dlg = document.createElement('dialog');
+      dlg.id = 'dlgCad'; dlg.className = 'cad';
+      dlg.innerHTML = `<form method="dialog"><h2>${novoLote ? 'Produto novo neste endereço?' : 'Mesmo lote ou lote novo?'}</h2>
+        <p class="muted small" style="margin:4px 0 12px">${esc(nome || 'Produto')} · você bipou o lote <b>${esc(dados.lote)}</b>, validade <b>${esc(brData(dados.validade))}</b>, <b>${dados.total}</b> un${dados.endereco ? ' em ' + esc(dados.endereco) : ''}.</p>
+        ${novoLote ? '<p style="margin:0 0 6px">O app não tinha este produto neste endereço. Criar um lote novo com essa quantidade?</p>'
+    : `<p style="margin:0 0 6px">O app já tem este produto aqui. Se for o mesmo lote com o dado errado, é só corrigir: o saldo passa a ser o que você bipou.</p>
+        <div class="cad-lista" id="cadLista">${cands.map((l, i) => `<div class="cad-c"><div class="cad-n"><b>Lote ${esc(l.lote)} · val. ${esc(brData(l.validade))}</b><div class="xs muted">${l.qtd} un no app${l.endereco ? ' · ' + esc(l.endereco) : ''}</div></div><div class="cad-cb"><button type="button" class="sm" data-i="${i}">É o mesmo lote: corrigir</button></div></div>`).join('')}</div>`}
+        <menu><button type="button" id="cadNao">Agora não</button><button type="button" class="primary" id="cadNovo">${novoLote ? 'Criar lote novo' : 'É um lote novo'}</button></menu></form>`;
+      document.body.appendChild(dlg);
+      let feito = false;
+      const fim = v => { if (feito) return; feito = true; try { dlg.close(); } catch { /* já fechado */ } dlg.remove(); resolve(v); };
+      const lista = $('#cadLista', dlg);
+      if (lista) lista.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) fim({ modo: 'corrigir', lote_id: cands[+b.dataset.i].id }); });
+      $('#cadNovo', dlg).addEventListener('click', () => fim({ modo: 'novo' }));
+      $('#cadNao', dlg).addEventListener('click', () => fim(null));
+      dlg.addEventListener('cancel', e => { e.preventDefault(); fim(null); });
+      dlg.showModal();
+    });
+  }
+
+  return { abre, escolher, procura, decide };
 })();

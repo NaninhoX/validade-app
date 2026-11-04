@@ -140,9 +140,9 @@ test('demonstração: carrega uma vez, só em banco sem estoque, e tem EANs vál
 test('TXT para o sistema da loja: linha em branco e EAN;quantidade, somando lotes do mesmo EAN', async () => {
   await novoDb();
   const v = await CONF.abrir(db, { tipo: 'VALIDADE', operador: 'T', endereco: '3-A-1' });
-  await CONF.adicionarItem(db, v.id, { ean: '7891000000017', qtd: 2, lote: 'A', validade: '2030-01-01' }, 'T');
-  await CONF.adicionarItem(db, v.id, { ean: '7891000000017', qtd: 3, lote: 'B', validade: '2030-02-01' }, 'T');
-  await CONF.adicionarItem(db, v.id, { ean: '7891000000024', qtd: 1, lote: 'C', validade: '2030-03-01' }, 'T');
+  await CONF.adicionarItem(db, v.id, { ean: '7891000000017', qtd: 2, lote: 'A', validade: '2030-01-01', modo: 'novo' }, 'T');
+  await CONF.adicionarItem(db, v.id, { ean: '7891000000017', qtd: 3, lote: 'B', validade: '2030-02-01', modo: 'novo' }, 'T');
+  await CONF.adicionarItem(db, v.id, { ean: '7891000000024', qtd: 1, lote: 'C', validade: '2030-03-01', modo: 'novo' }, 'T');
   const r = await CONF.txtLoja(db, v.id);
   const linhas = r.__raw.body.toString('utf8').split('\r\n');
   assert.equal(linhas[0], ' ');

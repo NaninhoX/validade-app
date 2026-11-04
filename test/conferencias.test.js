@@ -83,33 +83,55 @@ test('EAN desconhecido pede o nome uma vez; depois fica cadastrado', async () =>
   assert.equal(r2.item.qtd, 2);
 });
 
-test('VALIDADE soma ean+lote+validade e lança no estoque; lote ou validade diferentes viram outra linha', async () => {
+test('VALIDADE só corrige: a quantidade bipada vira o saldo do lote e nunca cria estoque sem confirmar', async () => {
   const db = await novoDb();
-  const c = await CF.abrir(db, { tipo: 'VALIDADE', operador: 'ANA', endereco: '3-A-1' });
-  const val = mais(120);
-  const br = val.split('-').reverse().join('/');
-  await CF.adicionarItem(db, c.id, { client_id: 'v1', ean: EAN, lote: 'l1', validade: br }, 'ANA');
-  const r = await CF.adicionarItem(db, c.id, { client_id: 'v2', ean: EAN, lote: 'L1', validade: val, qtd: 5 }, 'ANA');
-  assert.deepEqual(r.avisos, []);                                    // mesmo lote e validade: sem aviso
-  await CF.adicionarItem(db, c.id, { client_id: 'v3', ean: EAN, lote: 'L2', validade: mais(200) }, 'ANA');
-  await assert.rejects(() => CF.adicionarItem(db, c.id, { client_id: 'v4', ean: EAN, lote: 'L3', validade: 'xx' }, 'ANA'), /validade inválida/);
-  await CF.adicionarItem(db, c.id, { client_id: 'v2', ean: EAN, lote: 'L1', validade: val, qtd: 5 }, 'ANA');   // repetido
-  const d = await CF.detalhe(db, c.id);
-  assert.deepEqual(d.itens.map(i => [i.lote, i.qtd, i.endereco]), [['L1', 6, '3-A-1'], ['L2', 1, '3-A-1']]);
-  const lotes = (await S.lotesAtivos(db)).filter(l => l.ean === EAN).sort((a, b) => a.lote.localeCompare(b.lote));
-  assert.deepEqual(lotes.map(l => [l.lote, l.qtd, l.endereco]), [['L1', 6, '3-A-1'], ['L2', 1, '3-A-1']]);
-  const ev = await db.all(`SELECT tipo, obs FROM eventos ORDER BY id`);
-  assert.equal(ev.length, 3);
-  assert.ok(ev.every(e => e.tipo === 'RECEBIMENTO' && e.obs === `Conferência #${c.id}`));
+  const val = mais(120), br = val.split('-').reverse().join('/');
+  const antes = await S.leitura(db, { tipo: 'RECEBIMENTO', ean: EAN, lote: 'L1', validade: val, endereco: '3-A-1', qtd: 10, operador: 'ANA' });
+  const nL = async () => (await S.lotesAtivos(db)).filter(l => l.ean === EAN).map(l => [l.lote, l.qtd, l.endereco]).sort();
+  const c = await CF.abrir(db, { tipo: 'VALIDADE', operador: 'BIA', endereco: '3-A-1' });
 
-  // corrigir o lote estorna o antigo e lança o novo; remover estorna tudo
-  await CF.editarItem(db, c.id, 'v1', { lote: 'L9', qtd: 4 }, 'ANA');
-  assert.deepEqual((await S.lotesAtivos(db)).filter(l => l.ean === EAN).map(l => [l.lote, l.qtd]).sort(), [['L2', 1], ['L9', 4]]);
+  // lote igual: a quantidade bipada vira o saldo (10 -> 1, depois 6), sem somar com o que o app tinha
+  let r = await CF.adicionarItem(db, c.id, { client_id: 'v1', ean: EAN, lote: 'l1', validade: br }, 'BIA');
+  assert.deepEqual(r.estoque, { acao: 'ajustado', antes: 10, depois: 1 });
+  r = await CF.adicionarItem(db, c.id, { client_id: 'v2', ean: EAN, lote: 'L1', validade: val, qtd: 5 }, 'BIA');
+  assert.deepEqual(await nL(), [['L1', 6, '3-A-1']]);
+  await CF.adicionarItem(db, c.id, { client_id: 'v2', ean: EAN, lote: 'L1', validade: val, qtd: 5 }, 'BIA');          // reenvio: nada muda
+  assert.deepEqual(await nL(), [['L1', 6, '3-A-1']]);
+  r = await CF.adicionarItem(db, c.id, { client_id: 'v5', ean: EAN, lote: 'L1', validade: val, qtd: 4 }, 'BIA');      // 6 + 4 = 10 lidos: confere com o que o app tinha
+  assert.deepEqual(r.estoque, { acao: 'ajustado', antes: 6, depois: 10 });
+
+  // outro lote ou outra validade no mesmo endereço: pergunta (409) e não lança nada
+  const sem = () => CF.adicionarItem(db, c.id, { client_id: 'v3', ean: EAN, lote: 'L2', validade: mais(200) }, 'BIA');
+  await assert.rejects(sem, e => e.status === 409 && e.dados.pergunta === 'lote_diferente' && e.dados.candidatos[0].lote === 'L1' && e.dados.candidatos[0].qtd === 10);
+  assert.deepEqual(await nL(), [['L1', 10, '3-A-1']]);
+  // é um lote novo (confirmado)
+  r = await CF.adicionarItem(db, c.id, { client_id: 'v3', ean: EAN, lote: 'L2', validade: mais(200), modo: 'novo' }, 'BIA');
+  assert.equal(r.estoque.acao, 'novo');
+  assert.deepEqual(await nL(), [['L1', 10, '3-A-1'], ['L2', 1, '3-A-1']]);
+  // é o mesmo lote com a validade corrigida: o antigo zera e o saldo vai para o corrigido
+  const l1 = (await S.lotesAtivos(db)).find(l => l.lote === 'L1');
+  r = await CF.adicionarItem(db, c.id, { client_id: 'v6', ean: EAN, lote: 'L1', validade: mais(150), qtd: 8, modo: 'corrigir', lote_id: l1.id }, 'BIA');
+  assert.equal(r.estoque.acao, 'corrigido');
+  assert.deepEqual(await nL(), [['L1', 8, '3-A-1'], ['L2', 1, '3-A-1']]);
+  assert.equal((await S.lotesAtivos(db)).filter(l => l.validade === val).length, 0);
+  // produto que não estava no endereço: pergunta antes de criar
+  await assert.rejects(() => CF.adicionarItem(db, c.id, { client_id: 'v7', ean: EAN2, lote: 'Z', validade: val }, 'BIA'), e => e.status === 409 && e.dados.pergunta === 'novo_lote');
+  await assert.rejects(() => CF.adicionarItem(db, c.id, { client_id: 'v4', ean: EAN, lote: 'L3', validade: 'xx' }, 'BIA'), /validade inválida/);
+
+  // corrigir a linha estorna e lança de novo; remover estorna tudo (volta ao que o app tinha)
+  await CF.editarItem(db, c.id, 'v3', { qtd: 4 }, 'BIA');
+  assert.deepEqual(await nL(), [['L1', 8, '3-A-1'], ['L2', 4, '3-A-1']]);
   await CF.removerItem(db, c.id, 'v3');
-  assert.deepEqual((await S.lotesAtivos(db)).filter(l => l.ean === EAN).map(l => [l.lote, l.qtd]), [['L9', 4]]);
-  // sem endereço também entra (sem_endereco)
+  assert.deepEqual(await nL(), [['L1', 8, '3-A-1']]);
+  await CF.removerItem(db, c.id, 'v6');
+  assert.deepEqual(await nL(), [['L1', 10, '3-A-1']]);
+  await CF.removerItem(db, c.id, 'v1');
+  assert.deepEqual(await nL(), [['L1', 10, '3-A-1']]);                                // tudo estornado: o app volta ao que tinha
+  assert.ok(antes.grupo);
+  // sem endereço também entra, depois de confirmar
   const c2 = await CF.abrir(db, { tipo: 'VALIDADE', operador: 'ANA' });
-  await CF.adicionarItem(db, c2.id, { client_id: 'w1', ean: EAN2, lote: '', validade: val }, 'ANA');
+  await assert.rejects(() => CF.adicionarItem(db, c2.id, { client_id: 'w0', ean: EAN2, lote: '', validade: val }, 'ANA'), e => e.status === 409);
+  await CF.adicionarItem(db, c2.id, { client_id: 'w1', ean: EAN2, lote: '', validade: val, modo: 'novo' }, 'ANA');
   assert.equal((await CF.detalhe(db, c2.id)).itens[0].lote, 'S/L');
 });
 
@@ -149,9 +171,9 @@ test('ordem alfabética (acento e caixa ignorados) na lista e no CSV, com BOM e 
   assert.equal(linhas[1], `${EAN3};Ácido Zeta;4;;;3-A-1`);
   // mesmo produto: lote e depois validade
   const v = await CF.abrir(db, { tipo: 'VALIDADE', operador: 'ANA' });
-  await CF.adicionarItem(db, v.id, { client_id: 'p1', ean: EAN, lote: 'B', validade: mais(100) }, 'ANA');
-  await CF.adicionarItem(db, v.id, { client_id: 'p2', ean: EAN, lote: 'A', validade: mais(200) }, 'ANA');
-  await CF.adicionarItem(db, v.id, { client_id: 'p3', ean: EAN, lote: 'A', validade: mais(100) }, 'ANA');
+  await CF.adicionarItem(db, v.id, { client_id: 'p1', ean: EAN, lote: 'B', validade: mais(100), modo: 'novo' }, 'ANA');
+  await CF.adicionarItem(db, v.id, { client_id: 'p2', ean: EAN, lote: 'A', validade: mais(200), modo: 'novo' }, 'ANA');
+  await CF.adicionarItem(db, v.id, { client_id: 'p3', ean: EAN, lote: 'A', validade: mais(100), modo: 'novo' }, 'ANA');
   assert.deepEqual((await CF.detalhe(db, v.id)).itens.map(i => [i.lote, i.validade]), [['A', mais(100)], ['A', mais(200)], ['B', mais(100)]]);
 });
 

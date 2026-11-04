@@ -53,7 +53,7 @@ async function api(path, opts = {}) {
     location.href = '/login?volta=' + encodeURIComponent(location.pathname + location.hash);
     return new Promise(() => {});
   }
-  if (!r.ok) { const e = new Error((data && data.erro) || `erro ${r.status}`); e.status = r.status; throw e; }
+  if (!r.ok) { const e = new Error((data && data.erro) || `erro ${r.status}`); e.status = r.status; e.dados = data; throw e; }
   return data;
 }
 

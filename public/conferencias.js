@@ -5,7 +5,7 @@
 const Conferencias = (() => {
   const TIPOS = {
     RECEBIMENTO: { nome: 'Recebimento', desc: 'Bipe o que chegou e some as quantidades. Só registra: não altera o estoque.' },
-    VALIDADE: { nome: 'Validade', desc: 'Bipe e informe lote e validade de cada produto. Entra no estoque e na fila FEFO.' },
+    VALIDADE: { nome: 'Validade', desc: 'Confira lote e validade do que está na prateleira. Só corrige o estoque: a quantidade bipada vira a do lote (não soma).' },
     CONTAGEM: { nome: 'Contagem', desc: 'Bipe e conte, com endereço opcional. Só registra: não altera o estoque.' },
     RONDA: { nome: 'Ronda do dia', desc: '' },
   };
@@ -35,6 +35,8 @@ const Conferencias = (() => {
   const recusadas = () => lsGet('confRecusadas', []);
   const salvaRecusadas = l => lsSet('confRecusadas', l);
   const pendDe = id => pendCad().filter(o => String(o.conf) === String(id));
+  const pendSemCad = id => pendDe(id).filter(o => !o.decisao);          // produto sem cadastro
+  const pendDecide = id => pendDe(id).filter(o => o.decisao);             // lote que não bate com o do app: espera a decisão
 
   // guarda a conferência aberta no aparelho (rascunho e índice): é o que deixa abrir, bipar e finalizar sem internet
   function salvaCache() {
@@ -81,6 +83,10 @@ const Conferencias = (() => {
           if (ativo && ativo.id === o.conf) {
             if (r.nome && o.body && o.body.ean) { ativo.nomes[o.body.ean] = r.nome; ativo.rows.filter(x => x.ean === o.body.ean).forEach(x => { x.nome = r.nome; }); }
             if (r.item && o.metodo === 'POST' && ativo.ultimo) ativo.ultimo.total = r.item.qtd;
+            if (r.estoque && o.metodo === 'POST' && r.item && r.item.qtd === o.body.qtd) {            // primeira leitura da linha: mostra o que mudou no estoque
+              if (r.estoque.acao === 'ajustado') toast(`Estoque ajustado: o app tinha ${r.estoque.antes} un., agora ${r.estoque.depois}`, '', 4500);
+              else if (r.estoque.acao === 'corrigido') toast(`Lote corrigido (era ${r.estoque.de.lote}, ${brData(r.estoque.de.validade)})`, 'ok', 4500);
+            }
             if (r.avisos && r.avisos.length) toast(r.avisos.join(' · '), '', 5000);
           }
         } catch (e) {
@@ -88,6 +94,8 @@ const Conferencias = (() => {
           salvaFila(fila().slice(1));
           if (e.status === 422 && o.metodo === 'POST' && o.body && !o.body.nome) {   // EAN novo: sai da fila (não trava as seguintes) e espera o cadastro
             const l = pendCad(); l.push(o); salvaPendCad(l);
+          } else if (e.status === 409 && e.dados && e.dados.pergunta && o.metodo === 'POST') {   // Validade: o lote não bate com o do app, espera a decisão
+            const l = pendCad(); l.push({ ...o, decisao: e.dados }); salvaPendCad(l);
           } else {
             const l = recusadas(); l.push({ o, motivo: e.message, em: Date.now() }); salvaRecusadas(l);
             toast(e.message, 'bad', 6000);
@@ -110,7 +118,7 @@ const Conferencias = (() => {
   async function cadastraPendentes() {
     const a = ativo;
     if (!a) return;
-    for (const ean of [...new Set(pendDe(a.id).map(o => o.body.ean))]) {
+    for (const ean of [...new Set(pendSemCad(a.id).map(o => o.body.ean))]) {
       const r = await CadProduto.abre({ ean });
       if (!r) continue;
       try {
@@ -119,7 +127,7 @@ const Conferencias = (() => {
         else if (r.tipo === 'erro') ean2 = r.para;
         const resto = [];
         for (const o of pendCad()) {
-          if (String(o.conf) !== String(a.id) || o.body.ean !== ean) { resto.push(o); continue; }
+          if (String(o.conf) !== String(a.id) || o.body.ean !== ean || o.decisao) { resto.push(o); continue; }
           if (r.tipo === 'novo') Object.assign(o.body, { nome: r.nome, marca: r.marca, preco: r.preco });
           o.body.ean = ean2; empilha(o);
         }
@@ -130,15 +138,38 @@ const Conferencias = (() => {
       } catch (e) { toast(e.message, 'bad', 6000); }
     }
     await drena();
+    await decidePendentes();
     if (ativo === a) { desenha(); if (!pendDe(a.id).length && !recusadas().some(x => String(x.o.conf) === String(a.id))) recarrega(); }
+  }
+  // Validade: decide, uma vez por lote, se o que foi bipado é o mesmo lote com dado corrigido ou um lote novo
+  async function decidePendentes() {
+    const a = ativo;
+    if (!a) return;
+    const chave = o => [o.body.ean, o.body.lote || '', o.body.validade || '', o.body.endereco || ''].join('|');
+    for (const k of [...new Set(pendDecide(a.id).map(chave))]) {
+      const primeira = pendDecide(a.id).find(o => chave(o) === k);
+      if (!primeira) continue;
+      const total = pendDecide(a.id).filter(o => chave(o) === k).reduce((s, o) => s + (o.body.qtd || 1), 0);
+      const r = await CadProduto.decide({ nome: nomeDe(primeira.body.ean), dados: { ...primeira.decisao, total } });
+      if (!r) continue;
+      const resto = [];
+      for (const o of pendCad()) {
+        if (!(String(o.conf) === String(a.id) && o.decisao && chave(o) === k)) { resto.push(o); continue; }
+        const { decisao, ...op } = o;
+        op.body = { ...op.body, modo: r.modo, lote_id: r.lote_id }; empilha(op);
+      }
+      salvaPendCad(resto);
+    }
+    await drena();
   }
   const tentaRecusadas = () => { const a = ativo; if (!a) return; const resto = []; for (const x of recusadas()) { if (String(x.o.conf) === String(a.id)) empilha(x.o); else resto.push(x); } salvaRecusadas(resto); drena(); };
   const descartaRecusadas = () => { const a = ativo; if (!a) return; salvaRecusadas(recusadas().filter(x => String(x.o.conf) !== String(a.id))); a.sujo = true; desenha(); recarrega(); };
   function alertas() {
     const el = $('#cfAlertas');
     if (!el || !ativo) return;
-    const pc = pendDe(ativo.id), rc = recusadas().filter(x => String(x.o.conf) === String(ativo.id)), eans = new Set(pc.map(o => o.body.ean)).size;
+    const pc = pendSemCad(ativo.id), pd = pendDecide(ativo.id), rc = recusadas().filter(x => String(x.o.conf) === String(ativo.id)), eans = new Set(pc.map(o => o.body.ean)).size;
     el.innerHTML = (pc.length ? `<div class="callout warn" style="margin-bottom:12px">${ico('alert')}<div><b>${pl(eans, 'produto sem cadastro', 'produtos sem cadastro')}</b> (${pl(pc.length, 'leitura', 'leituras')}). Enquanto não forem cadastrados, ${ativo.c.tipo === 'VALIDADE' ? 'nada disso entra no estoque' : 'a leitura não é registrada'}.<div style="margin-top:8px"><button class="sm primary" id="cfCad">Cadastrar agora</button></div></div></div>` : '')
+      + (pd.length ? `<div class="callout warn" style="margin-bottom:12px">${ico('alert')}<div><b>${pl(pd.length, 'leitura espera', 'leituras esperam')} a sua decisão</b>: o lote não bate com o que o app tem neste endereço. Nada foi alterado no estoque ainda.<div style="margin-top:8px"><button class="sm primary" id="cfDecide">Decidir agora</button></div></div></div>` : '')
       + (rc.length ? `<div class="callout warn" style="margin-bottom:12px">${ico('alert')}<div><b>${pl(rc.length, 'leitura recusada', 'leituras recusadas')}</b>: ${esc([...new Set(rc.map(x => x.motivo))].join(' · '))}.<div style="margin-top:8px"><button class="sm" id="cfRetry">Tentar de novo</button> <button class="sm subtle" id="cfDescarta">Descartar</button></div></div></div>` : '');
   }
 
@@ -215,6 +246,7 @@ const Conferencias = (() => {
     });
     $('#cfAlertas').addEventListener('click', e => {
       if (e.target.closest('#cfCad')) cadastraPendentes();
+      else if (e.target.closest('#cfDecide')) decidePendentes().then(() => { if (ativo) { desenha(); recarrega(); } });
       else if (e.target.closest('#cfRetry')) tentaRecusadas();
       else if (e.target.closest('#cfDescarta')) descartaRecusadas();
     });
@@ -423,8 +455,8 @@ const Conferencias = (() => {
     const itens = a.rows.reduce((s, r) => s + r.qtd, 0), eans = new Set(a.rows.map(r => r.ean)).size;
     if (!a.rows.length && !pendDe(a.id).length) { toast('Nenhum item lido', 'bad'); return; }
     if (pendDe(a.id).length) {
-      if (confirm(`Há ${pendDe(a.id).length} leitura(s) de produto(s) sem cadastro que ainda NÃO foram registradas.\n\nCadastrar agora?`)) await cadastraPendentes();
-      if (pendDe(a.id).length && !confirm('Ainda há leituras sem cadastro. Fechar mesmo assim? Elas não serão registradas.')) return;
+      if (confirm(`Há ${pendDe(a.id).length} leitura(s) esperando cadastro ou decisão que ainda NÃO foram registradas.\n\nResolver agora?`)) { await cadastraPendentes(); await decidePendentes(); }
+      if (pendDe(a.id).length && !confirm('Ainda há leituras sem resolver. Fechar mesmo assim? Elas não serão registradas nem alterarão o estoque.')) return;
     }
     if (!confirm(`Fechar a conferência de ${nomeTipo(a.c.tipo).toLowerCase()}?\n\n${pl(itens, 'item', 'itens')} em ${pl(eans, 'EAN', 'EANs')}. Depois de fechada não dá para alterar. Você poderá imprimir a lista em ordem alfabética.`)) return;
     if (navigator.onLine) {
@@ -555,7 +587,7 @@ const Conferencias = (() => {
     cameraAberta = true;
     try { await Scanner.abrir({ titulo: nomeTipo(tipo), aceitar: 'ean', continuo: { montar, aoLer } }); }
     catch (er) { toast(er.message, 'bad', 6000); }
-    finally { cameraAberta = false; desenha(); drena().then(() => { if (ativo && ativo.id === a.id && pendDe(a.id).length) cadastraPendentes(); }); }
+    finally { cameraAberta = false; desenha(); drena().then(async () => { if (ativo && ativo.id === a.id && pendDe(a.id).length) { await cadastraPendentes(); if (ativo && ativo.id === a.id) desenha(); } }); }
   }
 
   // ---------- lista ----------
