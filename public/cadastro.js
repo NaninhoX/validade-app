@@ -109,5 +109,35 @@ const CadProduto = (() => {
     });
   }
 
-  return { abre, escolher, procura, decide };
+  // Fechar o módulo (conferência de Validade): marca o que está no app e não foi bipado. Devolve { itens: [{ lote_id, acao }] } ou null (manter tudo).
+  function faltantes({ modulos }) {
+    return new Promise(resolve => {
+      $$('#dlgCad').forEach(d => d.remove());
+      const dlg = document.createElement('dialog');
+      dlg.id = 'dlgCad'; dlg.className = 'cad';
+      dlg.innerHTML = `<form method="dialog"><h2>Fechar o módulo</h2>
+        <p class="muted small" style="margin:4px 0 12px">Estes lotes estão no app, mas você não bipou. Marque os que não estão mais na prateleira.</p>
+        ${modulos.map(m => `<div class="cad-sec"><b>${esc(m.endereco)}</b> <span class="xs muted">· ${m.lidos} ${m.lidos === 1 ? 'linha conferida' : 'linhas conferidas'} · ${m.faltam.length} ${m.faltam.length === 1 ? 'não bipado' : 'não bipados'}</span>
+          <div class="cad-lista">${m.faltam.map(l => `<label class="cad-c fal"><input type="checkbox" data-id="${l.id}"><div class="cad-n"><b>${esc(l.nome || l.ean)}</b><div class="xs muted">lote ${esc(l.lote)} · val. ${esc(brData(l.validade))} · ${l.qtd} un</div></div></label>`).join('')}</div></div>`).join('')}
+        <div class="cad-sec"><label class="f" for="falAcao">O que aconteceu com os marcados?</label>
+          <select id="falAcao"><option value="nao_achei">Não encontrei na prateleira (zerar o saldo)</option><option value="vendido">Foram vendidos (baixa por Venda)</option></select></div>
+        <menu><button type="button" class="subtle" id="falTodos">Marcar todos</button><button type="button" id="cadNao">Manter tudo no estoque</button><button type="button" class="primary" id="falOk">Aplicar nos marcados</button></menu></form>`;
+      document.body.appendChild(dlg);
+      let feito = false;
+      const fim = v => { if (feito) return; feito = true; try { dlg.close(); } catch { /* já fechado */ } dlg.remove(); resolve(v); };
+      const caixas = () => $$('input[type=checkbox]', dlg);
+      $('#falTodos', dlg).addEventListener('click', () => { const todos = caixas().every(x => x.checked); caixas().forEach(x => { x.checked = !todos; }); });
+      $('#falOk', dlg).addEventListener('click', () => {
+        const marcados = caixas().filter(x => x.checked);
+        if (!marcados.length) { toast('Marque pelo menos um lote, ou escolha "Manter tudo no estoque"', 'bad', 3500); return; }
+        const acao = $('#falAcao', dlg).value;
+        fim({ itens: marcados.map(x => ({ lote_id: Number(x.dataset.id), acao })) });
+      });
+      $('#cadNao', dlg).addEventListener('click', () => fim(null));
+      dlg.addEventListener('cancel', e => { e.preventDefault(); fim(null); });
+      dlg.showModal();
+    });
+  }
+
+  return { abre, escolher, procura, decide, faltantes };
 })();

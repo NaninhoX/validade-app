@@ -21,7 +21,7 @@ const Mapa = (() => {
     risco: { nome: 'Risco', desc: 'valor em estoque que já está em alerta ou vencido', ramp: RISCO, leg: ['sem risco', 'alto risco'] },
     status: { nome: 'Validade', desc: 'pior status de validade presente', ramp: null },
     ocup: { nome: 'Ocupação', desc: 'quantidade de itens guardados', ramp: OCUP, leg: ['poucos itens', 'muitos itens'] },
-    ronda: { nome: 'Ronda', desc: 'há quantos dias o endereço foi contado', ramp: RISCO, leg: ['contado há pouco', 'sem contar há 60+ dias'] },
+    ronda: { nome: 'Conferência', desc: 'há quantos dias o módulo foi conferido (Validade ou contagem)', ramp: RISCO, leg: ['conferido há pouco', 'sem conferir há 60+ dias'] },
   };
 
   function maximos() {
@@ -912,7 +912,7 @@ const Mapa = (() => {
     return `<b>${esc(enderecoDe(id, c.chave))}</b> · ${esc(rotuloG(id))}${r ? ' · ' + esc(r) : ''}<br>${c.lotes} lote${c.lotes > 1 ? 's' : ''} · ${int(c.qtd)} ${c.qtd > 1 ? 'itens' : 'item'}${c.valor ? ' · ' + brl(c.valor) : ''}${c.risco ? '<br>Em risco ' + brl(c.risco) : ''}`
       + itens.map(i => `<br><span class="tip-i" style="--c:${esc(i.cor || '#888')}"></span>${esc((i.nome || i.ean).slice(0, 34))} · ${i.qtd} un · ${i.dias <= 0 ? 'vencido' : 'em ' + i.dias + ' d'}${i.tp && i.tp !== 'IMPORT' ? ' · ' + esc(i.por || '?') + ' ' + esc(quandoCurto(i.em).slice(0, 5)) : ''}`).join('')
       + (resto > 0 ? `<br><span class="faint">+ ${resto} lote${resto > 1 ? 's' : ''}</span>` : '')
-      + (c.dias_sem_ronda === null ? '<br>Nunca contada' : '<br>Ronda há ' + c.dias_sem_ronda + ' d');
+      + (c.dias_sem_ronda === null ? '<br>Nunca conferido' : '<br>Conferido há ' + c.dias_sem_ronda + ' d' + (c.ultima_por && c.ultima_por !== 'importação' ? ' por ' + esc(c.ultima_por) : ''));
   }
 
   function ligaPalco() {
@@ -942,7 +942,7 @@ const Mapa = (() => {
         const cel = e.target.closest('.mp-cel[data-chave]');
         const c = d && cel ? d.celulas.find(x => x.chave === cel.dataset.chave) : null;
         if (c) tip.innerHTML = tipCelula(id, c, r);
-        else tip.innerHTML = d ? `<b>${esc(rotuloG(id))}</b>${r ? ' · ' + esc(r) : ''}<br>${d.lotes} lotes · ${int(d.qtd)} itens<br>Valor ${brl(d.valor)}<br>${d.risco ? 'Em risco ' + brl(d.risco) + '<br>' : ''}Pior: ${esc(d.pior || '—')}${d.nunca_contada ? '<br>Nunca contada' : d.dias_sem_ronda !== null ? '<br>Ronda há ' + d.dias_sem_ronda + ' d' : ''}` : `<b>${esc(rotuloG(id))}</b><br>sem estoque`;
+        else tip.innerHTML = d ? `<b>${esc(rotuloG(id))}</b>${r ? ' · ' + esc(r) : ''}<br>${d.lotes} lotes · ${int(d.qtd)} itens<br>Valor ${brl(d.valor)}<br>${d.risco ? 'Em risco ' + brl(d.risco) + '<br>' : ''}Pior: ${esc(d.pior || '—')}${d.nunca_contada ? '<br>Nunca conferida' : d.dias_sem_ronda !== null ? '<br>Conferida há ' + d.dias_sem_ronda + ' d' : ''}` : `<b>${esc(rotuloG(id))}</b><br>sem estoque`;
         tip.style.left = Math.min(innerWidth - 250, e.clientX + 16) + 'px'; tip.style.top = (e.clientY + 16) + 'px'; tip.classList.add('on');
       });
       el.addEventListener('mouseleave', () => tip.classList.remove('on'));
@@ -1058,7 +1058,7 @@ const Mapa = (() => {
           <div class="fr-lin">${c.risco ? 'Em risco <b>' + brl(c.risco) + '</b>' : 'Sem risco'}</div>
           <div class="fr-bar" title="Lotes por status">${[...por].map(([st, x]) => `<i style="flex:${x.n};background:${esc(x.cor)}" title="${esc(st)}: ${x.n}"></i>`).join('')}</div>
           <div class="fr-chips">${c.vencidos ? `<span class="fr-c bad">${c.vencidos} vencido${c.vencidos > 1 ? 's' : ''}</span>` : ''}${c.criticos ? `<span class="fr-c warn">${c.criticos} ≤ 30 d</span>` : ''}${etq ? `<span class="fr-c tag">${etq} p/ etiquetar</span>` : ''}</div>
-          <div class="fr-lin xs">${c.dias_sem_ronda === null || c.dias_sem_ronda === undefined ? 'nunca contado' : 'ronda há ' + c.dias_sem_ronda + ' d'}</div>`;
+          <div class="fr-lin xs">${c.dias_sem_ronda === null || c.dias_sem_ronda === undefined ? 'nunca conferido' : 'conferido há ' + c.dias_sem_ronda + ' d'}</div>`;
       }
       return `<button class="fr-mod${sel ? ' sel' : ''}${c ? '' : ' vazia'}" ${c ? `data-chave="${esc(chave)}"` : 'disabled'} style="${c && !k.vazio ? `--hc:${k.bg};--hi:${k.ink}` : ''}" aria-label="${esc(enderecoDe(id, chave))}">
         <div class="fr-h"><b>${m}</b><span>${esc(nome || '')}</span></div>${corpo}</button>`;
@@ -1098,7 +1098,7 @@ const Mapa = (() => {
     return `<div class="card drawer">
       <div class="head" style="margin-bottom:10px"><div><h2 style="font-size:20px">${esc(rotuloG(g.id))}</h2><div class="sub">${g.lotes ? `${g.lotes} lotes · ${int(g.qtd)} itens · ${brl(g.valor)}` : 'sem estoque cadastrado'}</div></div>
         <button class="icon subtle" id="fecha" aria-label="Fechar">${ico('x')}</button></div>
-      ${g.risco ? `<div class="callout warn" style="margin-bottom:12px">${ico('flame')}<div><b>${brl(g.risco)}</b> em risco${g.vencidos ? ` · <b>${g.vencidos}</b> vencido${g.vencidos > 1 ? 's' : ''}` : ''}${g.nunca_contada ? ' · endereços ainda sem contagem' : g.dias_sem_ronda > 7 ? ` · ronda há ${g.dias_sem_ronda} dias` : ''}</div></div>` : ''}
+      ${g.risco ? `<div class="callout warn" style="margin-bottom:12px">${ico('flame')}<div><b>${brl(g.risco)}</b> em risco${g.vencidos ? ` · <b>${g.vencidos}</b> vencido${g.vencidos > 1 ? 's' : ''}` : ''}${g.nunca_contada ? ' · endereços ainda sem conferência' : g.dias_sem_ronda > 7 ? ` · conferida há ${g.dias_sem_ronda} dias` : ''}</div></div>` : ''}
       ${SACARIA(g.id) ? '' : `<div style="margin:0 0 10px"><button class="sm" id="vFrente">${ico('chevron')} Ver de frente (abaixo do mapa)</button></div>`}
       <h3 style="margin:2px 0 4px">Setores</h3>${lados.map(resumoLado).join('')}
       ${geral ? `<div style="margin-top:12px"><h3 style="margin-bottom:6px">Sem lado/prateleira definidos</h3><button class="shelf" data-chave="geral" style="--hc:${calor(geral, true).bg};--hi:${calor(geral, true).ink}"><span class="lv">?</span><span><span class="nm">${esc(geral.pior)}</span><br><span class="vl">${geral.lotes} lote${geral.lotes > 1 ? 's' : ''} · ${int(geral.qtd)} un</span></span><span class="vl"></span></button><p class="xs muted" style="margin-top:6px">Esses lotes estão só com o número da gôndola. Na próxima ronda, informe lado e prateleira (ex.: ${g.id}-A-1).</p></div>` : ''}

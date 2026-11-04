@@ -241,3 +241,31 @@ test('cartão Hoje conta conferências fechadas e auditorias do dia', async () =
   const h = await CF.hoje(db);
   assert.deepEqual([h.conferencias, h.abertas, h.auditorias, h.a_processar], [1, 0, 1, 1]);
 });
+
+test('fechar o módulo: lista o que o app tem e não foi bipado; "não achei" zera e "vendido" baixa; cada leitura marca o lote como conferido', async () => {
+  const db = await novoDb();
+  const val = mais(120);
+  for (const [ean, lote] of [[EAN, 'L1'], [EAN, 'L2'], [EAN2, 'M1'], [EAN3, 'N1']]) await S.leitura(db, { tipo: 'RECEBIMENTO', ean, lote, validade: val, endereco: '3-A-1', qtd: 4, operador: 'ANA' });
+  await S.leitura(db, { tipo: 'RECEBIMENTO', ean: EAN4, lote: 'Z', validade: val, endereco: '5-B-1', qtd: 2, operador: 'ANA' });   // outro endereço: não entra
+  const c = await CF.abrir(db, { tipo: 'VALIDADE', operador: 'BIA', endereco: '3-A-1' });
+  await CF.adicionarItem(db, c.id, { client_id: 'f1', ean: EAN, lote: 'L1', validade: val, qtd: 4 }, 'BIA');
+  await CF.adicionarItem(db, c.id, { client_id: 'f2', ean: EAN3, lote: 'N1', validade: val, qtd: 4 }, 'BIA');
+  const rastro = (await S.lotesAtivos(db, { rastro: true })).find(l => l.lote === 'L1');
+  assert.equal(rastro.conferido_por, 'BIA'); assert.ok(rastro.conferido_em);                      // lido: conferido; saldo igual: continua 4
+  assert.equal((await S.lotesAtivos(db, { rastro: true })).find(l => l.lote === 'L2').conferido_por, null);        // só recebido: nunca conferido
+  const f = await CF.faltantes(db, c.id);
+  assert.equal(f.modulos.length, 1);
+  assert.equal(f.modulos[0].endereco, '3-A-1'); assert.equal(f.modulos[0].lidos, 2);
+  assert.deepEqual(f.modulos[0].faltam.map(l => l.lote).sort(), ['L2', 'M1']);
+  const [l2, m1] = ['L2', 'M1'].map(n => f.modulos[0].faltam.find(l => l.lote === n));
+  const r = await CF.resolverFaltantes(db, c.id, { itens: [{ lote_id: l2.id, acao: 'nao_achei' }, { lote_id: m1.id, acao: 'vendido' }, { lote_id: 999999, acao: 'vendido' }] }, 'BIA');
+  assert.equal(r.resolvidos, 2);                                                                   // o que não é do módulo é ignorado
+  const ativos = (await S.lotesAtivos(db)).filter(l => l.endereco === '3-A-1').map(l => l.lote).sort();
+  assert.deepEqual(ativos, ['L1', 'N1']);
+  const ev = await db.all("SELECT tipo, motivo, delta FROM eventos WHERE obs LIKE ? ORDER BY id", ['%módulo 3-A-1 fechado%']);
+  assert.deepEqual(ev.map(e => [e.tipo, e.motivo, Number(e.delta)]), [['CONTAGEM', 'Validade: não achei', -4], ['BAIXA', 'Venda', -4]]);
+  assert.equal((await CF.faltantes(db, c.id)).modulos.length, 0);
+  await CF.resolverFaltantes(db, c.id, { itens: [{ lote_id: l2.id, acao: 'nao_achei' }] }, 'BIA');   // repetir não faz nada
+  const c2 = await CF.abrir(db, { tipo: 'CONTAGEM', operador: 'ANA' });
+  await assert.rejects(() => CF.faltantes(db, c2.id), /Só a conferência de Validade/);
+});

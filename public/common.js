@@ -179,5 +179,11 @@ function descEndereco(e) {
 const ROTULO_COLOCADO = { RECEBIMENTO: 'Recebido por', TRANSF_ENTRADA: 'Movido por', CONTAGEM: 'Contado por', AJUSTE: 'Ajustado por' };
 const quandoCurto = ts => { if (!ts) return ''; const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
 const colocadoTxt = (por, em, tipo) => (!tipo ? '' : tipo === 'IMPORT' ? 'Carga inicial da planilha' : `${ROTULO_COLOCADO[tipo] || 'Colocado por'} ${por || '?'} · ${quandoCurto(em)}`);
+// "conferido há X dias por Y" do lote (vem da última contagem)
+const confTxt = l => {
+  if (!l.conferido_em) return { txt: 'Nunca conferido', cls: 'nunca' };
+  const d = Math.max(0, Math.round((Date.now() - Date.parse(l.conferido_em)) / 864e5));
+  return { txt: 'Conferido ' + (d === 0 ? 'hoje' : 'há ' + d + ' d') + (l.conferido_por ? ' por ' + l.conferido_por : ''), cls: d > 60 ? 'velho' : 'ok' };
+};
 const pill = (status, cor) => `<span class="pill" style="--c:${esc(cor || '#6e6e73')}">${esc(status)}</span>`;
 const addr = (e, ok = true) => `<span class="addr${ok === false ? ' bad' : ''}" title="${esc(descEndereco(e) || 'fora do padrão')}">${esc(e || 'sem endereço')}</span>`;

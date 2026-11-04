@@ -741,3 +741,9 @@ dialog.cad { width: min(94vw, 540px); max-height: 92vh; overflow: auto; }
 .sel-ac { display: flex; gap: 6px; flex-wrap: wrap; }
 @media (max-width: 700px) { .solo-m { display: inline-flex; } .sel-bar { padding: 8px 12px; } .eg-l .eg-ck { display: none; } .selmodo .eg-l .eg-ck { display: inline-grid; } }
 @media (max-width: 700px) { #cardGrp > .head { flex-wrap: wrap; } #cardGrp > .head h2 { flex: 1 1 100%; } .eg-tools { flex-wrap: wrap; } }
+
+/* conferido em, e fechar o módulo */
+.eg-conf { display: block; font-size: 12px; color: var(--muted); }
+.eg-conf.ok { color: var(--good); } .eg-conf.velho { color: var(--warn); font-weight: 600; }
+.cad-c.fal { cursor: pointer; justify-content: flex-start; gap: 12px; }
+.cad-c.fal input { width: 18px; height: 18px; min-height: 0; padding: 0; flex: none; accent-color: var(--accent); }

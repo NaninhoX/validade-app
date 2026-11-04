@@ -463,6 +463,18 @@ const Conferencias = (() => {
       await drena();
       if (a.sujo) { await recarrega(); toast('Algumas leituras foram recusadas. Confira a lista e feche de novo.', 'bad', 6000); return; }
     }
+    if (a.c.tipo === 'VALIDADE') {                                        // fechar o módulo: o que o app tem ali e não foi bipado
+      const sid = idServidor(a.id);
+      if (sid && navigator.onLine && !temPend(a.id)) {
+        try {
+          const f = await api('/api/conferencias/' + sid + '/faltantes');
+          if (f.modulos.length) {
+            const r = await CadProduto.faltantes(f);
+            if (r) { const x = await api('/api/conferencias/' + sid + '/faltantes', { method: 'POST', body: { itens: r.itens, operador: op() } }); toast(pl(x.resolvidos, 'lote atualizado no estoque', 'lotes atualizados no estoque'), 'ok', 4000); }
+          }
+        } catch (er) { toast(er.message, 'bad', 5000); }
+      } else toast('Sem conexão: não deu para conferir o que ficou de fora do módulo. Isso só aparece com internet.', '', 6000);
+    }
     const ts = new Date().toISOString();
     empilha({ conf: a.id, metodo: 'POST', url: `/api/conferencias/${a.id}/fechar`, body: { operador: op(), ts } });
     a.c.fechada_em = ts; a.c.aberta = false; salvaCache();
