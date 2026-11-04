@@ -91,6 +91,7 @@
     const sem = d.aud && d.aud.semanas ? d.aud.semanas.filter(s => s.acuracia !== null) : [], ult = sem[sem.length - 1];
     const cel = (n, r, cls = '') => `<div class="tv-c ${cls}"><b>${int(n)}</b><span>${r}</span></div>`;
     return `<div class="tv-rotina">${cel(h.rondas, h.rondas === 1 ? 'ronda hoje' : 'rondas hoje')}${cel(h.conferencias, h.conferencias === 1 ? 'conferência' : 'conferências')}${cel(h.auditorias, h.auditorias === 1 ? 'auditoria' : 'auditorias')}${cel(h.a_processar || 0, 'a processar', h.a_processar ? 'warn' : '')}</div>
+      <div class="tv-conf">${d.resumo.cobertura ? `Cobertura de validade: <b>${String(d.resumo.cobertura.pct_valor).replace('.', ',')}%</b> do estoque conferido em ${d.resumo.cobertura.dias} dias${d.resumo.fila_conferencia && d.resumo.fila_conferencia[0] ? ' · próximo: <b>' + d.resumo.fila_conferencia[0].endereco + '</b>' : ''}` : ''}</div>
       <div class="tv-conf">${ult ? `Confiança dos dados: <b>${ult.acuracia.toLocaleString('pt-BR')}%</b> na última auditoria` : 'Confiança dos dados: ainda sem auditoria concluída'}</div>`;
   }
 

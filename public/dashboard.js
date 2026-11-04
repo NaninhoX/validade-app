@@ -130,6 +130,7 @@ PAGINAS.geral = async () => {
     ${kpi(2, 'Perda potencial', 'trend', t.perda_potencial, 'brl', 'se vender com o desconto da regra', '', '#f97316')}
     ${kpi(3, 'Perda potencial evitada', 'check', res.evitada.evitada, 'brl', res.evitada.evitada ? `acumulado desde o início · ${brl(res.evitada.ultimos.evitada)} em ${res.evitada.ultimos.dias} dias` : 'registre as vendas em Baixa → Venda', 'ok', '#16a34a')}
     ${kpi(4, 'Vencidos em loja', 'alert', por[0].lotes, 'int', por[0].lotes ? `${brl(por[0].valor)} para retirar` : 'nada vencido', por[0].lotes ? 'bad' : '', '#9f1239', tendHtml(res, 'vencido_lotes', { descerEBom: true, fmt: int, un: ' lotes' }))}
+    ${kpi(5, 'Cobertura de validade', 'clipboard', Math.round(res.cobertura.pct_valor), 'pct', `${res.cobertura.modulos_ok} de ${res.cobertura.modulos} módulos conferidos em ${res.cobertura.dias} dias`, res.cobertura.pct_valor >= 80 ? 'ok' : res.cobertura.pct_valor >= 40 ? '' : 'bad', res.cobertura.pct_valor >= 80 ? '#16a34a' : res.cobertura.pct_valor >= 40 ? '#f59e0b' : '#e11d48')}
   </div>
   <div class="grid cols-2" style="margin-top:18px">
     <div class="card reveal" style="--i:4"><div class="head"><h2>Validade do estoque</h2><span class="sub">toque numa fatia para filtrar</span></div>
@@ -139,6 +140,16 @@ PAGINAS.geral = async () => {
         <div class="seg" id="muroMet" role="group" aria-label="Medida do muro"><button data-met="qtd" aria-pressed="${muroMet() === 'qtd'}">Itens</button><button data-met="valor" aria-pressed="${muroMet() === 'valor'}">R$</button></div></div>
       <div class="xs muted" id="muroSub" style="margin:-6px 0 4px">${muroSub()}</div>
       <div class="muro" id="muro">${muroBarras()}</div></div>
+  </div>
+  <div class="grid cols-2" style="margin-top:18px">
+    <div class="card reveal" style="--i:5"><div class="head"><div><h2>Cobertura de validade</h2><div class="sub">estoque em módulos conferidos nos últimos ${res.cobertura.dias} dias · meta 100%</div></div></div>
+      <div style="display:flex;align-items:baseline;gap:10px"><b style="font:700 34px var(--font-display)">${String(res.cobertura.pct_valor).replace('.', ',')}%</b><span class="muted small">${brl(res.cobertura.valor_ok)} de ${brl(res.cobertura.valor)}</span></div>
+      <div class="meter" style="margin:8px 0 14px"><i style="width:${Math.min(100, res.cobertura.pct_valor)}%;--c:${res.cobertura.pct_valor >= 80 ? 'var(--good)' : res.cobertura.pct_valor >= 40 ? 'var(--warn)' : 'var(--bad)'}"></i></div>
+      ${res.cobertura_pessoas.length ? res.cobertura_pessoas.map(p => `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${esc((n => n.charAt(0) + n.slice(1).toLowerCase())(p.nome))} <span class="xs muted">${p.ok} de ${p.modulos} módulos</span></span><b class="num">${String(p.pct_valor).replace('.', ',')}%</b></div><div class="meter" style="margin-top:4px"><i style="width:${Math.min(100, p.pct_valor)}%"></i></div></div>`).join('') : '<p class="muted small">Defina os responsáveis dos setores em Configurações para ver a cobertura por pessoa.</p>'}</div>
+    <div class="card reveal" style="--i:6"><div class="head"><div><h2>Conferir hoje</h2><div class="sub">módulos que mais precisam, por valor × dias sem conferir</div></div><a href="#/mapa" class="small">Ver no mapa →</a></div>
+      <div id="filaConf">${res.fila_conferencia.length ? res.fila_conferencia.slice(0, 8).map(m => `<div class="row" style="grid-template-columns:auto minmax(0,1fr) auto"><span class="addr">${esc(m.endereco)}</span>
+        <div style="min-width:0"><div class="pname">${brlK(m.valor)} em ${m.lotes} ${m.lotes === 1 ? 'lote' : 'lotes'}</div><div class="xs muted">${m.dias === null ? 'nunca conferido' : 'conferido há ' + m.dias + ' d'}${m.resp.length ? ' · ' + esc(m.resp.map(n => n.charAt(0) + n.slice(1).toLowerCase()).join(', ')) : ''}</div></div>
+        <button class="sm" data-conf="${esc(m.endereco)}">Conferir</button></div>`).join('') : '<p class="muted">Tudo conferido nos últimos ' + res.cobertura.dias + ' dias.</p>'}</div></div>
   </div>
   <div class="grid cols-2" style="margin-top:18px">
     <div class="card reveal" style="--i:6"><div class="head"><h2>Fazer hoje</h2><a href="#/estoque" class="small">Ver estoque →</a></div>
@@ -175,7 +186,14 @@ PAGINAS.geral.ligar = () => {
   Causa.montaCard($('#cardCausas'));
   Auditoria.cartao($('#audCard'));
   Conferencias.cartaoHoje($('#hojeCard'));
-  $$('[data-count]').forEach(el => contar(el, +el.dataset.count, el.dataset.fmt === 'brl' ? brl : int));
+  $$('[data-count]').forEach(el => contar(el, +el.dataset.count, el.dataset.fmt === 'brl' ? brl : el.dataset.fmt === 'pct' ? n => int(n) + '%' : int));
+  const fc = $('#filaConf');
+  if (fc) fc.addEventListener('click', async e => {                       // começa uma conferência de Validade já no módulo escolhido
+    const b = e.target.closest('[data-conf]'); if (!b) return;
+    b.disabled = true;
+    try { const c = await api('/api/conferencias', { method: 'POST', body: { tipo: 'VALIDADE', operador: S.op, endereco: b.dataset.conf, client_id: uuid() } }); location.hash = '#/conferencia/' + c.id; }
+    catch (er) { b.disabled = false; toast(er.rede ? 'Sem internet: abra a conferência pela tela Conferências' : er.message, 'bad', 5000); }
+  });
   requestAnimationFrame(() => requestAnimationFrame(() => $$('.seg-arc').forEach(c => { c.style.strokeDasharray = `${c.dataset.len} ${c.dataset.c - c.dataset.len}`; })));
   $$('[data-status]').forEach(el => el.addEventListener('click', () => { location.hash = '#/estoque?status=' + encodeURIComponent(el.dataset.status); }));
   $$('.row[data-q]').forEach(el => el.addEventListener('click', () => { location.hash = '#/estoque?q=' + encodeURIComponent(el.dataset.q); }));

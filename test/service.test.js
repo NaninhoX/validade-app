@@ -651,3 +651,26 @@ test('filtro por quem colocou e por período', async () => {
   assert.deepEqual(S.filtraRastro(rows, { desde: '30', por: 'ANA' }).map(r => r.lote), ['L2']);
   assert.equal(S.filtraRastro(rows, {}).length, 2);
 });
+
+test('cobertura de validade e fila de módulos a conferir', async () => {
+  const db = await novoDb();
+  await db.run('DELETE FROM config');
+  const val = mais(120);
+  await S.leitura(db, { tipo: 'RECEBIMENTO', ean: '7891000000017', lote: 'A', validade: val, endereco: '3-A-1', qtd: 5, operador: 'T' });     // R$ 100
+  await S.leitura(db, { tipo: 'RECEBIMENTO', ean: '7891000000024', lote: 'B', validade: val, endereco: '3-A-2', qtd: 10, operador: 'T' });    // R$ 100
+  await S.leitura(db, { tipo: 'RECEBIMENTO', ean: '7891000000017', lote: 'C', validade: val, endereco: '4-B-1', qtd: 15, operador: 'T' });    // R$ 300
+  for (const nome of ['ANA', 'BIA']) await A.salvarUsuario(db, { nome, pin: '123456', papel: 'operador', ativo: true });
+  await S.setSetores(db, { 3: { A: { nome: 'Ração', resp: ['ANA'] } }, 4: { B: { nome: 'Acessórios', resp: ['BIA'] } } });
+  let r = await S.resumo(db);
+  assert.equal(r.cobertura.pct_valor, 0); assert.equal(r.cobertura.modulos, 3);                                  // nada conferido ainda
+  assert.equal(r.fila_conferencia[0].endereco, '4-B-1');                                                         // mais valor e nunca conferido: primeiro
+  assert.deepEqual(r.fila_conferencia[0].resp, ['BIA']);
+  const l = (await S.lotesAtivos(db)).find(x => x.lote === 'C');
+  await S.leitura(db, { tipo: 'CONTAGEM', lote_id: l.id, qtd: 15, motivo: 'Validade: conferido', operador: 'BIA' });
+  r = await S.resumo(db);
+  assert.equal(r.cobertura.modulos_ok, 1); assert.equal(r.cobertura.valor_ok, 300); assert.equal(r.cobertura.pct_valor, 60);   // 300 de 500
+  assert.deepEqual(r.fila_conferencia.map(x => x.endereco).sort(), ['3-A-1', '3-A-2']);
+  const bia = r.cobertura_pessoas.find(p => p.nome === 'BIA'), ana = r.cobertura_pessoas.find(p => p.nome === 'ANA');
+  assert.equal(bia.pct_valor, 100); assert.equal(ana.pct_valor, 0);
+  assert.equal(r.cobertura_pessoas[0].nome, 'ANA');                                                              // quem está mais atrás vem primeiro
+});
