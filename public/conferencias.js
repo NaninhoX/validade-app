@@ -55,8 +55,13 @@ const Conferencias = (() => {
     const cid = decodeURIComponent(String(o.url).split('/').pop());
     const l = pendCad(), i = l.findIndex(x => String(x.conf) === String(o.conf) && x.body && x.body.client_id === cid);
     if (i < 0) return false;
-    if (o.metodo === 'DELETE') l.splice(i, 1);
-    else for (const k of ['qtd', 'lote', 'validade', 'endereco']) if (o.body && o.body[k] !== undefined) l[i].body[k] = o.body[k];
+    // todas as leituras em espera da mesma linha (mesmo EAN/lote/validade/endereço) valem juntas
+    const b0 = l[i].body, mesma = x => String(x.conf) === String(o.conf) && x.body && ['ean', 'lote', 'validade', 'endereco'].every(k => (x.body[k] || '') === (b0[k] || ''));
+    if (o.metodo === 'DELETE') { for (let j = l.length - 1; j >= 0; j--) if (mesma(l[j])) l.splice(j, 1); }
+    else {
+      for (const k of ['qtd', 'lote', 'validade', 'endereco']) if (o.body && o.body[k] !== undefined) l[i].body[k] = o.body[k];
+      for (let j = l.length - 1; j > i; j--) if (mesma(l[j])) l.splice(j, 1);    // a quantidade editada já é o total da linha
+    }
     salvaPendCad(l);
     return true;
   }
@@ -99,8 +104,8 @@ const Conferencias = (() => {
           } else {
             const l = recusadas(); l.push({ o, motivo: e.message, em: Date.now() }); salvaRecusadas(l);
             toast(e.message, 'bad', 6000);
+            if (ativo && ativo.id === o.conf) ativo.sujo = true;           // só leitura recusada suja a lista (ir para a espera não é recusa)
           }
-          if (ativo && ativo.id === o.conf) ativo.sujo = true;
         }
         if (ativo) desenha();
       }

@@ -128,7 +128,7 @@ PAGINAS.geral = async () => {
     ${kpi(0, 'Valor em estoque', 'box', t.valor, 'brl', `${int(t.itens)} itens · ${t.lotes} lotes`, '', 'var(--accent)', tendHtml(res, 'valor_total', { descerEBom: null }))}
     ${kpi(1, 'Valor em risco', 'flame', t.valor_em_risco, 'brl', 'em alerta ou vencido', 'bad', '#e11d48', tendHtml(res, 'valor_risco', { descerEBom: true }))}
     ${kpi(2, 'Perda potencial', 'trend', t.perda_potencial, 'brl', 'se vender com o desconto da regra', '', '#f97316')}
-    ${kpi(3, 'Perda potencial evitada', 'check', res.evitada.evitada, 'brl', res.evitada.evitada ? `acumulado desde o início · ${brl(res.evitada.ultimos.evitada)} em ${res.evitada.ultimos.dias} dias` : 'registre as vendas em Baixa → Venda', 'ok', '#16a34a')}
+    ${kpi(3, 'Perda potencial evitada', 'check', res.evitada.evitada, 'brl', res.evitada.evitada ? `acumulado desde o início · ${brl(res.evitada.ultimos.evitada)} em ${res.evitada.ultimos.dias} dias${res.evitada.com_desconto && res.evitada.com_desconto.unidades ? ' · ' + res.evitada.com_desconto.unidades + ' un vendidas com desconto (' + brl(res.evitada.com_desconto.recuperado) + ' recuperados)' : ''}` : 'registre as vendas em Baixa → Venda', 'ok', '#16a34a')}
     ${kpi(4, 'Vencidos em loja', 'alert', por[0].lotes, 'int', por[0].lotes ? `${brl(por[0].valor)} para retirar` : 'nada vencido', por[0].lotes ? 'bad' : '', '#9f1239', tendHtml(res, 'vencido_lotes', { descerEBom: true, fmt: int, un: ' lotes' }))}
     ${kpi(5, 'Cobertura de validade', 'clipboard', Math.round(res.cobertura.pct_valor), 'pct', `${res.cobertura.modulos_ok} de ${res.cobertura.modulos} módulos conferidos em ${res.cobertura.dias} dias`, res.cobertura.pct_valor >= 80 ? 'ok' : res.cobertura.pct_valor >= 40 ? '' : 'bad', res.cobertura.pct_valor >= 80 ? '#16a34a' : res.cobertura.pct_valor >= 40 ? '#f59e0b' : '#e11d48')}
   </div>
@@ -191,7 +191,11 @@ PAGINAS.geral.ligar = () => {
   if (fc) fc.addEventListener('click', async e => {                       // começa uma conferência de Validade já no módulo escolhido
     const b = e.target.closest('[data-conf]'); if (!b) return;
     b.disabled = true;
-    try { const c = await api('/api/conferencias', { method: 'POST', body: { tipo: 'VALIDADE', operador: S.op, endereco: b.dataset.conf, client_id: uuid() } }); location.hash = '#/conferencia/' + c.id; }
+    try {
+      const abertas = await api('/api/conferencias?tipo=VALIDADE&limite=200');                     // já tem uma aberta neste módulo? continua nela
+      const ja = (Array.isArray(abertas) ? abertas : abertas.itens || []).find(x => x.aberta && x.endereco === b.dataset.conf);
+      if (ja) { location.hash = '#/conferencia/' + ja.id; return; }
+      const c = await api('/api/conferencias', { method: 'POST', body: { tipo: 'VALIDADE', operador: S.op, endereco: b.dataset.conf, client_id: uuid() } }); location.hash = '#/conferencia/' + c.id; }
     catch (er) { b.disabled = false; toast(er.rede ? 'Sem internet: abra a conferência pela tela Conferências' : er.message, 'bad', 5000); }
   });
   requestAnimationFrame(() => requestAnimationFrame(() => $$('.seg-arc').forEach(c => { c.style.strokeDasharray = `${c.dataset.len} ${c.dataset.c - c.dataset.len}`; })));

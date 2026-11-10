@@ -803,7 +803,7 @@ const Coletor = (() => {
       const b = e.target.closest('button[data-b]');
       if (!b) return;
       const l = window.__baixaLotes.find(x => x.id === +b.dataset.b);
-      CFG = CFG || await api('/api/config').catch(() => ({ motivos_baixa: ['Venda', 'RMA', 'Avaria', 'Furto', 'Retirada Preventiva', 'Doação', 'Outro'] }));
+      CFG = CFG || await api('/api/config').catch(() => ({ motivos_baixa: ['Venda', 'Liquidação', 'RMA', 'Avaria', 'Furto', 'Retirada Preventiva', 'Doação', 'Outro'] }));
       const d = await Causa.dialogoBaixa({ sub: `lote ${l.lote} · saldo ${l.qtd}`, saldo: l.qtd, motivos: CFG.motivos_baixa, vencido: l.dias <= 0 });
       if (!d) return;
       try {

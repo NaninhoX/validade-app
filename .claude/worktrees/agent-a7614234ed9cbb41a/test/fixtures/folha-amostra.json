@@ -1,0 +1,17 @@
+{
+  "_nota": "Transcrição manual de 7 linhas da foto de exemplo (folha FIFO, filial 52). A última tem EAN lido errado (dígito verificador não bate); a 4a repete o lote da 3a com a mesma validade.",
+  "hoje": "2026-05-29",
+  "linhas": [
+    { "data_lancamento": "29/05/26", "ean": "7908248300773", "lote": "0243", "validade": "10/09/27", "qtd": 2 },
+    { "data_lancamento": "", "ean": "7896181297840", "lote": "1130", "validade": "16/07/26", "qtd": 1 },
+    { "data_lancamento": "", "ean": "7896181297840", "lote": "1126", "validade": "16/07/26", "qtd": 1 },
+    { "data_lancamento": "", "ean": "7896181297840", "lote": "1126", "validade": "16/07/26", "qtd": 1 },
+    { "data_lancamento": "", "ean": "7896181299998", "lote": "1342", "validade": "16/11/26", "qtd": 1 },
+    { "data_lancamento": "", "ean": "7896181216797", "lote": "0046", "validade": "02/01/27", "qtd": 12 },
+    { "data_lancamento": "", "ean": "7896181210126", "lote": "0928", "validade": "15/04/27", "qtd": 1 }
+  ],
+  "catalogo": {
+    "7908248300773": "PRODUTO A", "7896181297840": "PRODUTO B", "7896181299998": "PRODUTO C",
+    "7896181216797": "PRODUTO D", "7896181210122": "PRODUTO E"
+  }
+}

@@ -45,11 +45,14 @@ const EstGrp = (() => {
   const renderUm = g => { const el = achaEl(g); if (el) { el.outerHTML = linhaG(g); marcaSel(); } };
 
   async function carrega(reset, limite = 50) {
+    if (reset) G.seq = (G.seq || 0) + 1;
+    const meu = G.seq || 0;
     if (reset) { G.offset = 0; G.grupos = []; $('#egBody').innerHTML = ''; }
     const p = new URLSearchParams({ agrupar: 1, offset: G.offset, limite });
     if (G.ordem) { p.set('ordem', G.ordem); p.set('dir', G.dir); }
     for (const k of ['q', 'status', 'gondola', 'marca', 'sempreco', 'por', 'desde']) if (E[k]) p.set(k, E[k]);
     const r = await api('/api/lotes?' + p);
+    if (meu !== (G.seq || 0)) return;                                  // chegou depois de uma busca mais nova: descarta
     preencheQuem(r.quem);
     G.total = r.total; G.totalLotes = r.total_lotes;
     if (reset && E.q && r.total <= 2) r.itens.forEach(g => G.abertos.add(g.ean));        // busca bem específica: já abre os lotes

@@ -1,0 +1,17 @@
+/* Importar folha (foto da folha FIFO) */
+.folha { display: grid; gap: 14px; max-width: 720px; margin: 0 auto; padding-bottom: 88px; }
+.folha-dicas { margin: 0 0 14px 18px; color: var(--ink-2); }
+.folha-foto { min-height: 52px; width: 100%; font-size: 16px; }
+.folha-linha.off { opacity: .7; }
+.folha-motivos { margin: 0 0 10px 18px; color: var(--ink-2); }
+.folha-motivos .erro { color: var(--bad); font-weight: 600; }
+.folha-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.folha-campos .field, .folha .field { margin: 0; }
+.folha input:not([type=checkbox]):not([type=file]) { min-height: 44px; width: 100%; }
+.folha-ok { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 12px; }
+.folha-ok input { width: 22px; height: 22px; min-height: 0; }
+.folha-oks summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+.folha-barra { position: sticky; bottom: 0; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg, #fff) 30%); }
+.folha-barra button { width: 100%; min-height: 52px; font-size: 16px; }
+.folha-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+@media (max-width: 420px) { .folha-campos { grid-template-columns: 1fr; } }

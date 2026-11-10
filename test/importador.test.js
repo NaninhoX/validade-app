@@ -297,3 +297,20 @@ test('migração: lotes marcados Vendido viram Venda no histórico, Descartado v
   assert.equal(depois.legado.lotes, 0);
   assert.equal((await baixarVendidos(db, {})).ja_feita, true);            // só roda uma vez
 });
+
+test('perda evitada: venda com desconto (liquidação) não conta como evitada; vai para "com desconto"', async () => {
+  const db = await open({ dir: 'memory://' });
+  await S.upsertProduto(db, { ean: '7891000100103', nome: 'Brinquedo', preco: 50, operador: 'T' });
+  const hoje = U.hojeISO();
+  const val = new Date(Date.parse(hoje + 'T12:00:00Z') + 5 * 864e5).toISOString().slice(0, 10);
+  await S.leitura(db, { tipo: 'RECEBIMENTO', ean: '7891000100103', lote: 'D1', validade: val, qtd: 10, endereco: '1-A-1', operador: 'T' });
+  const l = await db.get("SELECT id FROM lotes WHERE lote='D1'");
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: l.id, qtd: 2, motivo: 'Venda', operador: 'T' });
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: l.id, qtd: 3, motivo: 'Liquidação', operador: 'T' });
+  await S.leitura(db, { tipo: 'BAIXA', lote_id: l.id, qtd: 1, motivo: 'Liquidação', operador: 'T' });
+  const e = await S.evitada(db);
+  assert.equal(e.unidades, 6);
+  assert.equal(e.com_desconto.unidades, 4);
+  assert.ok(e.evitada > 0 && e.com_desconto.recuperado > 0 && e.com_desconto.desconto > 0);
+  await db.close();
+});

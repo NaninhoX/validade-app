@@ -1,0 +1,13 @@
+/* Causa da perda: chips grandes no diálogo de baixa e card "Por que perdemos" */
+.causa-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.causa-chip { min-height: 52px; white-space: normal; text-align: left; justify-content: flex-start; padding: 8px 14px; font-size: 15px; font-weight: 560; border-radius: 12px; }
+.causa-chip[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 650; }
+.field.invalido .causa-chip { border-color: var(--bad); }
+.causa-erro { color: var(--bad); font-size: 13.5px; font-weight: 560; margin: -4px 0 10px; }
+#dlgBaixa { width: min(94vw, 460px); }
+#dlgBaixa .field { margin-bottom: 14px; }
+@media (min-width: 520px) { .causa-grid { grid-template-columns: 1fr 1fr; } }
+.causa-linha { margin-bottom: 14px; }
+.causa-topo { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; margin-bottom: 6px; }
+.causa-linha .xs { margin-top: 4px; }
+.causa-linha.sem .meter i { background: var(--faint); }

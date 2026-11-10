@@ -4,7 +4,7 @@
 const Causa = (() => {
   const CAUSAS = ['Comprei demais', 'Giro baixo', 'Entrou com pouco prazo', 'Ficou escondido ou mal exposto', 'Etiqueta/promoção não feita a tempo', 'Outro'];
   const MOTIVOS_COM_CAUSA = ['RMA', 'Avaria', 'Retirada Preventiva'];
-  const MOTIVOS_PADRAO = ['Venda', 'RMA', 'Avaria', 'Furto', 'Retirada Preventiva', 'Doação', 'Outro'];
+  const MOTIVOS_PADRAO = ['Venda', 'Liquidação', 'RMA', 'Avaria', 'Furto', 'Retirada Preventiva', 'Doação', 'Outro'];
   const exige = motivo => MOTIVOS_COM_CAUSA.includes(motivo);
 
   function criaDialogo() {
