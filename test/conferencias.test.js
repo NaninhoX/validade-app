@@ -269,3 +269,18 @@ test('fechar o módulo: lista o que o app tem e não foi bipado; "não achei" ze
   const c2 = await CF.abrir(db, { tipo: 'CONTAGEM', operador: 'ANA' });
   await assert.rejects(() => CF.faltantes(db, c2.id), /Só a conferência de Validade/);
 });
+
+test('vários operadores na mesma conferência: leituras simultâneas somam, cada um aparece com o seu total', async () => {
+  const db = await novoDb();
+  const c = await CF.abrir(db, { tipo: 'contagem', operador: 'ANA' });
+  await Promise.all([
+    ...[1, 2, 3].map(i => CF.adicionarItem(db, c.id, { ean: EAN, qtd: 1, client_id: 'a' + i }, 'ANA')),
+    ...[1, 2].map(i => CF.adicionarItem(db, c.id, { ean: EAN, qtd: 1, client_id: 'b' + i }, 'BIA')),
+    CF.adicionarItem(db, c.id, { ean: EAN2, qtd: 4, client_id: 'c1' }, 'LEO'),
+  ]);
+  const d = await CF.detalhe(db, c.id);
+  const l1 = d.itens.find(i => i.ean === EAN);
+  assert.equal(l1.qtd, 5);
+  assert.deepEqual(l1.por, { ANA: 3, BIA: 2 });
+  assert.deepEqual(d.conferencia.participantes.map(p => [p.nome, p.itens]).sort(), [['ANA', 3], ['BIA', 2], ['LEO', 4]]);
+});

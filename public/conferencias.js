@@ -182,7 +182,25 @@ const Conferencias = (() => {
   const chaveLinha = x => [x.ean, x.lote || '', x.validade || '', x.endereco || ''].join('|');
 
   function paraLocal(d) {
-    return d.itens.map(i => ({ cid: i.client_id || String(i.id), id: i.id, ean: i.ean, nome: i.nome, qtd: i.qtd, lote: i.lote, validade: i.validade, endereco: i.endereco, esperado: i.esperado, t: Date.parse(i.atualizado_em || i.criado_em) || 0 }));
+    return d.itens.map(i => ({ cid: i.client_id || String(i.id), id: i.id, ean: i.ean, nome: i.nome, qtd: i.qtd, lote: i.lote, validade: i.validade, endereco: i.endereco, esperado: i.esperado, por: i.por || {}, t: Date.parse(i.atualizado_em || i.criado_em) || 0 }));
+  }
+
+  // Outras pessoas bipando na mesma conferência: a cada poucos segundos traz o que mudou, desde que este aparelho não tenha nada na fila
+  async function sincroniza() {
+    const a = ativo;
+    if (!a || !a.c.aberta || ehLocal(a.id) || document.hidden || !navigator.onLine || drenando) return;
+    if (fila().some(o => o.conf === a.id) || temPend(a.id)) return;
+    try {
+      const d = await api('/api/conferencias/' + a.id, { tentativas: 0 });
+      if (ativo !== a || fila().some(o => o.conf === a.id)) return;
+      const assina = rs => JSON.stringify(rs.map(r => [r.cid, r.qtd, r.lote, r.validade, r.endereco]));
+      if (d.conferencia.fechada_em) { toast('Esta conferência foi finalizada por outra pessoa.', '', 4000); setTimeout(() => location.reload(), 1500); a.c.aberta = false; return; }
+      const novas = paraLocal(d);
+      if (assina(novas) === assina(a.rows) && !d.conferencia.fechada_em === !!a.c.aberta) { a.c = d.conferencia; contador(); return; }
+      a.c = d.conferencia; a.rows = novas;
+      for (const r of a.rows) if (!r.nome) r.nome = nomeDe(r.ean);
+      desenha();
+    } catch { /* sem rede ou conferência apagada: segue com o que tem */ }
   }
 
   async function recarrega() {
@@ -219,7 +237,7 @@ const Conferencias = (() => {
     view.innerHTML = `<div class="cf cwrap" id="cf">
       <div class="card cf-head"><div class="cf-tit"><div><b>${esc(nomeTipo(c.tipo))}</b> <span class="muted">#${c.id} · ${esc(c.operador)}${c.nota ? ' · NF ' + esc(c.nota) : ''}</span></div>
         <span class="pill" id="cfEstado" style="--c:${estadoCor(c)}">${estadoTxt(c)}</span></div>
-        <div class="cf-cont" id="cfCont" aria-live="polite"></div>
+        <div class="cf-cont" id="cfCont" aria-live="polite"></div><div class="xs" id="cfEquipe"></div>
         <div class="cf-acoes">
           ${editavel ? `<button class="primary" id="cfFechar">${ico('check')} Fechar conferência</button><button class="sm subtle" id="cfApagar">Descartar</button>`
     : `<a class="btn primary" href="/conferencia?id=${c.id}" target="_blank" rel="noopener">${ico('printer')} Imprimir ou salvar em PDF</a><a class="btn" href="/api/conferencias/${c.id}.csv" download>${ico('download')} CSV</a><a class="btn" href="/api/conferencias/${c.id}.txt" download title="Primeira linha em branco e EAN;quantidade em cada linha, para o Importar de coletor do sistema da loja">TXT para o sistema da loja</a>${c.tipo !== 'RONDA' && !c.processada ? `<button id="cfProc">${ico('check')} Marcar como processada</button>` : ''}`}
@@ -243,6 +261,8 @@ const Conferencias = (() => {
 
     desenha();
     const relogio = setInterval(() => { if (!document.body.contains($('#cf')) || !ativo || ativo.id !== c.id) clearInterval(relogio); else contador(); }, 20000);
+    const sinc = setInterval(() => { if (!document.body.contains($('#cf')) || !ativo || ativo.id !== c.id) clearInterval(sinc); else sincroniza(); }, 6000);   // várias pessoas na mesma conferência
+    if (c.aberta && c.tipo !== 'RONDA' && String(c.operador).toUpperCase() !== String(op()).toUpperCase() && !ehLocal(c.id)) toast('Você entrou na conferência de ' + nomeCurto(c.operador) + '. As leituras de vocês se somam: combinem quem confere cada módulo.', '', 7000);
 
     $('#cfLista').addEventListener('click', e => {
       const ed = e.target.closest('[data-ed]'), del = e.target.closest('[data-del]');
@@ -307,11 +327,21 @@ const Conferencias = (() => {
     drena();
   }
 
+  const nomeCurto = n => String(n || '').charAt(0) + String(n || '').slice(1).toLowerCase();
+  // quem já bipou nesta conferência (soma por pessoa das linhas); com mais de uma pessoa aparece a equipe
+  function equipe() {
+    const t = new Map();
+    for (const r of ativo.rows) for (const [n, q] of Object.entries(r.por || {})) t.set(n, (t.get(n) || 0) + Number(q));
+    return [...t].map(([nome, itens]) => ({ nome, itens })).filter(p => p.itens > 0).sort((a, b) => b.itens - a.itens);
+  }
+
   function contador() {
     if (!ativo || !$('#cfCont')) return;
     const itens = ativo.rows.reduce((s, r) => s + r.qtd, 0), eans = new Set(ativo.rows.map(r => r.ean)).size;
     const min = ativo.c.aberta ? Math.max(0, Math.round((Date.now() - Date.parse(ativo.c.aberta_em)) / 60000)) : ativo.c.minutos;
     $('#cfCont').innerHTML = `<b>${int(itens)}</b> ${itens === 1 ? 'item' : 'itens'} · <b>${eans}</b> ${eans === 1 ? 'EAN' : 'EANs'} · <b>${min}</b> min`;
+    const eq = $('#cfEquipe');
+    if (eq) { const ps = equipe(); eq.innerHTML = ps.length > 1 ? 'Equipe: ' + ps.map(p => '<b>' + esc(nomeCurto(p.nome)) + '</b> ' + int(p.itens)).join(' · ') : ''; }
   }
 
   function desenha() {
@@ -323,13 +353,15 @@ const Conferencias = (() => {
     $('#cfSync').textContent = pend ? (navigator.onLine ? `Enviando ${pend}…` : `Sem conexão: ${pend} leitura(s) guardada(s) neste aparelho`) : '';
     const aberta = ativo.c.aberta && ativo.c.tipo !== 'RONDA';
     const lista = [...ativo.rows].sort((a, b) => b.t - a.t);
+    const varios = equipe().length > 1;
     const eRonda = ativo.c.tipo === 'RONDA';
     $('#cfN').textContent = lista.length ? pl(lista.length, 'linha', 'linhas') : '';
     $('#cfLista').innerHTML = lista.length ? lista.map(r => {
       const cls = r.esperado === null || r.esperado === undefined ? '' : r.qtd === r.esperado ? 'ok' : r.qtd > r.esperado ? 'mais' : 'menos';
       const diff = cls === '' ? '' : cls === 'ok' ? 'igual' : (r.qtd > r.esperado ? '+' : '−') + Math.abs(r.qtd - r.esperado);
       const partes = [r.ean, r.lote ? 'lote ' + esc(r.lote) : '', r.validade ? 'val. ' + brData(r.validade) : '', r.endereco ? esc(r.endereco) : '',
-        cls ? `${eRonda ? 'sistema' : 'esperado'} ${r.esperado}${diff === 'igual' ? '' : ' (' + diff + ')'}` : ''].filter(Boolean);
+        cls ? `${eRonda ? 'sistema' : 'esperado'} ${r.esperado}${diff === 'igual' ? '' : ' (' + diff + ')'}` : '',
+        varios ? Object.entries(r.por || {}).map(([n, q]) => esc(nomeCurto(n)) + ' ' + q).join(' + ') : ''].filter(Boolean);
       return `<div class="cf-item ${cls}">
         <div class="cf-info"><div class="cf-nome">${esc(r.nome || ativo.nomes[r.ean] || 'Produto ' + r.ean)}</div><div class="xs muted">${partes.join(' · ')}</div></div>
         ${aberta ? `<button class="cf-qtd" data-ed="${esc(r.cid)}" aria-label="Editar ${esc(r.nome || r.ean)}">${int(r.qtd)}</button><button class="icon subtle" data-del="${esc(r.cid)}" aria-label="Remover linha">${ico('x')}</button>`
