@@ -6,3 +6,7 @@ data/
 .vercel
 *.xlsx
 backups/
+
+.claude/worktrees/
+PRD DockFlow.pdf
+tower-control (1).html
