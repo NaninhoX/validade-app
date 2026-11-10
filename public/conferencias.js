@@ -223,7 +223,7 @@ const Conferencias = (() => {
         <div class="cf-acoes">
           ${editavel ? `<button class="primary" id="cfFechar">${ico('check')} Fechar conferência</button><button class="sm subtle" id="cfApagar">Descartar</button>`
     : `<a class="btn primary" href="/conferencia?id=${c.id}" target="_blank" rel="noopener">${ico('printer')} Imprimir ou salvar em PDF</a><a class="btn" href="/api/conferencias/${c.id}.csv" download>${ico('download')} CSV</a><a class="btn" href="/api/conferencias/${c.id}.txt" download title="Primeira linha em branco e EAN;quantidade em cada linha, para o Importar de coletor do sistema da loja">TXT para o sistema da loja</a>${c.tipo !== 'RONDA' && !c.processada ? `<button id="cfProc">${ico('check')} Marcar como processada</button>` : ''}`}
-        </div><div class="xs muted" id="cfSync">${c.processada ? `Processada${c.processada_por ? ' por ' + esc(c.processada_por) : ''} em ${dataBr(c.processada_em)} às ${hora(c.processada_em)}${c.min_ate_processar !== null ? ' (' + durTxt(c.min_ate_processar) + ' depois de finalizar)' : ''}` : ''}</div></div>
+        </div>${!editavel && c.tipo !== 'RONDA' ? `<div class="cf-barras" title="Bipe no PC, na tela Conferências, para abrir esta conferência"><div>${Barras.svg(codigoConferencia(c.id), { altura: 48 })}<div class="xs muted">${codigoConferencia(c.id)} · bipe no PC para abrir e baixar o TXT</div></div></div>` : ''}<div class="xs muted" id="cfSync">${c.processada ? `Processada${c.processada_por ? ' por ' + esc(c.processada_por) : ''} em ${dataBr(c.processada_em)} às ${hora(c.processada_em)}${c.min_ate_processar !== null ? ' (' + durTxt(c.min_ate_processar) + ' depois de finalizar)' : ''}` : ''}</div></div>
       <div id="cfAlertas"></div>
       ${c.tipo === 'RONDA' ? `<div class="callout" style="margin-bottom:14px">${ico('info')}<div>Resumo da ronda do dia${c.obs ? ': ' + esc(c.obs) : ''}. Mostra o que foi contado; “sistema” é o saldo antes da contagem. Somente leitura.</div></div>` : ''}
       ${editavel ? `
@@ -618,6 +618,7 @@ const Conferencias = (() => {
         <div class="f-wrap" id="cfNotaW" style="margin-top:14px"><label class="f" for="cfNota">Número da NF (opcional)</label><input id="cfNota" inputmode="numeric" autocomplete="off" maxlength="40"></div>
         <button class="primary big" id="cfComecar" disabled>Começar a bipar</button></div>
       <div class="off-prep"><button class="sm" id="offPrepC">${ico('download')} Preparar para o modo avião</button><span class="xs muted" id="offInfoC"></span></div>
+      <div class="cf-bipa"><label class="f" for="cfBipa">Bipar conferência</label><input id="cfBipa" autocomplete="off" inputmode="text" placeholder="Bipe o código da conferência com o leitor (ex.: CONF40)"><span class="xs muted" id="cfBipaMsg"></span></div>
       <div class="cf-barra"><button class="primary" id="cfNovo">${ico('plus')} Nova conferência</button>
         <select id="cfFTipo" aria-label="Tipo"><option value="">Todos os tipos</option>${Object.keys(TIPOS).map(t => `<option value="${t}" ${f.tipo === t ? 'selected' : ''}>${TIPOS[t].nome}</option>`).join('')}</select>
         <input type="date" id="cfFData" aria-label="Dia"><select id="cfFOp" aria-label="Operador"><option value="">Todos os operadores</option></select></div>
@@ -626,6 +627,16 @@ const Conferencias = (() => {
     $('#offPrepC').addEventListener('click', async () => { $('#offPrepC').disabled = true; await Offline.preparar(); $('#offPrepC').disabled = false; offInfo(); });
     offInfo();
     let tipoNovo = null;
+    const bipa = $('#cfBipa');
+    bipa.addEventListener('keydown', async e => {                       // o leitor digita o código e termina com Enter
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const m = /^\s*(?:CONF)?\s*(\d{1,9})\s*$/i.exec(bipa.value);
+      if (!m) { $('#cfBipaMsg').textContent = 'Código não reconhecido. Bipe o código CONF impresso na conferência.'; bipa.select(); return; }
+      try { await api('/api/conferencias/' + m[1]); location.hash = '#/conferencia/' + m[1]; }
+      catch (er) { $('#cfBipaMsg').textContent = er.status === 404 ? 'Conferência ' + m[1] + ' não encontrada.' : er.message; bipa.select(); }
+    });
+    if (matchMedia('(pointer: fine)').matches) bipa.focus();             // no PC o cursor já fica pronto para o leitor
     $('#cfNovo').addEventListener('click', () => { $('#cfNova').hidden = !$('#cfNova').hidden; });
     $('#cfNovaX').addEventListener('click', () => { $('#cfNova').hidden = true; });
     $('#cfTipos').addEventListener('click', e => {
