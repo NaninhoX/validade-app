@@ -831,3 +831,6 @@ dialog.cad { width: min(94vw, 540px); max-height: 92vh; overflow: auto; }
 .m3-aj input[type=checkbox] { width: 18px; height: 18px; min-height: 0; justify-self: start; accent-color: var(--accent); }
 .m3-aj b { text-align: right; font-variant-numeric: tabular-nums; font-size: 12.5px; }
 .m3-aj-teclas { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+.m3-m .m3-p { opacity: .75; }
+.m3-m { min-width: 120px; }

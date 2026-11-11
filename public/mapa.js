@@ -297,8 +297,9 @@ const Mapa = (() => {
       const N = (vx, vy) => (vert ? [-vy, vx] : [vx, vy]);
       const poe = (chave, lx, ly, lw, lh, n, curto, lado, baixa, pal) => {
         const c = chave && d ? d.celulas.find(z => z.chave === chave) : null, k = calor(c, true), tem = c && !k.vazio;
-        caixas.push({ ...W(lx, ly, lw, lh), z: (baixa ? 8 : pal ? 120 : alturaG) * e, cor: tem ? k.bg : null, tinta: tem ? k.ink : null, g: g.id, chave: c ? chave : null, n: N(n[0], n[1]),
-          sel: !!(M.shelf && M.shelf.g === g.id && M.shelf.chave === chave) || (!M.shelf && M.sel === g.id), curto, l1: c ? (c.pior || '') : '', l2: c ? `${c.lotes} lote${c.lotes > 1 ? 's' : ''} · ${k.txt}` : '',
+        caixas.push({ ...W(lx, ly, lw, lh), z: (baixa ? 8 : pal ? 120 : (cfgG(g.id).altura || alturaG)) * e, cor: tem ? k.bg : null, tinta: tem ? k.ink : null, g: g.id, chave: c ? chave : null, n: N(n[0], n[1]),
+          sel: !!(M.shelf && M.shelf.g === g.id && M.shelf.chave === chave) || (!M.shelf && M.sel === g.id), curto, l1: c ? (c.pior || '') : '', l2: c ? `${c.lotes} lote${c.lotes > 1 ? 's' : ''} · ${int(c.qtd)} un` : '',
+          l3: c ? [c.risco ? `Em risco ${brlK(c.risco)}` : (c.valor ? brlK(c.valor) : ''), c.dias_sem_ronda === null || c.dias_sem_ronda === undefined ? 'nunca conferido' : `conferido há ${c.dias_sem_ronda} d`].filter(Boolean).join(' · ') : '', l4: c && c.itens && c.itens[0] ? `1º: ${(c.itens[0].nome || c.itens[0].ean).slice(0, 26)} · ${c.itens[0].dias <= 0 ? 'vencido' : 'em ' + c.itens[0].dias + ' d'}` : '',
           dicaHtml: c ? tipCelula(g.id, c, lado ? respTxt(setor(g.id, lado)) : '') : '' });
       };
       if (gm.area) {
@@ -1228,6 +1229,7 @@ const Mapa = (() => {
             ${PE_PD(id) ? '' : `<div><label class="f" for="gFrente">Ponta da Frente</label><select id="gFrente"><option value="" ${!c.frente ? 'selected' : ''}>Automática</option><option value="E" ${c.frente === 'E' ? 'selected' : ''}>À esquerda</option><option value="D" ${c.frente === 'D' ? 'selected' : ''}>À direita</option></select></div>`}</div>
           <div><label class="f">Medidas desta gôndola (cm) <span class="muted">— vazio usa o padrão da loja</span></label>
             <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">${CAMPOS_DIM.map(([k, r]) => `<div><label class="xs muted" for="gd_${k}">${r}</label><input id="gd_${k}" data-dim="${k}" type="number" min="10" max="300" placeholder="${dim()[k]}" value="${(c.dim || {})[k] ?? ''}"></div>`).join('')}</div></div>
+          <div><label class="f" for="gAlt">Altura no 3D (cm) <span class="muted">— vazio usa a altura padrão (${(typeof Mapa3D !== 'undefined' && Mapa3D.cfg().gondola) || 220} cm). Ex.: bancada 120</span></label><input id="gAlt" type="number" min="20" max="400" placeholder="padrão" value="${c.altura ?? ''}"></div>
           <div><label class="f">Nome de cada módulo <span class="muted">(opcional, o módulo 1 fica junto da Frente)</span></label>
             ${lados.map(l => `<div class="xs muted" style="margin:8px 0 4px">${NOME_LADO[l]}</div><div class="nomes-mod">${Array.from({ length: n }, (_, i) => `<input data-nome="${l}-${i + 1}" placeholder="${i + 1}" maxlength="40" value="${esc(nomes[`${l}-${i + 1}`] || '')}" aria-label="Nome do módulo ${i + 1} do ${NOME_LADO[l]}">`).join('')}</div>`).join('')}</div>`;
       }
@@ -1343,6 +1345,7 @@ const Mapa = (() => {
       if (inp.value === '') delete c.dim[inp.dataset.dim]; else c.dim[inp.dataset.dim] = +inp.value;
       desenhaPalco();
     }));
+    const alt = $('#gAlt'); if (alt) alt.addEventListener('change', () => { if (alt.value === '') delete c.altura; else c.altura = Math.max(20, Math.min(400, +alt.value || 220)); });
     $$('[data-nome]').forEach(inp => inp.addEventListener('change', () => { c.nomes = c.nomes || {}; if (inp.value.trim()) c.nomes[inp.dataset.nome] = inp.value.trim(); else delete c.nomes[inp.dataset.nome]; }));
   }
 

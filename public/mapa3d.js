@@ -270,7 +270,7 @@ const Mapa3D = (() => {
       const c = [b.x + b.w / 2 + b.n[0] * b.w / 2, b.z * .56, b.y + b.h / 2 + b.n[1] * b.h / 2];
       const para = [olho[0] - c[0], olho[2] - c[2]], dist = Math.hypot(olho[0] - c[0], olho[1] - c[1], olho[2] - c[2]);
       const face = (para[0] * b.n[0] + para[1] * b.n[1]) / (Math.hypot(para[0], para[1]) || 1);
-      if (dist < perto && face > .2) lista.push({ el, c, dist }); else el.style.display = 'none';
+      if ((dist < perto && face > .2) || b === S.sobre) lista.push({ el, c, dist: b === S.sobre ? 0 : dist }); else el.style.display = 'none';
     });
     lista.sort((a, b) => a.dist - b.dist);
     lista.forEach((x, k) => {
@@ -286,7 +286,7 @@ const Mapa3D = (() => {
   function montaRotulos() {
     const sc = S.cena;
     S.cam.innerHTML = sc.gondolas.map(g => `<div class="m3-g"><b>${ESC(g.id)}</b>${g.nome ? `<span> · ${ESC(g.nome)}</span>` : ''}${g.tag ? `<i>${g.tag}</i>` : ''}${g.sub ? `<small>${ESC(g.sub)}</small>` : ''}</div>`).join('')
-      + sc.caixas.map(b => (b.chave && b.l1 ? `<div class="m3-m" style="--c:${ESC(b.cor || 'var(--heat-empty)')};--t:${ESC(b.tinta || '#111')}"><b>${ESC(b.curto)}</b><span>${ESC(b.l1)}</span><small>${ESC(b.l2 || '')}</small></div>` : '<div class="m3-m" hidden></div>')).join('');
+      + sc.caixas.map(b => (b.chave && b.l1 ? `<div class="m3-m" style="--c:${ESC(b.cor || 'var(--heat-empty)')};--t:${ESC(b.tinta || '#111')}"><b>${ESC(b.curto)}</b><span>${ESC(b.l1)}</span><small>${ESC(b.l2 || '')}</small>${b.l3 ? `<small>${ESC(b.l3)}</small>` : ''}${b.l4 ? `<small class="m3-p">${ESC(b.l4)}</small>` : ''}</div>` : '<div class="m3-m" hidden></div>')).join('');
     const filhos = [...S.cam.children];
     S.rg = filhos.slice(0, sc.gondolas.length);
     S.rm = filhos.slice(sc.gondolas.length).map(el => (el.hidden ? null : el));
@@ -368,7 +368,7 @@ const Mapa3D = (() => {
     });
     cv.addEventListener('keyup', e => { S.teclas.delete(e.key.toLowerCase()); });
     cv.addEventListener('blur', () => S.teclas.clear());
-    cv.addEventListener('pointerleave', () => { if (S.sobre) { S.sobre = null; geometria(); pede(); } S.dica.hidden = true; });
+    cv.addEventListener('pointerleave', () => { if (S.sobre) { S.sobre = null; geometria(); pede(); } });
     S.barra.addEventListener('click', e => {
       const b = e.target.closest('[data-a]'); if (!b) return;
       const a = b.dataset.a;
@@ -430,8 +430,6 @@ const Mapa3D = (() => {
     const a = acerta(e.clientX, e.clientY), b = a.caixa && a.caixa.chave ? a.caixa : null;
     if (b !== S.sobre) { S.sobre = b; geometria(); pede(); }
     S.cv.style.cursor = b ? 'pointer' : '';
-    const d = S.dica;
-    if (b && b.dicaHtml) { const r = S.host.getBoundingClientRect(); d.innerHTML = b.dicaHtml; d.hidden = false; d.style.left = Math.min(r.width - 250, e.clientX - r.left + 16) + 'px'; d.style.top = Math.max(8, e.clientY - r.top + 16) + 'px'; } else d.hidden = true;
   }
   const preso = () => document.pointerLockElement === S.cv;
   function clique(e) {
