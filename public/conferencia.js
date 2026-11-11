@@ -25,7 +25,7 @@
   const fim = c.fechada_em ? hr(c.fechada_em) : 'em andamento';
   $('#folha').innerHTML = `
     <header><div><h1>Conferência de ${esc((nomeTipo[c.tipo] || c.tipo).toLowerCase())} · AP52 São Pedro</h1><div style="color:#364a68">Lista em ordem alfabética do produto${c.aberta ? ' · conferência ainda aberta' : ''}</div></div>
-      <div class="d"><b>${dt(c.aberta_em)}</b><br>Conferência nº ${c.id}${c.tipo !== 'RONDA' ? '<br>' + Barras.svg(codigoConferencia(c.id), { altura: 40, modulo: 1.5 }) : ''}</div></header>
+      <div class="d"><b>${dt(c.aberta_em)}</b><br>Conferência nº ${c.id}</div></header>
     <div class="info">
       <div><small>Tipo</small><b>${esc(nomeTipo[c.tipo] || c.tipo)}</b></div>
       <div><small>Operador</small><b>${esc(c.operador)}</b></div>

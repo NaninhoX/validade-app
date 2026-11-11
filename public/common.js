@@ -188,18 +188,3 @@ const confTxt = l => {
 const pill = (status, cor) => `<span class="pill" style="--c:${esc(cor || '#6e6e73')}">${esc(status)}</span>`;
 const addr = (e, ok = true) => `<span class="addr${ok === false ? ' bad' : ''}" title="${esc(descEndereco(e) || 'fora do padrão')}">${esc(e || 'sem endereço')}</span>`;
 
-// Código de barras Code 128 (conjunto B) em SVG, sem biblioteca. Serve para o leitor do PC "digitar" o texto.
-const Barras = (() => {
-  const P = '212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232 2331112'.split(' ');
-  const codigos = t => { const v = [104]; for (const ch of t) { const n = ch.charCodeAt(0) - 32; if (n < 0 || n > 94) throw new Error('caractere fora do Code 128B'); v.push(n); }
-    v.push(v.reduce((s, x, i) => s + (i ? x * i : x), 0) % 103); v.push(106); return v; };
-  function svg(texto, { altura = 56, modulo = 2 } = {}) {
-    const larg = codigos(String(texto)).map(v => P[v]).join('');
-    let x = 10 * modulo, barras = '';                                   // 10 módulos de margem clara de cada lado
-    for (let i = 0; i < larg.length; i++) { const w = +larg[i] * modulo; if (i % 2 === 0) barras += `<rect x="${x}" y="0" width="${w}" height="${altura}"/>`; x += w; }
-    const total = x + 10 * modulo;
-    return `<svg class="barras" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${altura}" width="${total}" height="${altura}" role="img" aria-label="Código de barras ${esc(texto)}"><rect width="${total}" height="${altura}" fill="#fff"/><g fill="#000">${barras}</g></svg>`;
-  }
-  return { svg, codigos, P };
-})();
-const codigoConferencia = id => 'CONF' + id;

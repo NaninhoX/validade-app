@@ -29,8 +29,5 @@
 .hoje-c { display: grid; justify-items: center; gap: 2px; padding: 10px 6px; border-radius: 12px; background: var(--surface-2); color: inherit; }
 .hoje-c b { font: 700 28px var(--font-display); letter-spacing: -.02em; }
 
-.cf-barras { margin-top: 4px; }
-.cf-barras .barras { display: block; max-width: 100%; height: auto; border-radius: 4px; }
-.cf-barras .xs { margin-top: 4px; }
 .cf-bipa { display: grid; gap: 4px; }
 .cf-bipa input { width: 100%; }
