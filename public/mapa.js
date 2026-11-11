@@ -299,6 +299,16 @@ const Mapa = (() => {
       <div class="fr-its">${c.itens.slice(0, 6).map(it => `<div class="fr-it"><i style="background:${esc(it.cor || '#888')}"></i><span>${esc((it.nome || it.ean).slice(0, 30))}</span><b>${it.dias <= 0 ? 'vencido' : it.dias + ' d'}</b><small>${it.qtd} un</small></div>`).join('')}${c.itens.length > 6 ? `<div class="fr-mais">+ ${c.itens.length - 6} lote${c.itens.length - 6 > 1 ? 's' : ''}</div>` : ''}</div>
       <div class="fr-lin xs fr-conf">${c.dias_sem_ronda === null || c.dias_sem_ronda === undefined ? 'nunca conferido' : 'conferido há ' + c.dias_sem_ronda + ' d' + (c.ultima_por && c.ultima_por !== 'importação' ? ' · ' + esc(c.ultima_por) : '')}</div>`;
   }
+  // dados do que é escrito na face do módulo (desenhado como textura no 3D, colado na geometria)
+  function dadosFace(c, num, nome, tipo) {
+    const base = { tipo, num, nome, vazio: !c };
+    if (!c) return base;
+    const por = new Map();
+    for (const it of c.itens) { const x = por.get(it.status) || { cor: it.cor, n: 0 }; x.n++; por.set(it.status, x); }
+    return { ...base, st: c.pior, lotes: c.lotes, qtd: c.qtd, risco: c.risco ? brl(c.risco) : '', venc: c.vencidos || 0, crit: c.criticos || 0, etq: c.itens.filter(it => it.etiquetar).length,
+      barra: [...por.values()], itens: c.itens.slice(0, 10).map(it => ({ cor: it.cor || '#888', nome: it.nome || it.ean, dias: it.dias, qtd: it.qtd })), mais: Math.max(0, c.itens.length - 10),
+      conf: c.dias_sem_ronda === null || c.dias_sem_ronda === undefined ? 'nunca conferido' : 'conferido há ' + c.dias_sem_ronda + ' d' + (c.ultima_por && c.ultima_por !== 'importação' ? ' · ' + c.ultima_por : '') };
+  }
   // Time-lapse: "e daqui a N dias?" — reclassifica os lotes do módulo com o prazo menor
   function celulaEm(c, n) {
     if (!c || !n) return c;
@@ -341,7 +351,7 @@ const Mapa = (() => {
         caixas.push({ ...W(lx, ly, lw, lh), z: (baixa ? 8 : pal ? 120 : (cfgG(g.id).altura || alturaG)) * e, cor: tem ? k.bg : null, tinta: tem ? k.ink : null, g: g.id, chave: c ? chave : null, n: N(n[0], n[1]),
           sel: !!(M.shelf && M.shelf.g === g.id && M.shelf.chave === chave) || (!M.shelf && M.sel === g.id), curto, l1: c ? (c.pior || '') : '', l2: c ? `${c.lotes} lote${c.lotes > 1 ? 's' : ''} · ${int(c.qtd)} un` : '',
           l3: c ? [c.risco ? `Em risco ${brlK(c.risco)}` : (c.valor ? brlK(c.valor) : ''), c.dias_sem_ronda === null || c.dias_sem_ronda === undefined ? 'nunca conferido' : `conferido há ${c.dias_sem_ronda} d`].filter(Boolean).join(' · ') : '', l4: c && c.itens && c.itens[0] ? `1º: ${(c.itens[0].nome || c.itens[0].ean).slice(0, 26)} · ${c.itens[0].dias <= 0 ? 'vencido' : 'em ' + c.itens[0].dias + ' d'}` : '',
-          dicaHtml: '', face: lado === 'A' || lado === 'B' ? { num: curto.slice(1), nome: (cfgG(g.id).nomes || {})[chave] || '', corpo: corpoFace(c), vazio: !c } : null });
+          dicaHtml: '', face: baixa ? null : dadosFace(c, curto, (cfgG(g.id).nomes || {})[chave] || '', pal ? 'pallet' : lado === 'A' || lado === 'B' ? 'modulo' : 'ponta') });
       };
       if (gm.area) {
         poe('geral', 0, 0, gm.L, gm.T, [0, 1], rotuloG(g.id), 'P', true);

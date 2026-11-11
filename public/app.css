@@ -835,12 +835,6 @@ dialog.cad { width: min(94vw, 540px); max-height: 92vh; overflow: auto; }
 .m3-m .m3-p { opacity: .75; }
 .m3-m { min-width: 120px; }
 
-/* cartão colado na face do módulo (mesmo desenho da vista de frente) */
-.m3-face.fr-mod { position: absolute; left: 0; top: 0; width: 280px; height: 214px; min-width: 0; min-height: 0; flex: none; transform-origin: 0 0; padding: 14px 16px; gap: 7px; overflow: hidden; pointer-events: none; will-change: transform; background: var(--hc, var(--heat-empty)); color: var(--hi, var(--ink)); border: 0; border-radius: 10px; box-shadow: none; }
-.m3-face .fr-h b { font-size: 30px; } .m3-face .fr-h span { font-size: 14px; } .m3-face .fr-st { font-size: 24px; } .m3-face .fr-lin { font-size: 16px; } .m3-face .fr-c { font-size: 14px; padding: 3px 10px; } .m3-face .fr-bar { height: 11px; }
-.m3-face.vazia { background: var(--heat-empty); color: var(--faint); border: 2px dashed var(--line-2); }
-.m3-face.sel { outline: 4px solid var(--accent); outline-offset: -4px; }
-
 .tl3 { display: inline-flex; align-items: center; gap: 8px; padding: 0 10px; min-height: 34px; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface); }
 .tl3 input[type=range] { width: 120px; min-height: 0; padding: 0; accent-color: var(--accent); }
 .tl3 b { min-width: 38px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
@@ -848,14 +842,3 @@ dialog.cad { width: min(94vw, 540px); max-height: 92vh; overflow: auto; }
 .m3-rt { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 6px; padding: 3px 9px 3px 4px; border-radius: 999px; background: var(--accent); color: var(--accent-ink, #fff); box-shadow: var(--shadow-2); white-space: nowrap; will-change: transform; }
 .m3-rt b { display: grid; place-items: center; min-width: 22px; height: 22px; border-radius: 50%; background: rgba(255, 255, 255, .92); color: #111; font: 700 12px var(--font-display); }
 .m3-rt span { font: 600 11.5px var(--font); } .m3-rt.longe span { display: none; }
-
-/* cartão na face: a altura toda do módulo é usada; com espaço sobrando entram os produtos do módulo */
-.m3-face.fr-mod { display: flex; flex-direction: column; }
-.m3-face .fr-its { display: none; }
-.m3-face.alto .fr-its { display: flex; flex-direction: column; gap: 5px; flex: 1 1 auto; min-height: 0; overflow: hidden; margin-top: 4px; padding-top: 8px; border-top: 1.5px solid rgba(0, 0, 0, .18); }
-.m3-face .fr-it { display: grid; grid-template-columns: 11px minmax(0, 1fr) auto; column-gap: 8px; align-items: center; font-size: 14px; line-height: 1.2; }
-.m3-face .fr-it i { width: 11px; height: 11px; border-radius: 50%; }
-.m3-face .fr-it span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.m3-face .fr-it b { font-size: 13.5px; } .m3-face .fr-it small { grid-column: 2 / 4; font-size: 12px; opacity: .8; margin-top: -2px; }
-.m3-face .fr-mais { font-size: 13px; opacity: .8; font-weight: 600; }
-.m3-face .fr-conf { margin-top: auto; font-size: 14px; font-weight: 600; opacity: .9; }

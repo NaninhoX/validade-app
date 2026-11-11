@@ -64,6 +64,122 @@ const Mapa3D = (() => {
     return { p, a: { p: gl.getAttribLocation(p, 'p'), n: gl.getAttribLocation(p, 'n'), c: gl.getAttribLocation(p, 'c') }, u: { m: gl.getUniformLocation(p, 'm'), luz: gl.getUniformLocation(p, 'luz'), fundo: gl.getUniformLocation(p, 'fundo'), nevoa: gl.getUniformLocation(p, 'nevoa') } };
   }
 
+  const VS2 = 'attribute vec3 p;attribute vec2 uv;uniform mat4 m;varying vec2 vuv;varying float vd;void main(){vuv=uv;gl_Position=m*vec4(p,1.);vd=gl_Position.w;}';
+  const FS2 = 'precision mediump float;varying vec2 vuv;varying float vd;uniform sampler2D tex;uniform float lum;uniform vec3 fundo;uniform float nevoa;void main(){float f=clamp(vd/nevoa,0.,1.);gl_FragColor=vec4(mix(texture2D(tex,vuv).rgb*lum,fundo,f*f*.85),1.);}';
+  function programaTex(gl) {
+    const sh = (tipo, src) => { const s = gl.createShader(tipo); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, VS2)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, FS2)); gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    return { p, a: { p: gl.getAttribLocation(p, 'p'), uv: gl.getAttribLocation(p, 'uv') }, u: { m: gl.getUniformLocation(p, 'm'), tex: gl.getUniformLocation(p, 'tex'), lum: gl.getUniformLocation(p, 'lum'), fundo: gl.getUniformLocation(p, 'fundo'), nevoa: gl.getUniformLocation(p, 'nevoa') } };
+  }
+
+  // ---------- o que vai escrito na face: desenhado num canvas 2D e usado como textura (fica colado no módulo, sem atraso ao mover) ----------
+  const FONTE = () => getComputedStyle(document.body).fontFamily || 'Segoe UI, sans-serif';
+  function ajusta(ctx, txt, larg) { if (ctx.measureText(txt).width <= larg) return txt; let s = txt; while (s.length > 1 && ctx.measureText(s + '…').width > larg) s = s.slice(0, -1); return s + '…'; }
+  function cartao(b, W, H) {
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const c = cv.getContext('2d'), f = b.face, s = W / 280, fam = FONTE(), pad = 16 * s;
+    const bg = b.cor || (S.tema.escuro ? 'rgb(58,58,60)' : 'rgb(225,225,228)'), ink = b.cor ? (b.tinta || '#111') : (S.tema.escuro ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.5)');
+    c.fillStyle = bg; c.fillRect(0, 0, W, H);
+    c.textBaseline = 'alphabetic'; c.fillStyle = ink;
+    const fonte = (px, peso = 400) => { c.font = peso + ' ' + Math.round(px * s) + 'px ' + fam; };
+    let y = pad;
+    // cabeçalho: número (ou letra da ponta) e nome do módulo
+    fonte(f.tipo === 'modulo' ? 38 : 34, 700); y += 34 * s; c.textAlign = 'left'; c.fillText(ajusta(c, f.num, W * .4), pad, y);
+    if (f.nome) { fonte(14, 600); c.textAlign = 'right'; c.fillText(ajusta(c, f.nome, W * .5), W - pad, y); c.textAlign = 'left'; }
+    if (f.vazio) { fonte(18, 600); c.textAlign = 'center'; c.globalAlpha = .65; c.fillText('sem lotes', W / 2, H / 2); c.globalAlpha = 1; return cv; }
+    y += 14 * s; fonte(f.tipo === 'ponta' ? 22 : 26, 700); y += 26 * s; c.fillText(ajusta(c, f.st, W - 2 * pad), pad, y);
+    fonte(16); y += 28 * s; c.fillText(ajusta(c, f.lotes + (f.lotes > 1 ? ' lotes' : ' lote') + ' · ' + f.qtd + ' un', W - 2 * pad), pad, y);
+    y += 24 * s; c.fillText(ajusta(c, f.risco ? 'Em risco ' + f.risco : 'Sem risco', W - 2 * pad), pad, y);
+    // barra de lotes por status
+    y += 14 * s; const total = f.barra.reduce((a, x) => a + x.n, 0) || 1; let bx = pad; const bw = W - 2 * pad, bh = 11 * s;
+    c.save(); c.beginPath(); c.roundRect ? c.roundRect(pad, y, bw, bh, bh / 2) : c.rect(pad, y, bw, bh); c.clip(); c.fillStyle = 'rgba(0,0,0,.18)'; c.fillRect(pad, y, bw, bh);
+    for (const x of f.barra) { const w = bw * x.n / total; c.fillStyle = x.cor; c.fillRect(bx, y, Math.max(w, 3 * s), bh); bx += w; } c.restore();
+    // selos
+    y += bh + 12 * s;
+    const selos = [f.venc ? [f.venc + (f.venc > 1 ? ' vencidos' : ' vencido'), '#b4132e'] : null, f.crit ? [f.crit + ' ≤ 30 d', '#14161a'] : null, f.etq ? [f.etq + ' p/ etiquetar', '#14161a'] : null].filter(Boolean);
+    let sx = pad; fonte(13, 700);
+    for (const [txt, cor] of selos) {
+      const w = c.measureText(txt).width + 20 * s; if (sx + w > W - pad && sx > pad) { sx = pad; y += 28 * s; }
+      c.fillStyle = 'rgba(255,255,255,.88)'; c.beginPath(); c.roundRect ? c.roundRect(sx, y, w, 22 * s, 11 * s) : c.rect(sx, y, w, 22 * s); c.fill();
+      c.fillStyle = cor; c.fillText(txt, sx + 10 * s, y + 16 * s); sx += w + 6 * s;
+    }
+    if (selos.length) y += 30 * s;
+    // produtos do módulo, enquanto couber na altura
+    const rodape = H - pad - 4 * s, linha = 34 * s;
+    c.fillStyle = ink; c.globalAlpha = .35; c.fillRect(pad, y, W - 2 * pad, 1.5 * s); c.globalAlpha = 1; y += 8 * s;
+    let n = 0;
+    for (const it of f.itens) {
+      if (y + linha > rodape - 24 * s) break;
+      c.fillStyle = it.cor; c.beginPath(); c.arc(pad + 5 * s, y + 11 * s, 5 * s, 0, 6.283); c.fill();
+      c.fillStyle = ink; fonte(14, 600); c.textAlign = 'right'; const dias = it.dias <= 0 ? 'vencido' : it.dias + ' d'; c.fillText(dias, W - pad, y + 15 * s);
+      const dw = c.measureText(dias).width; c.textAlign = 'left'; c.fillText(ajusta(c, it.nome, W - 2 * pad - 20 * s - dw), pad + 16 * s, y + 15 * s);
+      fonte(12); c.globalAlpha = .8; c.fillText(it.qtd + ' un', pad + 16 * s, y + 29 * s); c.globalAlpha = 1;
+      y += linha; n++;
+    }
+    const resto = f.mais + (f.itens.length - n);
+    if (resto > 0 && y + 18 * s < rodape) { fonte(13, 600); c.globalAlpha = .8; c.fillText('+ ' + resto + (resto > 1 ? ' lotes' : ' lote'), pad, y + 14 * s); c.globalAlpha = 1; }
+    fonte(14, 600); c.globalAlpha = .9; c.fillText(ajusta(c, f.conf, W - 2 * pad), pad, H - pad); c.globalAlpha = 1;
+    return cv;
+  }
+  // a textura de cada face é criada quando ela chega perto e fica numa lista curta (as mais antigas saem)
+  function texturaDe(i, b, W, H) {
+    let e = S.tex.get(i);
+    if (e) { S.tex.delete(i); S.tex.set(i, e); return e; }
+    const gl = S.gl, tx = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tx);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cartao(b, W, H));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    e = { tx }; S.tex.set(i, e);
+    while (S.tex.size > 44) { const k = S.tex.keys().next().value, v = S.tex.get(k); gl.deleteTexture(v.tx); S.tex.delete(k); }
+    return e;
+  }
+  function limpaTexturas() { if (!S || !S.tex) return; for (const v of S.tex.values()) S.gl.deleteTexture(v.tx); S.tex.clear(); }
+  // desenha as faces escritas: só as que estão de frente para a câmera e perto o bastante para ler
+  function desenhaFaces(longe) {
+    const gl = S.gl, sc = S.cena, olho = S.pose.olho, e = sc.e, P2 = S.prog2, luzv = norm([.45, .8, .35]);
+    const alcance = (S.modo === 'andar' ? 1100 : 1500) * e, cand = [];
+    sc.caixas.forEach((b, i) => {
+      if (!b.face) return;
+      const top = b.face.tipo === 'pallet';
+      let cx, cz, face;
+      if (top) { cx = b.x + b.w / 2; cz = b.y + b.h / 2; face = olho[1] > b.z ? 1 : -1; }
+      else { cx = b.x + b.w / 2 + b.n[0] * b.w / 2; cz = b.y + b.h / 2 + b.n[1] * b.h / 2; const pa = [olho[0] - cx, olho[2] - cz]; face = (pa[0] * b.n[0] + pa[1] * b.n[1]) / (Math.hypot(pa[0], pa[1]) || 1); }
+      const dist = Math.hypot(olho[0] - cx, olho[1] - (top ? b.z : b.z * .5), olho[2] - cz);
+      if (face < .06 || dist > alcance) return;
+      cand.push({ b, i, dist });
+    });
+    cand.sort((a, c) => a.dist - c.dist);
+    gl.useProgram(P2.p);
+    gl.uniformMatrix4fv(P2.u.m, false, new Float32Array(S.mvp)); gl.uniform3fv(P2.u.fundo, S.tema.fundo); gl.uniform1f(P2.u.nevoa, longe * (S.modo === 'andar' ? .22 : .9)); gl.uniform1i(P2.u.tex, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-2, -2);
+    gl.bindBuffer(gl.ARRAY_BUFFER, S.bufQ);
+    gl.enableVertexAttribArray(P2.a.p); gl.vertexAttribPointer(P2.a.p, 3, gl.FLOAT, false, 20, 0); gl.enableVertexAttribArray(P2.a.uv); gl.vertexAttribPointer(P2.a.uv, 2, gl.FLOAT, false, 20, 12);
+    for (const { b, i } of cand.slice(0, 40)) {
+      const top = b.face.tipo === 'pallet', larg = top ? b.w : (b.n[1] ? b.w : b.h), alto = top ? b.h : b.z;
+      const W = 384, H = Math.round(Math.max(200, Math.min(820, W * alto / larg)));
+      const tx = texturaDe(i, b, W, H).tx;
+      let TL, TR, BR, BL;
+      if (top) { const y = b.z; TL = [b.x, y, b.y]; TR = [b.x + b.w, y, b.y]; BR = [b.x + b.w, y, b.y + b.h]; BL = [b.x, y, b.y + b.h]; }
+      else {
+        const nx = b.n[0], nz = b.n[1], rx = nz, rz = -nx;                       // "direita" de quem olha a face de frente
+        const ox = nz > 0 ? b.x : nz < 0 ? b.x + b.w : nx > 0 ? b.x + b.w : b.x, oz = nz > 0 ? b.y + b.h : nz < 0 ? b.y : nx > 0 ? b.y + b.h : b.y;
+        const ax = ox + rx * larg, az = oz + rz * larg;
+        TL = [ox, b.z, oz]; TR = [ax, b.z, az]; BR = [ax, 0, az]; BL = [ox, 0, oz];
+      }
+      const v = new Float32Array([...TL, 0, 0, ...TR, 1, 0, ...BR, 1, 1, ...TL, 0, 0, ...BR, 1, 1, ...BL, 0, 1]);
+      gl.bufferData(gl.ARRAY_BUFFER, v, gl.DYNAMIC_DRAW);
+      gl.bindTexture(gl.TEXTURE_2D, tx);
+      const n3 = top ? [0, 1, 0] : [b.n[0], 0, b.n[1]];
+      gl.uniform1f(P2.u.lum, (.5 + .5 * Math.max(dot(n3, luzv), 0) + .12 * n3[1]) * (b === S.sobre ? 1.1 : 1));
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.useProgram(S.prog.p);
+  }
+
   // triângulos das caixas e do chão; linhas da grade, do contorno e da seleção
   function geometria() {
     const sc = S.cena, t = S.tema, T = [], Ln = [];
@@ -281,6 +397,7 @@ const Mapa3D = (() => {
     gl.uniform3fv(S.prog.u.luz, norm([.45, .8, .35])); gl.uniform3fv(S.prog.u.fundo, f); gl.uniform1f(S.prog.u.nevoa, longe * (S.modo === 'andar' ? .22 : .9));
     const liga = buf => { gl.bindBuffer(gl.ARRAY_BUFFER, buf); const a = S.prog.a; gl.enableVertexAttribArray(a.p); gl.vertexAttribPointer(a.p, 3, gl.FLOAT, false, 36, 0); gl.enableVertexAttribArray(a.n); gl.vertexAttribPointer(a.n, 3, gl.FLOAT, false, 36, 12); gl.enableVertexAttribArray(a.c); gl.vertexAttribPointer(a.c, 3, gl.FLOAT, false, 36, 24); };
     liga(S.bufT); gl.drawArrays(gl.TRIANGLES, 0, S.nT);
+    desenhaFaces(longe);
     liga(S.bufL); gl.drawArrays(gl.LINES, 0, S.nL);
     rotulos();
     if (S.tw || segue) pede();
@@ -305,55 +422,13 @@ const Mapa3D = (() => {
       el.classList.toggle('longe', t[2] > Math.hypot(sc.largura, sc.altura) * 1.15);
     });
     (sc.rota || []).forEach((p, i) => { const el = S.rr[i], t = el && tela([p.x, 12 * e, p.z]); if (!el) return; if (!dentro(t)) { el.style.display = 'none'; return; } el.style.display = ''; el.style.transform = `translate(${t[0].toFixed(1)}px, ${t[1].toFixed(1)}px) translate(-50%, -50%)`; el.classList.toggle('longe', t[2] > Math.hypot(sc.largura, sc.altura) * 1.1); });
-    // módulos: os mais próximos virados para a câmera; os de lado A/B ganham o cartão colado na própria face
-    const perto = S.modo === 'andar' ? 700 * e : 600 * e, lista = [], faces = [];
-    sc.caixas.forEach((b, i) => {
-      const el = S.rm[i]; if (!el) return;
-      if (b.face) {
-        const sul = b.n[1] > 0, x0 = sul ? b.x : b.x + b.w, dx = sul ? 1 : -1, zf = sul ? b.y + b.h : b.y;
-        const yT = b.z * .94, yB = b.z * .1, P = [[x0, yT], [x0 + dx * b.w, yT], [x0 + dx * b.w, yB], [x0, yB]].map(q => [q[0], q[1], zf]);
-        const cx = b.x + b.w / 2, cz = zf, dist = Math.hypot(olho[0] - cx, olho[1] - b.z * .5, olho[2] - cz);
-        const para = [olho[0] - cx, olho[2] - cz], face = (para[0] * b.n[0] + para[1] * b.n[1]) / (Math.hypot(para[0], para[1]) || 1);
-        if (face < .12 || dist > perto * 2.2) { el.style.display = 'none'; return; }
-        const pts = P.map(q => tela(q));
-        if (pts.some(q => !q)) { el.style.display = 'none'; return; }
-        const larg = Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]);
-        if (larg < 90 || larg > W * 6) { el.style.display = 'none'; return; }
-        faces.push({ el, b, pts, dist, centro: [cx, b.z * .5, cz], larg });
-        return;
-      }
-      const c = [b.x + b.w / 2 + b.n[0] * b.w / 2, b.z * .56, b.y + b.h / 2 + b.n[1] * b.h / 2];
-      const para = [olho[0] - c[0], olho[2] - c[2]], dist = Math.hypot(olho[0] - c[0], olho[1] - c[1], olho[2] - c[2]);
-      const face = (para[0] * b.n[0] + para[1] * b.n[1]) / (Math.hypot(para[0], para[1]) || 1);
-      if ((dist < perto && face > .2) || b === S.sobre) lista.push({ el, c, dist: b === S.sobre ? 0 : dist }); else el.style.display = 'none';
-    });
-    faces.sort((a, b) => a.dist - b.dist);
-    faces.forEach((f, k) => {
-      let ok = k < 16;
-      if (ok) { const d = sub(f.centro, olho), L = Math.hypot(d[0], d[1], d[2]); ok = !bloqueio(olho, mul(d, 1 / L), L - 2 * e, f.b); }   // atrás de outra gôndola: não mostra
-      if (!ok) { f.el.style.display = 'none'; return; }
-      const hCard = Math.round(Math.max(214, Math.min(640, 280 * (f.b.z * .84) / f.b.w)));
-      const m = matrizFace(280, hCard, f.pts);
-      if (f.el.dataset.h !== String(hCard)) { f.el.dataset.h = String(hCard); f.el.style.height = hCard + 'px'; f.el.classList.toggle('alto', hCard > 330); }
-      if (!m) { f.el.style.display = 'none'; return; }
-      f.el.style.display = ''; f.el.style.transform = m; f.el.style.zIndex = String(60 - k);
-      f.el.classList.toggle('sel', !!f.b.sel);
-    });
-    lista.sort((a, b) => a.dist - b.dist);
-    lista.forEach((x, k) => {
-      const t = k < 12 ? tela(x.c) : null;
-      if (!dentro(t)) { x.el.style.display = 'none'; return; }
-      const esc_ = lim(260 * e / x.dist * (H / 520), .55, 1.15);
-      x.el.style.display = ''; x.el.style.zIndex = String(100 - k);
-      x.el.style.transform = `translate(${t[0].toFixed(1)}px, ${t[1].toFixed(1)}px) translate(-50%, -50%) scale(${esc_.toFixed(2)})`;
-    });
   }
 
   const ESC = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   function montaRotulos() {
     const sc = S.cena;
     S.cam.innerHTML = sc.gondolas.map(g => `<div class="m3-g"><b>${ESC(g.id)}</b>${g.nome ? `<span> · ${ESC(g.nome)}</span>` : ''}${g.tag ? `<i>${g.tag}</i>` : ''}${g.sub ? `<small>${ESC(g.sub)}</small>` : ''}</div>`).join('')
-      + sc.caixas.map(b => (b.face ? `<div class="m3-face fr-mod${b.face.vazio ? ' vazia' : ''}" style="--hc:${ESC(b.cor || 'var(--heat-empty)')};--hi:${ESC(b.tinta || '#111')}"><div class="fr-h"><b>${ESC(b.face.num)}</b><span>${ESC(b.face.nome)}</span></div>${b.face.corpo}</div>` : b.chave && b.l1 ? `<div class="m3-m" style="--c:${ESC(b.cor || 'var(--heat-empty)')};--t:${ESC(b.tinta || '#111')}"><b>${ESC(b.curto)}</b><span>${ESC(b.l1)}</span><small>${ESC(b.l2 || '')}</small>${b.l3 ? `<small>${ESC(b.l3)}</small>` : ''}${b.l4 ? `<small class="m3-p">${ESC(b.l4)}</small>` : ''}</div>` : '<div class="m3-m" hidden></div>')).join('');
+      ;
     S.cam.insertAdjacentHTML('beforeend', (sc.rota || []).map(p => `<div class="m3-rt" title="${ESC(p.end)}"><b>${p.n}</b><span>${ESC(p.end)}</span></div>`).join(''));
     S.rr = [...S.cam.querySelectorAll('.m3-rt')];
     const filhos = [...S.cam.children].filter(el => !el.classList.contains('m3-rt'));
@@ -523,7 +598,7 @@ const Mapa3D = (() => {
     const cv = host.querySelector('canvas'), gl = cv.getContext('webgl', { antialias: true, alpha: false });
     if (!gl) { host.innerHTML = ''; return false; }
     try {
-      S = { host, cv, gl, cam: host.querySelector('.m3-rot'), barra: host.querySelector('.m3-barra'), dica: host.querySelector('.m3-tip'), painel: host.querySelector('.m3-painel'), manche_el: host.querySelector('.m3-manche'), manche: null, aoMudar, prog: programa(gl), bufT: gl.createBuffer(), bufL: gl.createBuffer(), modo: 'orbita', teclas: new Set(), aoEscolher, o: null, a: null, tw: null, raf: 0, sobre: null, rg: [], rm: [], tema: tema() };
+      S = { host, cv, gl, cam: host.querySelector('.m3-rot'), barra: host.querySelector('.m3-barra'), dica: host.querySelector('.m3-tip'), painel: host.querySelector('.m3-painel'), manche_el: host.querySelector('.m3-manche'), manche: null, aoMudar, prog: programa(gl), prog2: programaTex(gl), bufQ: gl.createBuffer(), tex: new Map(), bufT: gl.createBuffer(), bufL: gl.createBuffer(), modo: 'orbita', teclas: new Set(), aoEscolher, o: null, a: null, tw: null, raf: 0, sobre: null, rg: [], rm: [], tema: tema() };
     } catch { S = null; host.innerHTML = ''; return false; }
     gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.frontFace(gl.CCW);
     gl.disable(gl.CULL_FACE);                                   // caixas sem tampa de baixo: sem descarte de faces evita erro de ordem dos vértices
@@ -536,7 +611,7 @@ const Mapa3D = (() => {
     S.cena = sc; S.sobre = null; S.tema = tema();
     const diag = Math.hypot(sc.largura, sc.altura);
     S.dMin = 60 * sc.e; S.dMax = diag * 3;
-    geometria(); montaRotulos();
+    limpaTexturas(); geometria(); montaRotulos();
     if (primeira || !S.o) {
       S.o = { tx: sc.largura / 2, tz: sc.altura / 2, th: 0, ph: 1.553, d: diag * 1.2 };
       if (entrada) { S.o.d = diag * 1.35; enquadra(1100, 'iso'); } else enquadra(0, 'iso');
