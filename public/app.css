@@ -803,3 +803,15 @@ dialog.cad { width: min(94vw, 540px); max-height: 92vh; overflow: auto; }
 .stage.tresd .gon.sel > svg { outline: calc(2.5px * var(--inv, 1)) solid var(--accent); outline-offset: calc(2px * var(--inv, 1)); }
 .canvas.entra3d .gon { animation: sobe3d .8s cubic-bezier(.2, .9, .25, 1.12) both; animation-delay: calc(450ms + var(--i, 0) * 40ms); }
 @keyframes sobe3d { from { transform: scale3d(1, 1, .001); } to { transform: scale3d(1, 1, 1); } }
+
+/* ---------- Visão geral: cartões de KPI inclinam para o ponteiro, com reflexo ---------- */
+@media (hover: hover) and (pointer: fine) {
+  .kpis { perspective: 900px; }
+  .card.kpi { transform-style: preserve-3d; will-change: transform; }
+  .card.kpi.tilt { transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateZ(6px); transition: transform .08s linear, box-shadow .2s; box-shadow: var(--shadow-2); }
+  .card.kpi::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s; background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, #fff 16%, transparent), transparent 62%); }
+  .card.kpi.tilt::after { opacity: 1; }
+  .card.kpi.tilt .val { transform: translateZ(18px); }
+  .card.kpi .val { transition: transform .2s var(--ease-out); }
+}
+@media (prefers-reduced-motion: reduce) { .card.kpi.tilt { transform: none; } }

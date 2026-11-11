@@ -75,9 +75,18 @@ async function rota() {
   const ordem = Object.keys(ROTAS);
   document.documentElement.style.setProperty('--vt-dir', ordem.indexOf(r) < ordem.indexOf((rota.atual || '').split('/')[0]) ? -1 : 1);
   rota.atual = chave;
-  if (mudou && document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    try { document.startViewTransition(troca).finished.catch(() => {}); } catch { troca(); }
-  } else troca();
+  // a troca roda uma vez só e SEMPRE antes de a tela nova ser desenhada (senão o esqueleto cairia por cima do conteúdo)
+  let trocou = false;
+  const umaVez = () => { if (trocou || meu !== token) return; trocou = true; troca(); };
+  if (mudou && document.startViewTransition && !document.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    try {
+      const vt = document.startViewTransition(umaVez);
+      vt.finished.catch(() => {}); vt.ready.catch(() => {});
+      await Promise.race([vt.updateCallbackDone.catch(() => {}), new Promise(r => setTimeout(r, 400))]);
+    } catch { /* sem transição */ }
+  }
+  umaVez();
+  if (meu !== token) return;
   try {
     const html = await PAGINAS[r](q, meu);
     if (meu !== token) return;
@@ -194,6 +203,20 @@ PAGINAS.geral = async () => {
   </div>`;
 };
 PAGINAS.geral.ligar = () => {
+  const ks = $('.kpis');
+  if (ks && matchMedia('(hover: hover) and (pointer: fine)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {   // cartões inclinam para o ponteiro
+    let atual = null;
+    const solta = () => { if (atual) { atual.classList.remove('tilt'); atual = null; } };
+    ks.addEventListener('pointermove', e => {
+      const c = e.target.closest('.card.kpi');
+      if (c !== atual) { solta(); atual = c; if (c) { c.style.animation = 'none'; c.style.opacity = 1; c.classList.add('tilt'); } }
+      if (!c) return;
+      const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+      c.style.setProperty('--ry', ((x - .5) * 9).toFixed(2) + 'deg'); c.style.setProperty('--rx', ((.5 - y) * 9).toFixed(2) + 'deg');
+      c.style.setProperty('--mx', (x * 100).toFixed(1) + '%'); c.style.setProperty('--my', (y * 100).toFixed(1) + '%');
+    });
+    ks.addEventListener('pointerleave', solta);
+  }
   Causa.montaCard($('#cardCausas'));
   Auditoria.cartao($('#audCard'));
   Conferencias.cartaoHoje($('#hojeCard'));

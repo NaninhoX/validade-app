@@ -67,3 +67,25 @@ body.modo-tv .page { max-width: none; padding: 0; animation: none !important; tr
   .tv-kpis { grid-template-columns: 1fr 1fr; } .tv-grade { display: flex; flex-direction: column; } .tv-card { min-height: 220px; } .tv-corpo { flex: none; }
 }
 .tv-lista { flex: 1 1 0; min-height: 0; overflow: hidden; -webkit-mask-image: linear-gradient(#000 82%, transparent); mask-image: linear-gradient(#000 82%, transparent); }
+
+/* ---------- movimento do Modo TV ---------- */
+.tv-kpi b.mudou { animation: tv-mudou 1.6s ease-out; }
+@keyframes tv-mudou { 0% { text-shadow: 0 0 0 transparent; } 25% { text-shadow: 0 0 22px color-mix(in srgb, var(--accent) 80%, transparent); } 100% { text-shadow: 0 0 0 transparent; } }
+.tv-kpi.bad { animation: tv-alerta 3.2s ease-in-out infinite; }
+@keyframes tv-alerta { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 26px 0 color-mix(in srgb, var(--bad) 38%, transparent); } }
+.tv-rola.anda { animation: tv-rola 20s ease-in-out infinite alternate; }
+@keyframes tv-rola { 0%, 14% { transform: none; } 86%, 100% { transform: translateY(var(--rola, 0)); } }
+
+/* planta em 3D: gira devagar; cor = pior status, altura = valor em risco */
+.tv-p3d { flex: 1 1 0; min-height: 0; display: grid; place-items: center; perspective: 900px; perspective-origin: 50% 10%; overflow: hidden; }
+.tv-p3 { position: relative; width: 92%; max-height: 100%; transform-style: preserve-3d; transform: rotateX(56deg) rotateZ(-30deg); animation: tv-gira 36s ease-in-out infinite alternate; border: 1.5px solid var(--line-2); border-radius: 6px; background: color-mix(in srgb, var(--accent) 5%, transparent); box-shadow: 0 30px 60px rgba(0, 0, 0, .35); }
+@keyframes tv-gira { from { transform: rotateX(56deg) rotateZ(-14deg); } to { transform: rotateX(56deg) rotateZ(-52deg); } }
+.tv-g { position: absolute; transform-style: preserve-3d; --z: calc(var(--t) * 3.4em); animation: tv-sobe .9s cubic-bezier(.2, .9, .25, 1.1) both; animation-delay: calc(500ms + var(--i, 0) * 45ms); }
+@keyframes tv-sobe { from { transform: scale3d(1, 1, .001); } to { transform: scale3d(1, 1, 1); } }
+.tv-g i { position: absolute; display: block; }
+.tv-g .tp { inset: 0; background: var(--hc); transform: translateZ(var(--z)); border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18); }
+.tv-g .wf { left: 0; top: 100%; width: 100%; height: var(--z); transform-origin: top; transform: rotateX(90deg); background: linear-gradient(color-mix(in srgb, var(--hc) 78%, #000), color-mix(in srgb, var(--hc) 52%, #000)); }
+.tv-g .wl { left: 0; top: 0; width: var(--z); height: 100%; transform-origin: left; transform: rotateY(-90deg); background: linear-gradient(90deg, color-mix(in srgb, var(--hc) 40%, #000), color-mix(in srgb, var(--hc) 60%, #000)); }
+.tv-g.vz .tp { opacity: .55; } .tv-g.vz .wf, .tv-g.vz .wl { opacity: .4; }
+.tv-g b { position: absolute; right: -.5em; top: -.5em; min-width: 1.5em; height: 1.5em; display: grid; place-items: center; border-radius: 999px; background: var(--bad); color: #fff; font: 700 .7em var(--font); transform: translateZ(calc(var(--z) + .4em)) rotateZ(33deg) rotateX(-56deg); box-shadow: 0 0 0 0 rgba(203, 27, 54, .6); animation: halo 2.4s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .tv-p3, .tv-g, .tv-kpi.bad, .tv-rola.anda, .tv-g b { animation: none; } }

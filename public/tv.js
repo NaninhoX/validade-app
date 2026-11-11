@@ -16,16 +16,16 @@
     return { resumo, mapa, fila: fila || [], hoje, aud };
   }
 
-  const kpi = (rot, val, hint, cls = '') => `<div class="tv-kpi ${cls}"><span class="tv-kl">${rot}</span><b>${val}</b><small>${hint}</small></div>`;
+  const kpi = (rot, val, hint, cls = '', num = null) => `<div class="tv-kpi ${cls}"><span class="tv-kl">${rot}</span><b${num === null ? '' : ` data-v="${num}"`}>${val}</b><small>${hint}</small></div>`;
 
   function kpis(d) {
     const t = d.resumo.totais, venc = d.resumo.por_status[0] || { valor: 0, lotes: 0 };
     const tt = (campo, o) => { const x = tendKpi(d.resumo, campo, o); return x ? ' · ' + x.txt : ''; };
     return `<div class="tv-kpis">
-      ${kpi('Valor em estoque', brl(t.valor), `${int(t.itens)} itens · ${int(t.lotes)} lotes` + tt('valor_total', { descerEBom: null }))}
-      ${kpi('Vencido na loja', brl(venc.valor), `${int(venc.lotes)} lotes para retirar` + tt('vencido_valor', { descerEBom: true }), venc.lotes ? 'bad' : 'ok')}
-      ${kpi('Em risco (até 90 dias)', brl(t.valor_em_risco), 'valor que vence em breve' + tt('valor_risco', { descerEBom: true }), 'warn')}
-      ${kpi('Perda potencial', brl(t.perda_potencial), 'se vender com o desconto da regra')}
+      ${kpi('Valor em estoque', brl(t.valor), `${int(t.itens)} itens · ${int(t.lotes)} lotes` + tt('valor_total', { descerEBom: null }), '', t.valor)}
+      ${kpi('Vencido na loja', brl(venc.valor), `${int(venc.lotes)} lotes para retirar` + tt('vencido_valor', { descerEBom: true }), venc.lotes ? 'bad' : 'ok', venc.valor)}
+      ${kpi('Em risco (até 90 dias)', brl(t.valor_em_risco), 'valor que vence em breve' + tt('valor_risco', { descerEBom: true }), 'warn', t.valor_em_risco)}
+      ${kpi('Perda potencial', brl(t.perda_potencial), 'se vender com o desconto da regra', '', t.perda_potencial)}
       ${kpi('Perda potencial evitada', brl(d.resumo.evitada ? d.resumo.evitada.evitada : 0), d.resumo.evitada && d.resumo.evitada.evitada ? 'acumulado · ' + brl(d.resumo.evitada.ultimos.evitada) + ' em ' + d.resumo.evitada.ultimos.dias + ' dias' : 'sem vendas registradas', 'ok')}
     </div>`;
   }
@@ -56,15 +56,15 @@
   function planta(d) {
     const L = d.mapa && d.mapa.layout; if (!L || !L.gondolas.length) return '<div class="tv-vazio">Planta ainda não desenhada.</div>';
     const por = new Map(d.mapa.gondolas.map(g => [g.id, g]));
-    const f = 1 / 1;
-    const caixas = L.gondolas.map(g => {
-      const x = por.get(g.id), cor = x && x.lotes ? x.cor : 'var(--tv-vazio)', w = g.w * f, h = g.h * f;
-      const rot = Math.max(w, h) > 40;
-      return `<g><rect x="${g.x}" y="${g.y}" width="${w}" height="${h}" rx="4" fill="${cor}" opacity="${x && x.lotes ? .92 : .55}"/>
-        ${rot ? `<text x="${g.x + w / 2}" y="${g.y + h / 2 + 5}" text-anchor="middle" class="tv-pn">${g.id}</text>` : ''}
-        ${x && x.vencidos ? `<circle cx="${g.x + w}" cy="${g.y}" r="11" fill="var(--bad)"/><text x="${g.x + w}" y="${g.y + 4}" text-anchor="middle" class="tv-pb">${x.vencidos}</text>` : ''}</g>`;
+    const max = Math.max(1, ...d.mapa.gondolas.map(g => g.risco || 0));
+    const pc = (v, tot) => (v / tot * 100).toFixed(3) + '%';
+    const caixas = L.gondolas.map((g, i) => {
+      const x = por.get(g.id), tem = x && x.lotes, cor = tem ? x.cor : 'var(--tv-vazio)';
+      const alt = tem ? 0.18 + 0.82 * Math.sqrt((x.risco || 0) / max) : 0.06;
+      return `<div class="tv-g${tem ? '' : ' vz'}" style="left:${pc(g.x, L.largura)};top:${pc(g.y, L.altura)};width:${pc(g.w, L.largura)};height:${pc(g.h, L.altura)};--hc:${cor};--t:${alt.toFixed(3)};--i:${i}">
+        <i class="tp"></i><i class="wf"></i><i class="wl"></i>${x && x.vencidos ? `<b>${x.vencidos}</b>` : ''}</div>`;
     }).join('');
-    return `<svg viewBox="0 0 ${L.largura} ${L.altura}" class="tv-planta" role="img" aria-label="Planta da loja com calor por gôndola"><rect x="1" y="1" width="${L.largura - 2}" height="${L.altura - 2}" rx="6" fill="none" stroke="var(--line-2)" stroke-width="2"/>${caixas}</svg>`;
+    return `<div class="tv-p3d" role="img" aria-label="Planta da loja em 3D: a altura de cada gôndola é o valor em risco"><div class="tv-p3" style="aspect-ratio:${L.largura}/${L.altura}">${caixas}</div></div>`;
   }
 
   function topGondolas(d) {
@@ -80,10 +80,10 @@
 
   function fazer(d) {
     if (!d.fila.length) return '<div class="tv-vazio">Nada urgente agora.</div>';
-    return '<div class="tv-lista">' + d.fila.slice(0, 8).map(i => {
+    return '<div class="tv-lista"><div class="tv-rola">' + d.fila.slice(0, 14).map(i => {
       const venc = i.dias <= 0;
       return `<div class="tv-fz"><i style="background:${i.cor}"></i><div><b>${esc(i.nome || i.ean)}</b><small>${esc(i.endereco || 'sem endereço')} · ${i.qtd} un. · ${venc ? 'venceu há ' + (-i.dias) + ' d' : 'vence em ' + i.dias + ' d'}</small></div><span class="tv-ac ${venc ? 'ret' : 'etq'}">${venc ? 'Retirar' : i.desconto ? 'Etiquetar ' + i.desconto + '%' : 'Frente'}</span></div>`;
-    }).join('') + '</div>';
+    }).join('') + '</div></div>';
   }
 
   function rotina(d) {
@@ -102,7 +102,7 @@
       <div class="tv-grade">
         ${card('Validade do estoque', 'lotes por status', rosca(d), 1, 'a')}
         ${card('Muro de validade', 'itens que vencem por mês', muro(d), 2, 'b')}
-        ${card('Planta da loja', 'calor pelo pior status da gôndola', planta(d), 3, 'c')}
+        ${card('Planta da loja', 'cor = pior status · altura = valor em risco', planta(d), 3, 'c')}
         ${card('Fazer agora', 'o que mais pesa, em ordem', fazer(d), 4, 'd')}
         ${card('Gôndolas em risco', 'valor em risco', topGondolas(d), 5, 'e')}
         ${card('Marcas que mais pesam', 'perda estimada', marcas(d), 6, 'f')}
@@ -122,8 +122,32 @@
     </div>`;
   }
 
+  // movimento: os números contam até o valor (do zero na entrada, do valor anterior a cada atualização) e a lista "Fazer agora" rola sozinha
+  const valoresKpi = () => $$('.tv-kpi b[data-v]').map(el => +el.dataset.v);
+  function vida(antes) {
+    const parado = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    $$('.tv-kpi b[data-v]').forEach((el, i) => {
+      const alvo = +el.dataset.v, de = antes ? antes[i] : 0;
+      if (parado || !isFinite(alvo) || de === alvo || de === undefined) return;
+      const t0 = performance.now(), ms = antes ? 1400 : 1100;
+      const passo = t => { const p = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - p, 4); el.textContent = brl(de + (alvo - de) * e); if (p < 1) requestAnimationFrame(passo); else el.textContent = brl(alvo); };
+      requestAnimationFrame(passo);
+      if (antes) { el.classList.remove('mudou'); void el.offsetWidth; el.classList.add('mudou'); }
+    });
+    medeRola(); setTimeout(medeRola, 1600);                              // de novo depois que a tela assenta
+  }
+  function medeRola() {
+    const parado = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const lista = $('.tv-lista'), rola = $('.tv-rola');
+    if (lista && rola && !rola.classList.contains('anda')) {
+      const sobra = rola.scrollHeight - lista.clientHeight;
+      if (sobra > 8 && !parado) { rola.style.setProperty('--rola', -sobra + 'px'); rola.style.animationDuration = Math.max(12, sobra / 14) + 's'; rola.classList.add('anda'); }
+    }
+  }
+
   function inicia() {
     clearInterval(timer);
+    setTimeout(() => vida(null), 60);
     let seg = 0, ocupado = false, ultima = horaSP(new Date()).slice(0, 5);
     timer = setInterval(async () => {
       const raiz = $('#tvRaiz');
@@ -137,7 +161,9 @@
       try {
         const d = await busca();
         if (!$('#tvRaiz') || !location.hash.startsWith('#/tv')) return;
+        const antes = valoresKpi();
         DADOS = d; $('#tvCorpo').innerHTML = corpo(d, false);
+        vida(antes);
         ultima = horaSP(new Date()).slice(0, 5); atu.classList.remove('off'); atu.textContent = 'Atualizado às ' + ultima;
       } catch { if (atu) { atu.classList.add('off'); atu.textContent = 'Sem conexão: dados de ' + ultima; } }
       finally { ocupado = false; }
