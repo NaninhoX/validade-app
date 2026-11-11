@@ -225,6 +225,7 @@ const Mapa = (() => {
   }
 
   function ligaCamera(st) {
+    if (tresD()) return;                                          // no 3D quem cuida do ponteiro é o Mapa3D
     const ptrs = new Map(); let pan = null, pinca = null, moveu = false, banda = null;
     st.addEventListener('pointerdown', e => { if (!M.desenhando || !M.editG || e.target.closest('.ctrls')) return; e.stopImmediatePropagation(); e.preventDefault(); iniciaDesenho(e); }, true);
     st.addEventListener('wheel', e => {
@@ -284,6 +285,53 @@ const Mapa = (() => {
     $('#cFit').addEventListener('click', () => { enquadra(true); setTimeout(agendaDetalhe, 600); });
   }
 
+  // ---------- 3D: cada módulo de cada lado vira um bloco (cor e altura pela métrica escolhida) ----------
+  function cena3d() {
+    const L = layoutExibido(), e = escalaPx(), porId = new Map(M.data.gondolas.map(g => [g.id, g])), mx = maximos();
+    const frac = c => (M.metric === 'ocup' ? Math.sqrt(c.qtd / mx.cOcup) : M.metric === 'ronda' ? (c.dias_sem_ronda === null || c.dias_sem_ronda === undefined ? 1 : Math.min(1, c.dias_sem_ronda / 60))
+      : M.metric === 'status' ? Math.min(1, Math.max(0, c.pior_peso || 0) / 4) : Math.sqrt((c.risco || 0) / mx.cRisco));
+    const caixas = [], gondolas = [];
+    for (const g of L.gondolas) {
+      const d = porId.get(g.id), gm = geomG(g.id), vert = g.rot === 90, ini = caixas.length;
+      const W = (lx, ly, lw, lh) => (vert ? { x: g.x + (gm.T - ly - lh) * e, y: g.y + lx * e, w: lh * e, h: lw * e } : { x: g.x + lx * e, y: g.y + ly * e, w: lw * e, h: lh * e });
+      const N = (vx, vy) => (vert ? [-vy, vx] : [vx, vy]);
+      const poe = (chave, lx, ly, lw, lh, n, curto, lado, baixa) => {
+        const c = chave && d ? d.celulas.find(z => z.chave === chave) : null, k = calor(c, true), tem = c && !k.vazio;
+        caixas.push({ ...W(lx, ly, lw, lh), z: (baixa ? 8 : tem ? 105 + 85 * Math.max(0, Math.min(1, frac(c))) : 90) * e, cor: tem ? k.bg : null, tinta: tem ? k.ink : null, g: g.id, chave: c ? chave : null, n: N(n[0], n[1]),
+          sel: !!(M.shelf && M.shelf.g === g.id && M.shelf.chave === chave) || (!M.shelf && M.sel === g.id), curto, l1: c ? (c.pior || '') : '', l2: c ? `${c.lotes} lote${c.lotes > 1 ? 's' : ''} · ${k.txt}` : '',
+          dicaHtml: c ? tipCelula(g.id, c, lado ? respTxt(setor(g.id, lado)) : '') : '' });
+      };
+      if (gm.area) {
+        poe('geral', 0, 0, gm.L, gm.T, [0, 1], rotuloG(g.id), 'P', true);
+        for (const p of cfgG(g.id).pallets || []) poe(`P${p.id}`, p.x, p.y, p.c, p.l, [0, 1], `P${p.id}`, 'P', false);
+      } else {
+        const { D, n, T } = gm, lados = ladosG(g.id), pt = pontasDe(g.id);
+        const yBase = (T - lados.length * D.modulo_l) / 2, yPonta = (T - D.ponta_c) / 2;
+        for (let mod = 1; mod <= n; mod++) {
+          const x = D.ponta_p + colunaDoModulo(g.id, mod) * D.modulo_c;
+          lados.forEach((lado, k) => poe(`${lado}-${mod}`, x, yBase + k * D.modulo_l, D.modulo_c, D.modulo_l, lados.length === 1 ? [0, lado === 'B' ? -1 : 1] : [0, k === 0 ? -1 : 1], `${lado}${mod}`, lado, false));
+        }
+        const pe = celulaPonta(d, pt.esq), pd = celulaPonta(d, pt.dir);
+        poe(pe && pe.chave, 0, yPonta, D.ponta_p, D.ponta_c, [-1, 0], pt.esq, pt.esq, false);
+        poe(pd && pd.chave, D.ponta_p + n * D.modulo_c, yPonta, D.ponta_p, D.ponta_c, [1, 0], pt.dir, pt.dir, false);
+      }
+      const c = caixa(g), minhas = caixas.slice(ini), r = respGondola(g.id), resumo = d && d.lotes ? (d.risco ? brlK(d.risco) : 'ok') : '';
+      gondolas.push({ id: g.id, nome: (cfgTodas()[g.id] || {}).nome || '', cx: c.x + c.w / 2, cy: c.y + c.h / 2, tam: Math.max(c.w, c.h), topo: Math.max(...minhas.map(b => b.z)), tag: d && d.vencidos ? d.vencidos : 0, sub: [resumo, r].filter(Boolean).join(' · ') });
+    }
+    return { largura: L.largura, altura: L.altura, e, caixas, gondolas };
+  }
+  function palco3d(stage) {
+    stage.style.height = '';
+    const ok = typeof Mapa3D !== 'undefined' && Mapa3D.monta(stage, { aoEscolher: b => {
+      if (b) { if (b.chave) escolheGondola(b.g, b.chave); else escolheGondola(b.g); }
+      else if (M.sel !== null) { M.sel = null; M.shelf = null; desenhaPalco(); desenhaLateral(); }
+    } });
+    if (!ok) { toast('Este aparelho não conseguiu abrir o 3D. Voltei para a planta.', 'bad', 5000); M.vista = 'planta'; lsSet('mapaVista', 'planta'); return montaTudo(); }
+    Mapa3D.cena(cena3d(), { entrada: !!M.entra3d }); M.entra3d = false;
+    const noLayout = new Set(layoutExibido().gondolas.map(g => g.id)), orfas = M.data.gondolas.filter(g => !noLayout.has(g.id)), aviso = $('#orfas');
+    if (aviso) aviso.innerHTML = orfas.length ? `<div class="callout warn">${ico('alert')}<div>Gôndola(s) <b>${orfas.map(g => g.id).join(', ')}</b> têm estoque mas ainda não estão na planta.</div></div>` : '';
+  }
+
   function desenhaPalco() {
     const L = layoutExibido();
     const stage = $('#stage');
@@ -292,6 +340,8 @@ const Mapa = (() => {
     stage.classList.toggle('stage-bare', grade);
     const tres = tresD();
     stage.classList.toggle('tresd', tres);
+    if (tres) { $('#ctrls').hidden = true; return palco3d(stage); }
+    if (typeof Mapa3D !== 'undefined' && Mapa3D.ativo()) Mapa3D.destroi();
     const entra3d = tres && M.entra3d; M.entra3d = false;
     const mx3 = tres ? maximos() : null, alt3 = L.largura * 0.085;
     const altura3 = d => {
@@ -1385,7 +1435,7 @@ const Mapa = (() => {
     v.innerHTML = `
       <div class="editbar reveal" style="margin-bottom:12px;justify-content:space-between">
         <div class="seg" role="group" aria-label="O que mostrar no mapa">${Object.entries(METRICAS).map(([k, m]) => `<button data-metric="${k}" aria-pressed="${M.metric === k}" title="${esc(m.desc)}">${m.nome}</button>`).join('')}</div>
-        <div class="editbar">${legenda()}${!M.edit && !M.editG ? `<div class="seg" role="group" aria-label="Visualização"><button data-vista="grade" aria-pressed="${M.vista === 'grade'}">Grade</button><button data-vista="planta" aria-pressed="${M.vista === 'planta'}">Planta</button><button data-vista="3d" aria-pressed="${M.vista === '3d'}" title="Planta inclinada: a altura de cada gôndola acompanha o que está sendo mostrado">3D</button></div>` : ''}${M.ctx.admin && !M.edit && !M.editG ? `<button id="editar">${ico('edit')} Editar planta</button><button id="editarG">${ico('edit')} Editar gôndolas</button>` : ''}</div>
+        <div class="editbar">${legenda()}${!M.edit && !M.editG ? `<div class="seg" role="group" aria-label="Visualização"><button data-vista="grade" aria-pressed="${M.vista === 'grade'}">Grade</button><button data-vista="planta" aria-pressed="${M.vista === 'planta'}">Planta</button><button data-vista="3d" aria-pressed="${M.vista === '3d'}" title="Loja em 3D: gire, aproxime e ande pelos corredores; cada módulo de cada lado tem a sua cor">3D</button></div>` : ''}${M.ctx.admin && !M.edit && !M.editG ? `<button id="editar">${ico('edit')} Editar planta</button><button id="editarG">${ico('edit')} Editar gôndolas</button>` : ''}</div>
       </div>
       ${L.provisorio && !M.edit ? `<div class="callout reveal" style="--i:1;margin-bottom:12px">${ico('info')}<div><b>Planta provisória.</b> As gôndolas estão em grade só para você já enxergar os dados. ${M.ctx.admin ? 'Clique em <b>Editar planta</b> para arrastar cada gôndola até a posição real, aplicar a proporção real, desenhar as setas de fluxo e enviar a imagem do layout da loja como fundo.' : 'Peça a um administrador para montar a planta real.'}</div></div>` : ''}
       <div id="orfas" style="margin-bottom:12px"></div>

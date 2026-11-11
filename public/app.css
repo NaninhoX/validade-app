@@ -784,25 +784,24 @@ dialog.cad { width: min(94vw, 540px); max-height: 92vh; overflow: auto; }
   .eg-r .eg-ck { display: none; } .selmodo .eg-r .eg-ck { display: grid; }
 }
 
-/* ---------- Mapa em 3D: planta inclinada, gôndolas em relevo (altura = métrica escolhida) ---------- */
-.stage.tresd { perspective: 2200px; perspective-origin: 50% 20%; background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--accent) 9%, var(--surface)), var(--surface) 60%); }
-.stage.tresd .canvas { transform-style: preserve-3d; }
-.stage.tresd .fluxo, .stage.tresd .alcas, .stage.tresd .guias { display: none; }
-.stage.tresd .perimetro { box-shadow: 0 40px 80px rgba(0, 0, 0, .28); }
-.stage.tresd .gon { transform-style: preserve-3d; transform-origin: 50% 50% 0; overflow: visible; }
-.stage.tresd .gon > svg { transform: translateZ(var(--z)); transition: filter .2s; }
-.stage.tresd .gon .w3 { position: absolute; display: block; pointer-events: auto; backface-visibility: visible; }
-.stage.tresd .gon .wf { left: 0; top: 100%; width: 100%; height: var(--z); transform-origin: top; transform: rotateX(90deg); background: linear-gradient(color-mix(in srgb, var(--hc) 80%, #000), color-mix(in srgb, var(--hc) 58%, #000)); }
-.stage.tresd .gon .wl { left: 0; top: 0; width: var(--z); height: 100%; transform-origin: left; transform: rotateY(-90deg); background: linear-gradient(90deg, color-mix(in srgb, var(--hc) 46%, #000), color-mix(in srgb, var(--hc) 64%, #000)); }
-.stage.tresd .gon .gn { top: auto; bottom: 100%; left: 0; margin: 0; transform-origin: left bottom; transform: translateZ(calc(var(--z) + 6px)) rotateZ(30deg) rotateX(-56deg) scale(var(--inv, 1)); }
-.stage.tresd .gon.perto .gn { display: grid; }
-.stage.tresd .gon .tag { transform: translateZ(calc(var(--z) + 6px)) rotateZ(30deg) rotateX(-56deg) scale(var(--inv, 1)); }
-.stage.tresd .gon:hover > svg { filter: brightness(1.18); }
-.stage.tresd .gon:hover .w3 { filter: brightness(1.25); }
-.stage.tresd .gon.sel { outline: 0; }
-.stage.tresd .gon.sel > svg { outline: calc(2.5px * var(--inv, 1)) solid var(--accent); outline-offset: calc(2px * var(--inv, 1)); }
-.canvas.entra3d .gon { animation: sobe3d .8s cubic-bezier(.2, .9, .25, 1.12) both; animation-delay: calc(450ms + var(--i, 0) * 40ms); }
-@keyframes sobe3d { from { transform: scale3d(1, 1, .001); } to { transform: scale3d(1, 1, 1); } }
+/* ---------- Mapa em 3D (WebGL): palco, rótulos por cima e barra de vistas ---------- */
+.stage.tresd { cursor: default; padding: 0; }
+.m3-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; cursor: grab; }
+.m3-rot { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.m3-g { position: absolute; left: 0; top: 0; white-space: nowrap; text-align: center; font: 700 13px/1.15 var(--font-display); color: var(--ink); text-shadow: 0 0 5px var(--surface), 0 0 5px var(--surface), 0 1px 2px var(--surface); will-change: transform; }
+.m3-g span { font-weight: 600; } .m3-g small { display: block; font: 600 10.5px var(--font); color: var(--muted); }
+.m3-g i { display: inline-grid; place-items: center; min-width: 17px; height: 17px; margin-left: 5px; padding: 0 4px; border-radius: 999px; background: var(--bad); color: #fff; font: 700 10.5px var(--font); font-style: normal; text-shadow: none; vertical-align: 1px; }
+.m3-g.longe span, .m3-g.longe small { display: none; }
+.m3-m { position: absolute; left: 0; top: 0; display: grid; gap: 1px; min-width: 92px; padding: 6px 9px; border-radius: 6px; background: var(--c); color: var(--t); border: 1px solid rgba(0, 0, 0, .28); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); text-align: left; white-space: nowrap; will-change: transform; }
+.m3-m b { font: 700 15px/1 var(--font-display); } .m3-m span { font: 700 12.5px/1.2 var(--font); } .m3-m small { font: 500 11px/1.2 var(--font); opacity: .85; }
+.m3-barra { position: absolute; left: 12px; bottom: 12px; right: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; pointer-events: none; }
+.m3-barra button { pointer-events: auto; min-height: 34px; padding: 0 12px; font-size: 13px; box-shadow: var(--shadow-1); }
+.m3-dica { font-size: 12px; color: var(--muted); background: color-mix(in srgb, var(--surface) 82%, transparent); padding: 5px 9px; border-radius: 6px; }
+.m3-tip { position: absolute; z-index: 6; pointer-events: none; }
+.m3-tip[hidden] { display: none; }
+.stage.andando .m3-cv { cursor: crosshair; }
+.stage.andando .m3-g { opacity: .85; }
+@media (max-width: 700px) { .m3-dica { display: none; } .m3-barra { bottom: 8px; left: 8px; } .m3-barra button { padding: 0 10px; } }
 
 /* ---------- Visão geral: cartões de KPI inclinam para o ponteiro, com reflexo ---------- */
 @media (hover: hover) and (pointer: fine) {
@@ -815,3 +814,4 @@ dialog.cad { width: min(94vw, 540px); max-height: 92vh; overflow: auto; }
   .card.kpi .val { transition: transform .2s var(--ease-out); }
 }
 @media (prefers-reduced-motion: reduce) { .card.kpi.tilt { transform: none; } }
+.tip.m3-tip { position: absolute; opacity: 1; transform: none; max-width: 300px; }
