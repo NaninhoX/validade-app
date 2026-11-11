@@ -747,3 +747,39 @@ dialog.cad { width: min(94vw, 540px); max-height: 92vh; overflow: auto; }
 .eg-conf.ok { color: var(--good); } .eg-conf.velho { color: var(--warn); font-weight: 600; }
 .cad-c.fal { cursor: pointer; justify-content: flex-start; gap: 12px; }
 .cad-c.fal input { width: 18px; height: 18px; min-height: 0; padding: 0; flex: none; accent-color: var(--accent); }
+
+/* ---------- transição entre telas (View Transitions; sem suporte, troca direto) ---------- */
+#view { view-transition-name: pagina; }
+.nav[aria-current=page] { view-transition-name: nav-ativo; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .2s; }
+::view-transition-old(pagina) { animation: vt-sai .16s cubic-bezier(.4, 0, 1, 1) both; }
+::view-transition-new(pagina) { animation: vt-entra .34s cubic-bezier(.2, .8, .2, 1) both; }
+::view-transition-group(nav-ativo) { animation-duration: .32s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+@keyframes vt-sai { to { opacity: 0; transform: translateX(calc(var(--vt-dir, 1) * -28px)); } }
+@keyframes vt-entra { from { opacity: 0; transform: translateX(calc(var(--vt-dir, 1) * 36px)); } }
+
+/* lista de produto do Estoque abre e fecha deslizando */
+:root { interpolate-size: allow-keywords; }
+.eg-g::details-content { block-size: 0; overflow: clip; transition: block-size .26s cubic-bezier(.2, .8, .2, 1), content-visibility .26s allow-discrete; }
+.eg-g[open]::details-content { block-size: auto; }
+@media (prefers-reduced-motion: reduce) { .eg-g::details-content { transition: none; } }
+
+/* Estoque em área estreita (PC com janela pequena ou menu aberto): vira cartão para o nome do produto não sumir */
+.eg-scroll { container: eg / inline-size; }
+@container eg (max-width: 780px) {
+  .eg-head { display: none; }
+  .eg-r { grid-template-columns: 22px 22px minmax(0, 1fr) auto auto; grid-template-areas: "ck chev p pr ac" "ck chev st q at"; row-gap: 4px; padding: 10px 12px; }
+  .eg-r .eg-ck { grid-area: ck; } .eg-chev { grid-area: chev; } .eg-p { grid-area: p; } .eg-st { grid-area: st; }
+  .eg-q { grid-area: q; text-align: left; } .eg-q::after { content: ' un'; color: var(--muted); }
+  .eg-preco { grid-area: pr; } .eg-at { grid-area: at; justify-content: flex-end; } .eg-ac { grid-area: ac; }
+  .c-valor, .c-venc, .c-dias { display: none; }
+  .eg-lh { display: none; }
+  .eg-l { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 0; }
+  .eg-l [data-l]::before { content: attr(data-l) ': '; color: var(--muted); }
+  .eg-lac { flex: 1 1 100%; justify-content: flex-start; }
+}
+@media (max-width: 700px) {   /* no celular vale o desenho próprio (sem caixinha fora do modo Selecionar) */
+  .eg-r { grid-template-columns: 22px minmax(0, 1fr) auto auto; grid-template-areas: "chev p pr ac" "chev st q at"; }
+  .eg-chev, .eg-r .eg-ck { grid-area: chev; }
+  .eg-r .eg-ck { display: none; } .selmodo .eg-r .eg-ck { display: grid; }
+}

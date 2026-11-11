@@ -59,14 +59,25 @@ async function rota() {
   const q = new URLSearchParams(qs || '');
   if (param) q.set('id', param);
   const meu = ++token;
-  pintaNav(r); fechaMais();
-  document.body.classList.toggle('modo-tv', r === 'tv');
-  $('#voltar').hidden = r === 'geral';
-  window.scrollTo(0, 0);
-  $('#tTitulo').textContent = ROTAS[r].titulo; $('#tSub').textContent = ROTAS[r].sub();
-  document.title = ROTAS[r].titulo + ' · Controle de Validade';
-  view.style.animation = 'none'; void view.offsetWidth; view.style.animation = '';
-  view.innerHTML = skeleton(r);
+  const troca = () => {
+    pintaNav(r); fechaMais();
+    document.body.classList.toggle('modo-tv', r === 'tv');
+    $('#voltar').hidden = r === 'geral';
+    window.scrollTo(0, 0);
+    $('#tTitulo').textContent = ROTAS[r].titulo; $('#tSub').textContent = ROTAS[r].sub();
+    document.title = ROTAS[r].titulo + ' · Controle de Validade';
+    view.style.animation = 'none'; void view.offsetWidth; view.style.animation = '';
+    view.innerHTML = skeleton(r);
+  };
+  // troca de tela com transição: a página desliza no sentido do menu e o marcador do menu corre até o item novo
+  const chave = r + '/' + (param || '');
+  const mudou = rota.atual !== undefined && rota.atual !== chave;
+  const ordem = Object.keys(ROTAS);
+  document.documentElement.style.setProperty('--vt-dir', ordem.indexOf(r) < ordem.indexOf((rota.atual || '').split('/')[0]) ? -1 : 1);
+  rota.atual = chave;
+  if (mudou && document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    try { document.startViewTransition(troca).finished.catch(() => {}); } catch { troca(); }
+  } else troca();
   try {
     const html = await PAGINAS[r](q, meu);
     if (meu !== token) return;
