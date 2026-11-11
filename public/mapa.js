@@ -290,20 +290,20 @@ const Mapa = (() => {
     const L = layoutExibido(), e = escalaPx(), porId = new Map(M.data.gondolas.map(g => [g.id, g])), mx = maximos();
     const frac = c => (M.metric === 'ocup' ? Math.sqrt(c.qtd / mx.cOcup) : M.metric === 'ronda' ? (c.dias_sem_ronda === null || c.dias_sem_ronda === undefined ? 1 : Math.min(1, c.dias_sem_ronda / 60))
       : M.metric === 'status' ? Math.min(1, Math.max(0, c.pior_peso || 0) / 4) : Math.sqrt((c.risco || 0) / mx.cRisco));
-    const caixas = [], gondolas = [];
+    const caixas = [], gondolas = [], alturaG = (typeof Mapa3D !== 'undefined' && Mapa3D.cfg().gondola) || 220;   // todas as gôndolas com a mesma altura (ajustável)
     for (const g of L.gondolas) {
       const d = porId.get(g.id), gm = geomG(g.id), vert = g.rot === 90, ini = caixas.length;
       const W = (lx, ly, lw, lh) => (vert ? { x: g.x + (gm.T - ly - lh) * e, y: g.y + lx * e, w: lh * e, h: lw * e } : { x: g.x + lx * e, y: g.y + ly * e, w: lw * e, h: lh * e });
       const N = (vx, vy) => (vert ? [-vy, vx] : [vx, vy]);
-      const poe = (chave, lx, ly, lw, lh, n, curto, lado, baixa) => {
+      const poe = (chave, lx, ly, lw, lh, n, curto, lado, baixa, pal) => {
         const c = chave && d ? d.celulas.find(z => z.chave === chave) : null, k = calor(c, true), tem = c && !k.vazio;
-        caixas.push({ ...W(lx, ly, lw, lh), z: (baixa ? 8 : tem ? 105 + 85 * Math.max(0, Math.min(1, frac(c))) : 90) * e, cor: tem ? k.bg : null, tinta: tem ? k.ink : null, g: g.id, chave: c ? chave : null, n: N(n[0], n[1]),
+        caixas.push({ ...W(lx, ly, lw, lh), z: (baixa ? 8 : pal ? 120 : alturaG) * e, cor: tem ? k.bg : null, tinta: tem ? k.ink : null, g: g.id, chave: c ? chave : null, n: N(n[0], n[1]),
           sel: !!(M.shelf && M.shelf.g === g.id && M.shelf.chave === chave) || (!M.shelf && M.sel === g.id), curto, l1: c ? (c.pior || '') : '', l2: c ? `${c.lotes} lote${c.lotes > 1 ? 's' : ''} · ${k.txt}` : '',
           dicaHtml: c ? tipCelula(g.id, c, lado ? respTxt(setor(g.id, lado)) : '') : '' });
       };
       if (gm.area) {
         poe('geral', 0, 0, gm.L, gm.T, [0, 1], rotuloG(g.id), 'P', true);
-        for (const p of cfgG(g.id).pallets || []) poe(`P${p.id}`, p.x, p.y, p.c, p.l, [0, 1], `P${p.id}`, 'P', false);
+        for (const p of cfgG(g.id).pallets || []) poe(`P${p.id}`, p.x, p.y, p.c, p.l, [0, 1], `P${p.id}`, 'P', false, true);
       } else {
         const { D, n, T } = gm, lados = ladosG(g.id), pt = pontasDe(g.id);
         const yBase = (T - lados.length * D.modulo_l) / 2, yPonta = (T - D.ponta_c) / 2;
@@ -325,7 +325,7 @@ const Mapa = (() => {
     const ok = typeof Mapa3D !== 'undefined' && Mapa3D.monta(stage, { aoEscolher: b => {
       if (b) { if (b.chave) escolheGondola(b.g, b.chave); else escolheGondola(b.g); }
       else if (M.sel !== null) { M.sel = null; M.shelf = null; desenhaPalco(); desenhaLateral(); }
-    } });
+    }, aoMudar: () => desenhaPalco() });
     if (!ok) { toast('Este aparelho não conseguiu abrir o 3D. Voltei para a planta.', 'bad', 5000); M.vista = 'planta'; lsSet('mapaVista', 'planta'); return montaTudo(); }
     Mapa3D.cena(cena3d(), { entrada: !!M.entra3d }); M.entra3d = false;
     const noLayout = new Set(layoutExibido().gondolas.map(g => g.id)), orfas = M.data.gondolas.filter(g => !noLayout.has(g.id)), aviso = $('#orfas');

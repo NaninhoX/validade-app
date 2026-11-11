@@ -14,10 +14,14 @@ const Mapa3D = (() => {
   const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
   const lim = (v, a, b) => Math.max(a, Math.min(b, v));
   const mix = (a, b, t) => a + (b - a) * t;
-  const FOV = 50 * Math.PI / 180;
+  const PADRAO = { sens: 1, invY: false, vel: 1, fov: 75, olhos: 170, gondola: 220 };
+  const le = () => { try { return { ...PADRAO, ...(JSON.parse(localStorage.getItem('passeio3d') || '{}')) }; } catch { return { ...PADRAO }; } };
+  let CFG = le();
+  const guarda = () => { try { localStorage.setItem('passeio3d', JSON.stringify(CFG)); } catch { /* modo privado */ } };
+  const fov = () => (S && S.modo === 'andar' && !S.tw ? CFG.fov : 50) * Math.PI / 180;
 
   function perspectiva(aspecto, perto, longe) {
-    const f = 1 / Math.tan(FOV / 2), nf = 1 / (perto - longe);
+    const f = 1 / Math.tan(fov() / 2), nf = 1 / (perto - longe);
     return [f / aspecto, 0, 0, 0, 0, f, 0, 0, 0, 0, (longe + perto) * nf, -1, 0, 0, 2 * longe * perto * nf, 0];
   }
   // matriz de visão a partir do olho e da direção (base: direita, cima, frente)
@@ -129,13 +133,13 @@ const Mapa3D = (() => {
     if (vista === 'iso') { o.th = -.6; o.ph = .72; }
     // distância para caber: o maior lado da planta projetado, com folga
     const raio = Math.hypot(sc.largura, sc.altura) / 2, asp = w / h;
-    o.d = raio / Math.tan(FOV / 2) / Math.min(1, asp) * (o.ph > 1.4 ? .82 : .92);
+    o.d = raio / Math.tan(fov() / 2) / Math.min(1, asp) * (o.ph > 1.4 ? .82 : .92);
     orbitaPara(o, ms);
   }
 
   // raio do ponteiro → caixa mais próxima, ou ponto no chão
   function raio(cx, cy) {
-    const r = S.cv.getBoundingClientRect(), nx = ((cx - r.left) / r.width) * 2 - 1, ny = 1 - ((cy - r.top) / r.height) * 2, t = Math.tan(FOV / 2), asp = r.width / r.height;
+    const r = S.cv.getBoundingClientRect(), nx = ((cx - r.left) / r.width) * 2 - 1, ny = 1 - ((cy - r.top) / r.height) * 2, t = Math.tan(fov() / 2), asp = r.width / r.height;
     const V = S.v;
     return { o: S.pose.olho, d: norm(add(add(V.f, mul(V.r, nx * t * asp)), mul(V.u, ny * t))) };
   }
@@ -178,13 +182,14 @@ const Mapa3D = (() => {
       let achou = false;
       for (let raioB = 20 * sc.e; raioB < Math.max(sc.largura, sc.altura) && !achou; raioB += 20 * sc.e) for (let k = 0; k < 16 && !achou; k++) { const xx = x + Math.cos(k / 16 * 6.283) * raioB, zz = z + Math.sin(k / 16 * 6.283) * raioB; if (livre(xx, zz)) { x = xx; z = zz; achou = true; } }
     }
-    const a = { x, z, alt: 160 * sc.e, Y: -S.o.th, P: -.06 };
+    const a = { x, z, alt: CFG.olhos * sc.e, Y: -S.o.th, P: 0, vx: 0, vz: 0 };
     vaiPara({ olho: [a.x, a.alt, a.z], dir: dirDe(a.Y, a.P) }, 900, () => { S.a = a; S.modo = 'andar'; S.destino = null; interface_(); });
     S.aPend = a;
   }
   function saiAndar() {
     const a = S.a; if (!a) return;
     const o = { ...S.o, tx: a.x, tz: a.z, th: -a.Y };
+    if (document.pointerLockElement === S.cv) document.exitPointerLock();
     S.modo = 'orbita'; S.destino = null; S.o = o; interface_();
     S.tw = { de: { olho: [a.x, a.alt, a.z], dir: dirDe(a.Y, a.P) }, para: poseOrbita(o), t0: performance.now(), ms: 800, fim: null }; pede();
   }
@@ -200,11 +205,16 @@ const Mapa3D = (() => {
     // teclado e destino (andar) / teclado (órbita)
     const K = S.teclas, sc = S.cena;
     if (S.modo === 'andar' && !S.tw) {
-      const a = S.a, vel = 260 * sc.e * dt * (K.has('shift') ? 2 : 1);
-      const fr = (K.has('w') || K.has('arrowup') ? 1 : 0) - (K.has('s') || K.has('arrowdown') ? 1 : 0), la = (K.has('d') ? 1 : 0) - (K.has('a') ? 1 : 0);
-      const gira = (K.has('arrowright') || K.has('e') ? 1 : 0) - (K.has('arrowleft') || K.has('q') ? 1 : 0);
-      if (gira) { a.Y += gira * 1.9 * dt; segue = true; }
-      if (fr || la) { S.destino = null; anda((Math.sin(a.Y) * fr + Math.cos(a.Y) * la) * vel, (-Math.cos(a.Y) * fr + Math.sin(a.Y) * la) * vel); segue = true; }
+      const a = S.a, vMax = 150 * CFG.vel * sc.e * (K.has('shift') ? 1.9 : 1), vel = vMax * dt;
+      let fr = (K.has('w') || K.has('arrowup') ? 1 : 0) - (K.has('s') || K.has('arrowdown') ? 1 : 0), la = (K.has('d') ? 1 : 0) - (K.has('a') ? 1 : 0);
+      if (S.manche) { fr += -S.manche.y; la += S.manche.x; }
+      const mag = Math.hypot(fr, la); if (mag > 1) { fr /= mag; la /= mag; }
+      const gira = (K.has('arrowright') ? 1 : 0) - (K.has('arrowleft') ? 1 : 0);
+      if (gira) { a.Y += gira * 1.7 * dt; segue = true; }
+      const ax = (Math.sin(a.Y) * fr + Math.cos(a.Y) * la) * vMax, az = (-Math.cos(a.Y) * fr + Math.sin(a.Y) * la) * vMax, sua = Math.min(1, dt * 11);
+      a.vx = (a.vx || 0) + (ax - (a.vx || 0)) * sua; a.vz = (a.vz || 0) + (az - (a.vz || 0)) * sua;       // acelera e freia suave
+      if (mag > .01) S.destino = null;
+      if (Math.hypot(a.vx, a.vz) > vMax * .02 + .001) { anda(a.vx * dt, a.vz * dt); segue = true; } else { a.vx = 0; a.vz = 0; }
       if (S.destino) {
         const dx = S.destino[0] - a.x, dz = S.destino[1] - a.z, dist = Math.hypot(dx, dz), p = Math.min(dist, vel * 1.25), x0 = a.x, z0 = a.z;
         if (dist < 4 * sc.e) S.destino = null; else { anda(dx / dist * p, dz / dist * p); if (Math.hypot(a.x - x0, a.z - z0) < p * .2) S.destino = null; else segue = true; }
@@ -285,8 +295,8 @@ const Mapa3D = (() => {
   function interface_() {
     const andar = S.modo === 'andar';
     S.barra.innerHTML = andar
-      ? '<button data-a="sair" class="primary">Sair do passeio</button><span class="m3-dica">Clique no chão para ir até lá · arraste para olhar · W A S D ou setas para andar · clique num módulo para abrir</span>'
-      : '<button data-a="topo" title="Vista de cima">Topo</button><button data-a="frente" title="Vista de frente, baixa">Frente</button><button data-a="iso" title="Vista em perspectiva">Perspectiva</button><button data-a="fit" title="Enquadrar a loja toda (F)">Enquadrar</button><button data-a="andar" class="primary" title="Entrar na loja e andar pelos corredores">Andar pela loja</button><span class="m3-dica">Arraste para girar · botão direito (ou Shift) para mover · rolagem aproxima no ponteiro · duplo clique foca</span>';
+      ? '<button data-a="sair" class="primary">Sair do passeio</button><button data-a="ajustes" title="Sensibilidade, velocidade, campo de visão e alturas">Ajustes</button><span class="m3-dica">' + (matchMedia('(pointer: coarse)').matches ? 'Manche à esquerda para andar · arraste para olhar · toque num módulo para abrir' : 'Clique na loja para controlar com o mouse · W A S D anda · Shift corre · clique abre o módulo da mira · Esc solta o mouse') + '</span>'
+      : '<button data-a="topo" title="Vista de cima">Topo</button><button data-a="frente" title="Vista de frente, baixa">Frente</button><button data-a="iso" title="Vista em perspectiva">Perspectiva</button><button data-a="fit" title="Enquadrar a loja toda (F)">Enquadrar</button><button data-a="andar" class="primary" title="Entrar na loja e andar pelos corredores">Andar pela loja</button><button data-a="ajustes" title="Ajustes do passeio e altura das gôndolas">Ajustes</button><span class="m3-dica">Arraste para girar · botão direito (ou Shift) para mover · rolagem aproxima no ponteiro · duplo clique foca</span>';
     S.host.classList.toggle('andando', andar);
   }
 
@@ -306,6 +316,7 @@ const Mapa3D = (() => {
       e.preventDefault();
     });
     cv.addEventListener('pointermove', e => {
+      if (preso()) { passa(e); return; }                         // mouse preso: olha em volta mesmo com botão apertado
       if (!ptrs.has(e.pointerId)) { if (e.pointerType === 'mouse') passa(e); return; }
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (S.tw) return;
@@ -313,14 +324,14 @@ const Mapa3D = (() => {
       if (ptrs.size === 2 && pinca) {
         const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, ang = Math.atan2(b.y - a.y, b.x - a.x);
         if (S.modo === 'orbita') { const o = S.o; move(mx - pinca.mx, my - pinca.my); o.d = lim(o.d * pinca.d / d, S.dMin, S.dMax); let da = ang - pinca.ang; if (da > 3) da -= 6.283; if (da < -3) da += 6.283; o.th -= da; }
-        else { const a2 = S.a, passo = (pinca.my - my) / h * 600 * S.cena.e; anda(Math.sin(a2.Y) * passo, -Math.cos(a2.Y) * passo); }
+
         pinca = { d, mx, my, ang }; pede(); return;
       }
       if (!arr) return;
       const dx = e.clientX - arr.x, dy = e.clientY - arr.y;
       if (!moveu && Math.hypot(dx, dy) < 5) return;
       moveu = true; arr.x = e.clientX; arr.y = e.clientY;
-      if (S.modo === 'andar') { S.a.Y -= dx * .0042; S.a.P = lim(S.a.P + dy * .0042, -1.2, 1.2); S.destino = null; }
+      if (S.modo === 'andar') { olha(dx * 1.6, dy * 1.6); }
       else if (arr.mover) move(dx, dy);
       else { S.o.th -= dx * .0062; S.o.ph = lim(S.o.ph + dy * .0055, .06, 1.553); }
       S.cv.style.cursor = 'grabbing'; pede();
@@ -335,7 +346,7 @@ const Mapa3D = (() => {
     cv.addEventListener('pointerup', solta); cv.addEventListener('pointercancel', solta);
     cv.addEventListener('wheel', e => {
       e.preventDefault(); if (S.tw) return;
-      if (S.modo === 'andar') { const p = -e.deltaY * .6 * S.cena.e; anda(Math.sin(S.a.Y) * p, -Math.cos(S.a.Y) * p); S.destino = null; pede(); return; }
+      if (S.modo === 'andar') return;
       const o = S.o, fator = Math.exp(e.deltaY * (e.ctrlKey ? .01 : .0014)), d1 = lim(o.d * fator, S.dMin, S.dMax), k = d1 / o.d, pt = chaoEm(e.clientX, e.clientY);
       if (pt) { o.tx = pt[0] + (o.tx - pt[0]) * k; o.tz = pt[1] + (o.tz - pt[1]) * k; }      // o ponto sob o ponteiro fica parado, como no CAD
       o.d = d1; pede();
@@ -349,7 +360,7 @@ const Mapa3D = (() => {
     cv.addEventListener('keydown', e => {
       const k = e.key.toLowerCase();
       if (['w', 'a', 's', 'd', 'q', 'e', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(k)) { S.teclas.add(k); e.preventDefault(); pede(); return; }
-      if (k === 'escape' && S.modo === 'andar') { saiAndar(); e.preventDefault(); e.stopPropagation(); return; }
+      if (k === 'escape' && S.modo === 'andar') { if (!S.painel.hidden) { S.painel.hidden = true; } else saiAndar(); e.preventDefault(); e.stopPropagation(); return; }
       if (S.modo !== 'orbita') return;
       if (k === 'f') enquadra(500);
       if (k === '+' || k === '=') orbitaPara({ d: lim(S.o.d / 1.4, S.dMin, S.dMax) }, 200);
@@ -361,42 +372,91 @@ const Mapa3D = (() => {
     S.barra.addEventListener('click', e => {
       const b = e.target.closest('[data-a]'); if (!b) return;
       const a = b.dataset.a;
+      if (a === 'ajustes') { S.painel.hidden = !S.painel.hidden; if (!S.painel.hidden) painelAjustes(); return; }
       if (a === 'andar') entraAndar(); else if (a === 'sair') saiAndar(); else if (a === 'fit') enquadra(550); else enquadra(650, a);
       cv.focus({ preventScroll: true });
     });
+    S.aoTravar = () => { if (S) { S.host.classList.toggle('preso', preso()); S.teclas.clear(); pede(); } };
+    document.addEventListener('pointerlockchange', S.aoTravar);
+    // manche de toque (andar no celular)
+    const mj = S.manche_el, pino = mj.firstElementChild;
+    const mexe = e => { const r = mj.getBoundingClientRect(), raioM = r.width / 2; let x = (e.clientX - r.left - raioM) / raioM, y = (e.clientY - r.top - raioM) / raioM; const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; } S.manche = { x, y }; pino.style.transform = `translate(${x * raioM * .55}px, ${y * raioM * .55}px)`; pede(); };
+    mj.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { mj.setPointerCapture(e.pointerId); } catch { /* ok */ } mexe(e); });
+    mj.addEventListener('pointermove', e => { if (S.manche) mexe(e); });
+    const largaM = () => { S.manche = null; pino.style.transform = ''; };
+    mj.addEventListener('pointerup', largaM); mj.addEventListener('pointercancel', largaM);
     S.ro = new ResizeObserver(() => pede()); S.ro.observe(S.host);
+  }
+  function olha(mx, my) {
+    const k = .0021 * CFG.sens;
+    S.a.Y += mx * k; S.a.P = lim(S.a.P + my * k * (CFG.invY ? 1 : -1), -1.35, 1.35);
+  }
+  // painel de ajustes, no jeito das opções de um jogo em primeira pessoa
+  function painelAjustes() {
+    const linha = (k, rot, min, max, passo, fmt) => `<label class="m3-aj"><span>${rot}</span><input type="range" data-k="${k}" min="${min}" max="${max}" step="${passo}" value="${CFG[k]}"><b data-v="${k}">${fmt(CFG[k])}</b></label>`;
+    const F = { sens: v => Number(v).toFixed(1) + '×', vel: v => Number(v).toFixed(1) + '×', fov: v => v + '°', olhos: v => (v / 100).toFixed(2).replace('.', ',') + ' m', gondola: v => (v / 100).toFixed(2).replace('.', ',') + ' m' };
+    S.painel.innerHTML = `<div class="m3-aj-t"><b>Ajustes do passeio</b><button class="icon subtle sm" data-x aria-label="Fechar">✕</button></div>
+      ${linha('sens', 'Sensibilidade do mouse', .2, 3, .1, F.sens)}
+      <label class="m3-aj"><span>Inverter eixo vertical</span><input type="checkbox" data-k="invY" ${CFG.invY ? 'checked' : ''}><b></b></label>
+      ${linha('vel', 'Velocidade ao andar', .5, 2.5, .1, F.vel)}
+      ${linha('fov', 'Campo de visão', 55, 100, 1, F.fov)}
+      ${linha('olhos', 'Altura dos olhos', 150, 195, 1, F.olhos)}
+      ${linha('gondola', 'Altura das gôndolas', 180, 260, 5, F.gondola)}
+      <div class="m3-aj-teclas"><b>Teclas</b> W A S D andar · Shift correr · mouse olhar · clique abrir o módulo da mira · Esc soltar o mouse</div>
+      <button data-padrao class="sm">Restaurar o padrão</button>`;
+    S.painel.oninput = e => {
+      const k = e.target.dataset.k; if (!k) return;
+      CFG[k] = e.target.type === 'checkbox' ? e.target.checked : Number(e.target.value); guarda();
+      const v = S.painel.querySelector(`[data-v="${k}"]`); if (v) v.textContent = F[k](CFG[k]);
+      if (k === 'olhos' && S.a) S.a.alt = CFG.olhos * S.cena.e;
+      if (k === 'gondola' && S.aoMudar) S.aoMudar();
+      pede();
+    };
+    S.painel.onclick = e => {
+      if (e.target.closest('[data-x]')) { S.painel.hidden = true; return; }
+      if (e.target.closest('[data-padrao]')) { CFG = { ...PADRAO }; guarda(); if (S.a) S.a.alt = CFG.olhos * S.cena.e; if (S.aoMudar) S.aoMudar(); painelAjustes(); pede(); }
+    };
   }
   function acertaChao(cx, cy) { const R = raio(cx, cy); if (R.d[1] > -1e-6) return null; const t = -R.o[1] / R.d[1]; return [R.o[0] + R.d[0] * t, R.o[2] + R.d[2] * t]; }
   // mover (pan): o chão acompanha o ponteiro
   function move(dx, dy) {
-    const o = S.o, h = S.cv.clientHeight || 1, k = 2 * o.d * Math.tan(FOV / 2) / h, sn = Math.sin(o.th), cs = Math.cos(o.th), fy = k / Math.max(.25, Math.sin(o.ph));
+    const o = S.o, h = S.cv.clientHeight || 1, k = 2 * o.d * Math.tan(fov() / 2) / h, sn = Math.sin(o.th), cs = Math.cos(o.th), fy = k / Math.max(.25, Math.sin(o.ph));
     o.tx += -cs * dx * k - sn * dy * fy; o.tz += sn * dx * k - cs * dy * fy;
     const sc = S.cena; o.tx = lim(o.tx, -sc.largura * .5, sc.largura * 1.5); o.tz = lim(o.tz, -sc.altura * .5, sc.altura * 1.5);
   }
   function passa(e) {
     if (S.tw) return;
+    if (preso()) { olha(e.movementX || 0, e.movementY || 0); S.destino = null; pede(); const r0 = S.cv.getBoundingClientRect(); e = { clientX: r0.left + r0.width / 2, clientY: r0.top + r0.height / 2 }; }
     const a = acerta(e.clientX, e.clientY), b = a.caixa && a.caixa.chave ? a.caixa : null;
     if (b !== S.sobre) { S.sobre = b; geometria(); pede(); }
     S.cv.style.cursor = b ? 'pointer' : '';
     const d = S.dica;
     if (b && b.dicaHtml) { const r = S.host.getBoundingClientRect(); d.innerHTML = b.dicaHtml; d.hidden = false; d.style.left = Math.min(r.width - 250, e.clientX - r.left + 16) + 'px'; d.style.top = Math.max(8, e.clientY - r.top + 16) + 'px'; } else d.hidden = true;
   }
+  const preso = () => document.pointerLockElement === S.cv;
   function clique(e) {
+    if (S.modo === 'andar') {
+      const r = S.cv.getBoundingClientRect(), noCentro = preso();
+      const a = noCentro ? acerta(r.left + r.width / 2, r.top + r.height / 2) : acerta(e.clientX, e.clientY);
+      if (a.caixa && a.caixa.chave) { if (noCentro) document.exitPointerLock(); if (S.aoEscolher) S.aoEscolher(a.caixa); return; }
+      if (e.pointerType === 'mouse') { if (!noCentro && S.cv.requestPointerLock) { try { const p = S.cv.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch { /* sem trava: segue arrastando */ } } return; }
+      if (a.chao) { S.destino = a.chao; pede(); }                 // toque: vai até o ponto
+      return;
+    }
     const a = acerta(e.clientX, e.clientY);
     if (a.caixa) { if (S.aoEscolher) S.aoEscolher(a.caixa); return; }
-    if (S.modo === 'andar' && a.chao) { S.destino = a.chao; pede(); return; }
     if (S.aoEscolher) S.aoEscolher(null);
   }
 
   // ---------- API ----------
-  function monta(host, { aoEscolher } = {}) {
-    if (S && S.host === host && S.cv.isConnected) { S.aoEscolher = aoEscolher; return true; }
+  function monta(host, { aoEscolher, aoMudar } = {}) {
+    if (S && S.host === host && S.cv.isConnected) { S.aoEscolher = aoEscolher; S.aoMudar = aoMudar; return true; }
     destroi();
-    host.innerHTML = '<canvas class="m3-cv" tabindex="0" aria-label="Loja em 3D: arraste para girar, role para aproximar"></canvas><div class="m3-rot" aria-hidden="true"></div><div class="m3-barra"></div><div class="tip m3-tip" hidden></div>';
+    host.innerHTML = '<canvas class="m3-cv" tabindex="0" aria-label="Loja em 3D: arraste para girar, role para aproximar"></canvas><div class="m3-rot" aria-hidden="true"></div><div class="m3-mira" aria-hidden="true"></div><div class="m3-manche" aria-label="Andar"><i></i></div><div class="m3-barra"></div><div class="m3-painel" hidden></div><div class="tip m3-tip" hidden></div>';
     const cv = host.querySelector('canvas'), gl = cv.getContext('webgl', { antialias: true, alpha: false });
     if (!gl) { host.innerHTML = ''; return false; }
     try {
-      S = { host, cv, gl, cam: host.querySelector('.m3-rot'), barra: host.querySelector('.m3-barra'), dica: host.querySelector('.m3-tip'), prog: programa(gl), bufT: gl.createBuffer(), bufL: gl.createBuffer(), modo: 'orbita', teclas: new Set(), aoEscolher, o: null, a: null, tw: null, raf: 0, sobre: null, rg: [], rm: [], tema: tema() };
+      S = { host, cv, gl, cam: host.querySelector('.m3-rot'), barra: host.querySelector('.m3-barra'), dica: host.querySelector('.m3-tip'), painel: host.querySelector('.m3-painel'), manche_el: host.querySelector('.m3-manche'), manche: null, aoMudar, prog: programa(gl), bufT: gl.createBuffer(), bufL: gl.createBuffer(), modo: 'orbita', teclas: new Set(), aoEscolher, o: null, a: null, tw: null, raf: 0, sobre: null, rg: [], rm: [], tema: tema() };
     } catch { S = null; host.innerHTML = ''; return false; }
     gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.frontFace(gl.CCW);
     gl.disable(gl.CULL_FACE);                                   // caixas sem tampa de baixo: sem descarte de faces evita erro de ordem dos vértices
@@ -414,14 +474,16 @@ const Mapa3D = (() => {
       S.o = { tx: sc.largura / 2, tz: sc.altura / 2, th: 0, ph: 1.553, d: diag * 1.2 };
       if (entrada) { S.o.d = diag * 1.35; enquadra(1100, 'iso'); } else enquadra(0, 'iso');
     }
-    if (S.modo === 'andar' && S.a) S.a.alt = 160 * sc.e;
+    if (S.modo === 'andar' && S.a) S.a.alt = CFG.olhos * sc.e;
     pede();
   }
   function destroi() {
     if (!S) return;
     cancelAnimationFrame(S.raf); if (S.ro) S.ro.disconnect();
+    if (S.aoTravar) document.removeEventListener('pointerlockchange', S.aoTravar);
+    if (document.pointerLockElement === S.cv) document.exitPointerLock();
     const ext = S.gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext();
     S = null;
   }
-  return { monta, cena, destroi, ativo: () => !!S, modo: () => (S ? S.modo : null) };
+  return { monta, cena, destroi, ativo: () => !!S, modo: () => (S ? S.modo : null), cfg: () => CFG };
 })();
