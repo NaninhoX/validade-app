@@ -296,7 +296,8 @@ const Mapa = (() => {
       <div class="fr-lin">${c.risco ? 'Em risco <b>' + brl(c.risco) + '</b>' : 'Sem risco'}</div>
       <div class="fr-bar">${[...por].map(([st, x]) => `<i style="flex:${x.n};background:${esc(x.cor)}"></i>`).join('')}</div>
       <div class="fr-chips">${c.vencidos ? `<span class="fr-c bad">${c.vencidos} vencido${c.vencidos > 1 ? 's' : ''}</span>` : ''}${c.criticos ? `<span class="fr-c warn">${c.criticos} ≤ 30 d</span>` : ''}${etq ? `<span class="fr-c tag">${etq} p/ etiquetar</span>` : ''}</div>
-      <div class="fr-lin xs">${c.dias_sem_ronda === null || c.dias_sem_ronda === undefined ? 'nunca conferido' : 'conferido há ' + c.dias_sem_ronda + ' d'}</div>`;
+      <div class="fr-its">${c.itens.slice(0, 6).map(it => `<div class="fr-it"><i style="background:${esc(it.cor || '#888')}"></i><span>${esc((it.nome || it.ean).slice(0, 30))}</span><b>${it.dias <= 0 ? 'vencido' : it.dias + ' d'}</b><small>${it.qtd} un</small></div>`).join('')}${c.itens.length > 6 ? `<div class="fr-mais">+ ${c.itens.length - 6} lote${c.itens.length - 6 > 1 ? 's' : ''}</div>` : ''}</div>
+      <div class="fr-lin xs fr-conf">${c.dias_sem_ronda === null || c.dias_sem_ronda === undefined ? 'nunca conferido' : 'conferido há ' + c.dias_sem_ronda + ' d' + (c.ultima_por && c.ultima_por !== 'importação' ? ' · ' + esc(c.ultima_por) : '')}</div>`;
   }
   // Time-lapse: "e daqui a N dias?" — reclassifica os lotes do módulo com o prazo menor
   function celulaEm(c, n) {

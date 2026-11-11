@@ -332,7 +332,9 @@ const Mapa3D = (() => {
       let ok = k < 16;
       if (ok) { const d = sub(f.centro, olho), L = Math.hypot(d[0], d[1], d[2]); ok = !bloqueio(olho, mul(d, 1 / L), L - 2 * e, f.b); }   // atrás de outra gôndola: não mostra
       if (!ok) { f.el.style.display = 'none'; return; }
-      const m = matrizFace(280, 214, f.pts);
+      const hCard = Math.round(Math.max(214, Math.min(640, 280 * (f.b.z * .84) / f.b.w)));
+      const m = matrizFace(280, hCard, f.pts);
+      if (f.el.dataset.h !== String(hCard)) { f.el.dataset.h = String(hCard); f.el.style.height = hCard + 'px'; f.el.classList.toggle('alto', hCard > 330); }
       if (!m) { f.el.style.display = 'none'; return; }
       f.el.style.display = ''; f.el.style.transform = m; f.el.style.zIndex = String(60 - k);
       f.el.classList.toggle('sel', !!f.b.sel);
