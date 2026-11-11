@@ -169,10 +169,14 @@ const Mapa = (() => {
 
   const layoutExibido = () => layoutAtual();
 
+  // 3D: a mesma planta, inclinada; cada gôndola ganha altura conforme a métrica (só para ver, não para editar)
+  const tresD = () => M.vista === '3d' && !M.edit && !M.editG;
+  const INCLINA = 56, GIRA = -30;
   function aplicaCam(anima) {
     const c = $('#canvas'); if (!c) return;
-    c.style.transition = anima ? 'transform .55s var(--ease)' : 'none';
-    c.style.transform = `translate(${M.cam.tx}px, ${M.cam.ty}px) scale(${M.cam.k})`;
+    const L3 = layoutExibido(), t3 = tresD() ? (M.tilt === undefined ? 1 : M.tilt) : 0;
+    c.style.transition = anima ? `transform ${tresD() ? '.9s' : '.55s'} var(--ease)` : 'none';
+    c.style.transform = `translate(${M.cam.tx}px, ${M.cam.ty}px) scale(${M.cam.k})` + (tresD() ? ` translate(${L3.largura / 2}px, ${L3.altura / 2}px) rotateX(${INCLINA * t3}deg) rotateZ(${GIRA * t3}deg) translate(${-L3.largura / 2}px, ${-L3.altura / 2}px)` : '');
     c.style.setProperty('--inv', String(Math.min(1.6, 1 / M.cam.k)));       // rótulos e selos mantêm o tamanho na tela
     $('#stage').classList.toggle('zoom-longe', M.cam.k < (M.kfit || 1) * 1.6);
     const fx = $('#fluxo');
@@ -184,9 +188,9 @@ const Mapa = (() => {
   function enquadra(anima) {
     const st = $('#stage'), L = layoutExibido();
     if (!st || !st.clientWidth) return;
-    const w = st.clientWidth, h = st.clientHeight, k = Math.min(w / L.largura, h / L.altura) * 0.97;
+    const w = st.clientWidth, h = st.clientHeight, k = Math.min(w / L.largura, h / L.altura) * (tresD() ? 0.78 : 0.97);
     M.kfit = k;
-    M.cam = { k, tx: (w - L.largura * k) / 2, ty: (h - L.altura * k) / 2, fit: true };
+    M.cam = { k, tx: (w - L.largura * k) / 2, ty: (h - L.altura * k) / 2 - (tresD() ? h * 0.1 : 0), fit: true };
     aplicaCam(anima);
   }
 
@@ -207,7 +211,7 @@ const Mapa = (() => {
   // aproxima a câmera de uma gôndola (vista de cima), deixando livre a área do painel
   function focaGondola(id) {
     const st = $('#stage'), g = layoutExibido().gondolas.find(x => x.id === id);
-    if (M.vista === 'grade') return desenhaPalco();
+    if (M.vista === 'grade' || tresD()) return desenhaPalco();
     if (!st || !g) return;
     const c = caixa(g), w = st.clientWidth, h = st.clientHeight, painel = innerWidth >= 900 ? 392 : 0, aw = w - painel, ah = innerWidth >= 900 ? h : h * 0.42;
     const vert = g.rot === 90, alvoPx = vert ? Math.max(ah * 0.85, 620) / c.h : Math.max(aw * 0.9, 620) / c.w;   // o desenho completo precisa de uns 620 px de comprimento
@@ -286,6 +290,15 @@ const Mapa = (() => {
     if (!stage) return;
     const grade = M.vista === 'grade' && !M.edit && !M.editG;
     stage.classList.toggle('stage-bare', grade);
+    const tres = tresD();
+    stage.classList.toggle('tresd', tres);
+    const entra3d = tres && M.entra3d; M.entra3d = false;
+    const mx3 = tres ? maximos() : null, alt3 = L.largura * 0.085;
+    const altura3 = d => {
+      if (!d || !d.lotes) return alt3 * 0.07;
+      const t = M.metric === 'ocup' ? Math.sqrt(d.qtd / mx3.ocup) : M.metric === 'ronda' ? (d.dias_sem_ronda === null || d.dias_sem_ronda === undefined ? 1 : Math.min(1, d.dias_sem_ronda / 60)) : M.metric === 'status' ? Math.min(1, Math.max(0, (d.pior_peso || 0)) / 4) : Math.sqrt((d.risco || 0) / mx3.risco);
+      return alt3 * (0.14 + 0.86 * Math.max(0, Math.min(1, t)));
+    };
     $('#ctrls').hidden = grade;
     if (grade) { stage.style.height = 'auto'; return desenhaGrade(stage); }
     stage.style.height = '';
@@ -295,16 +308,20 @@ const Mapa = (() => {
     const kDet = (M.camAlvo || M.cam).k;
     M.detKey = chaveDetalhe(kDet);
     const entra = M.anim; M.anim = false;
-    stage.innerHTML = `<div class="canvas${entra ? ' entra' : ''}" id="canvas" style="width:${L.largura}px;height:${L.altura}px">
+    stage.innerHTML = `<div class="canvas${entra && !tres ? ' entra' : ''}${entra3d ? ' entra3d' : ''}" id="canvas" style="width:${L.largura}px;height:${L.altura}px">
       ${L.fundo ? `<div class="bg" style="background-image:url('${esc(L.fundo)}');opacity:${L.fundo_opacidade}"></div>` : ''}
       <div class="grid-bg"></div><div class="perimetro"></div>
       ${L.gondolas.map((g, i) => {
         const d = porId.get(g.id), c = caixa(g), texto = larguraNaTela(g, kDet) >= DETALHE_PX, nome = (cfgTodas()[g.id] || {}).nome, r = respGondola(g.id);
         const resumo = d && d.lotes ? `${d.risco ? brlK(d.risco) : 'ok'}` : '';
-        return `<div class="gon${selIds().includes(g.id) ? ' sel' : ''}${emEdicao() ? ' edit' : ''}${texto ? ' perto' : ''}" data-g="${g.id}" style="left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px;--i:${i}" tabindex="0" role="button" aria-label="${esc(rotuloG(g.id))}">
-          ${svgPlanta(g, d, texto)}<span class="gn"><b>${g.id}</b>${nome ? ` · ${esc(nome)}` : ''}${!texto && (resumo || r) ? `<small>${[resumo, r].filter(Boolean).map(esc).join(' · ')}</small>` : ''}</span>${d && d.vencidos ? `<span class="tag">${d.vencidos}</span>` : ''}</div>`;
+        return `<div class="gon${selIds().includes(g.id) ? ' sel' : ''}${emEdicao() ? ' edit' : ''}${texto ? ' perto' : ''}" data-g="${g.id}" style="left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px;--i:${i}${tres ? `;--z:${altura3(d).toFixed(1)}px;--hc:${(calor(d).bg) || 'var(--heat-empty)'}` : ''}" tabindex="0" role="button" aria-label="${esc(rotuloG(g.id))}">
+          ${svgPlanta(g, d, texto)}<span class="gn"><b>${g.id}</b>${nome ? ` · ${esc(nome)}` : ''}${!texto && (resumo || r) ? `<small>${[resumo, r].filter(Boolean).map(esc).join(' · ')}</small>` : ''}</span>${d && d.vencidos ? `<span class="tag">${d.vencidos}</span>` : ''}${tres ? '<i class="w3 wf"></i><i class="w3 wl"></i>' : ''}</div>`;
       }).join('')}</div><svg id="fluxo" class="fluxo" aria-hidden="true"></svg><svg id="alcas" class="alcas" aria-hidden="true"></svg><svg id="guias" class="guias" aria-hidden="true"></svg>`;
-    aplicaCam(false);
+    if (entra3d && !matchMedia('(prefers-reduced-motion: reduce)').matches) {                 // entra de cima e inclina; as gôndolas sobem em seguida
+      M.tilt = 0; aplicaCam(false);
+      let feito = false; const ir = () => { if (feito) return; feito = true; M.tilt = 1; aplicaCam(true); };
+      requestAnimationFrame(() => requestAnimationFrame(ir)); setTimeout(ir, 250);
+    } else { M.tilt = 1; aplicaCam(false); }
     const orfas = M.data.gondolas.filter(g => !noLayout.has(g.id));
     const aviso = $('#orfas');
     if (aviso) aviso.innerHTML = orfas.length ? `<div class="callout warn">${ico('alert')}<div>Gôndola(s) <b>${orfas.map(g => g.id).join(', ')}</b> têm estoque mas ainda não estão na planta. ${M.ctx.admin ? 'Use “Editar planta” para posicioná-las.' : ''}</div></div>` : '';
@@ -1368,7 +1385,7 @@ const Mapa = (() => {
     v.innerHTML = `
       <div class="editbar reveal" style="margin-bottom:12px;justify-content:space-between">
         <div class="seg" role="group" aria-label="O que mostrar no mapa">${Object.entries(METRICAS).map(([k, m]) => `<button data-metric="${k}" aria-pressed="${M.metric === k}" title="${esc(m.desc)}">${m.nome}</button>`).join('')}</div>
-        <div class="editbar">${legenda()}${!M.edit && !M.editG ? `<div class="seg" role="group" aria-label="Visualização"><button data-vista="grade" aria-pressed="${M.vista === 'grade'}">Grade</button><button data-vista="planta" aria-pressed="${M.vista === 'planta'}">Planta</button></div>` : ''}${M.ctx.admin && !M.edit && !M.editG ? `<button id="editar">${ico('edit')} Editar planta</button><button id="editarG">${ico('edit')} Editar gôndolas</button>` : ''}</div>
+        <div class="editbar">${legenda()}${!M.edit && !M.editG ? `<div class="seg" role="group" aria-label="Visualização"><button data-vista="grade" aria-pressed="${M.vista === 'grade'}">Grade</button><button data-vista="planta" aria-pressed="${M.vista === 'planta'}">Planta</button><button data-vista="3d" aria-pressed="${M.vista === '3d'}" title="Planta inclinada: a altura de cada gôndola acompanha o que está sendo mostrado">3D</button></div>` : ''}${M.ctx.admin && !M.edit && !M.editG ? `<button id="editar">${ico('edit')} Editar planta</button><button id="editarG">${ico('edit')} Editar gôndolas</button>` : ''}</div>
       </div>
       ${L.provisorio && !M.edit ? `<div class="callout reveal" style="--i:1;margin-bottom:12px">${ico('info')}<div><b>Planta provisória.</b> As gôndolas estão em grade só para você já enxergar os dados. ${M.ctx.admin ? 'Clique em <b>Editar planta</b> para arrastar cada gôndola até a posição real, aplicar a proporção real, desenhar as setas de fluxo e enviar a imagem do layout da loja como fundo.' : 'Peça a um administrador para montar a planta real.'}</div></div>` : ''}
       <div id="orfas" style="margin-bottom:12px"></div>
@@ -1381,7 +1398,7 @@ const Mapa = (() => {
       <div id="frente" class="frente" hidden></div>
       <div class="tip" id="tip"></div>`;
     $$('[data-metric]', v).forEach(b => b.addEventListener('click', () => { M.metric = b.dataset.metric; lsSet('mapaMetrica', M.metric); montaTudo(); }));
-    $$('[data-vista]', v).forEach(b => b.addEventListener('click', () => { M.vista = b.dataset.vista; lsSet('mapaVista', M.vista); montaTudo(); }));
+    $$('[data-vista]', v).forEach(b => b.addEventListener('click', () => { M.vista = b.dataset.vista; lsSet('mapaVista', M.vista); M.cam = null; M.entra3d = M.vista === '3d'; montaTudo(); }));
     const ed = $('#editar', v);
     const edg = $('#editarG', v);
     // os dois editores usam o mesmo rascunho: planta (layout), configuração das gôndolas e medidas padrão
