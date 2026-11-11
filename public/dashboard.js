@@ -253,7 +253,7 @@ PAGINAS.folha = async () => Folha.html();
 PAGINAS.folha.ligar = () => Folha.ligar();
 
 // ---------- mapa ----------
-PAGINAS.mapa = async () => { await Mapa.render(view, { admin: S.admin }); return null; };
+PAGINAS.mapa = async q => { await Mapa.render(view, { admin: S.admin }, q); return null; };
 
 // Tendência dos KPIs: usa as fotos diárias registradas (res.tendencia). Com menos de 2 pontos não mostra nada. descerEBom: true, false ou null (neutro).
 function tendKpi(res, campo, { descerEBom = null, fmt = brl, un = '' } = {}) {

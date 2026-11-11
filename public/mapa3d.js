@@ -95,6 +95,17 @@ const Mapa3D = (() => {
         if (b.sel) { linha([a[0], .02, a[1]], [c[0], .02, c[1]], borda); linha([a[0], 0, a[1]], [a[0], y1, a[1]], borda); }
       }
     }
+    if (sc.rota && sc.rota.length) {
+      const larg = 16 * sc.e, pts = [[sc.largura * .5, 0].concat([])];
+      const R = sc.rota;
+      const fita = (a, b) => {
+        const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz) || 1, nx = -dz / L * larg / 2, nz = dx / L * larg / 2, y = .35;
+        quad([a.x + nx, y, a.z + nz], [b.x + nx, y, b.z + nz], [b.x - nx, y, b.z - nz], [a.x - nx, y, a.z - nz], [0, 1, 0], t.realce);
+        quad([a.x - nx, y, a.z - nz], [b.x - nx, y, b.z - nz], [b.x + nx, y, b.z + nz], [a.x + nx, y, a.z + nz], [0, -1, 0], t.realce);
+      };
+      for (let i = 0; i + 1 < R.length; i++) fita(R[i], R[i + 1]);
+      for (const p of R) { const h = 26 * sc.e; quad([p.x - h, .6, p.z - h], [p.x - h, .6, p.z + h], [p.x + h, .6, p.z + h], [p.x + h, .6, p.z - h], [0, 1, 0], t.realce); }
+    }
     const gl = S.gl;
     gl.bindBuffer(gl.ARRAY_BUFFER, S.bufT); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(T), gl.STATIC_DRAW); S.nT = T.length / 9;
     gl.bindBuffer(gl.ARRAY_BUFFER, S.bufL); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(Ln), gl.STATIC_DRAW); S.nL = Ln.length / 9;
@@ -135,6 +146,36 @@ const Mapa3D = (() => {
     const raio = Math.hypot(sc.largura, sc.altura) / 2, asp = w / h;
     o.d = raio / Math.tan(fov() / 2) / Math.min(1, asp) * (o.ph > 1.4 ? .82 : .92);
     orbitaPara(o, ms);
+  }
+
+  // matriz CSS que cola um retângulo W×H (pixels) num quadrilátero da tela (TL, TR, BR, BL)
+  function matrizFace(W, H, p) {
+    const [x0, y0] = p[0], [x1, y1] = p[1], [x2, y2] = p[2], [x3, y3] = p[3];
+    const sx = x0 - x1 + x2 - x3, sy = y0 - y1 + y2 - y3;
+    let a, b, c, d, g = 0, h = 0;
+    if (Math.abs(sx) < 1e-6 && Math.abs(sy) < 1e-6) { a = x1 - x0; b = y1 - y0; c = x3 - x0; d = y3 - y0; }
+    else {
+      const dx1 = x1 - x2, dx2 = x3 - x2, dy1 = y1 - y2, dy2 = y3 - y2, den = dx1 * dy2 - dx2 * dy1;
+      if (Math.abs(den) < 1e-9) return null;
+      g = (sx * dy2 - dx2 * sy) / den; h = (dx1 * sy - sx * dy1) / den;
+      a = x1 - x0 + g * x1; b = y1 - y0 + g * y1; c = x3 - x0 + h * x3; d = y3 - y0 + h * y3;
+    }
+    return `matrix3d(${a / W},${b / W},0,${g / W},${c / H},${d / H},0,${h / H},0,0,1,0,${x0},${y0},0,1)`;
+  }
+  // a primeira caixa que o raio atravessa antes de "ate" (distância); null se o caminho está livre
+  function bloqueio(o, dir, ate, exceto) {
+    for (const b of S.cena.caixas) {
+      if (b === exceto) continue;
+      const mn = [b.x, 0, b.y], mx = [b.x + b.w, b.z, b.y + b.h];
+      let t0 = 0, t1 = Infinity, ok = true;
+      for (let i = 0; i < 3 && ok; i++) {
+        if (Math.abs(dir[i]) < 1e-9) { if (o[i] < mn[i] || o[i] > mx[i]) ok = false; continue; }
+        let u = (mn[i] - o[i]) / dir[i], v = (mx[i] - o[i]) / dir[i]; if (u > v) [u, v] = [v, u];
+        t0 = Math.max(t0, u); t1 = Math.min(t1, v); if (t0 > t1) ok = false;
+      }
+      if (ok && t0 < ate - 1) return b;
+    }
+    return null;
   }
 
   // raio do ponteiro → caixa mais próxima, ou ponto no chão
@@ -263,14 +304,38 @@ const Mapa3D = (() => {
       el.style.display = ''; el.style.transform = `translate(${t[0].toFixed(1)}px, ${t[1].toFixed(1)}px) translate(-50%, -100%)`;
       el.classList.toggle('longe', t[2] > Math.hypot(sc.largura, sc.altura) * 1.15);
     });
-    // módulos: os mais próximos virados para a câmera
-    const perto = S.modo === 'andar' ? 620 * e : 520 * e, lista = [];
+    (sc.rota || []).forEach((p, i) => { const el = S.rr[i], t = el && tela([p.x, 12 * e, p.z]); if (!el) return; if (!dentro(t)) { el.style.display = 'none'; return; } el.style.display = ''; el.style.transform = `translate(${t[0].toFixed(1)}px, ${t[1].toFixed(1)}px) translate(-50%, -50%)`; el.classList.toggle('longe', t[2] > Math.hypot(sc.largura, sc.altura) * 1.1); });
+    // módulos: os mais próximos virados para a câmera; os de lado A/B ganham o cartão colado na própria face
+    const perto = S.modo === 'andar' ? 700 * e : 600 * e, lista = [], faces = [];
     sc.caixas.forEach((b, i) => {
       const el = S.rm[i]; if (!el) return;
+      if (b.face) {
+        const sul = b.n[1] > 0, x0 = sul ? b.x : b.x + b.w, dx = sul ? 1 : -1, zf = sul ? b.y + b.h : b.y;
+        const yT = b.z * .94, yB = b.z * .1, P = [[x0, yT], [x0 + dx * b.w, yT], [x0 + dx * b.w, yB], [x0, yB]].map(q => [q[0], q[1], zf]);
+        const cx = b.x + b.w / 2, cz = zf, dist = Math.hypot(olho[0] - cx, olho[1] - b.z * .5, olho[2] - cz);
+        const para = [olho[0] - cx, olho[2] - cz], face = (para[0] * b.n[0] + para[1] * b.n[1]) / (Math.hypot(para[0], para[1]) || 1);
+        if (face < .12 || dist > perto * 2.2) { el.style.display = 'none'; return; }
+        const pts = P.map(q => tela(q));
+        if (pts.some(q => !q)) { el.style.display = 'none'; return; }
+        const larg = Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]);
+        if (larg < 90 || larg > W * 6) { el.style.display = 'none'; return; }
+        faces.push({ el, b, pts, dist, centro: [cx, b.z * .5, cz], larg });
+        return;
+      }
       const c = [b.x + b.w / 2 + b.n[0] * b.w / 2, b.z * .56, b.y + b.h / 2 + b.n[1] * b.h / 2];
       const para = [olho[0] - c[0], olho[2] - c[2]], dist = Math.hypot(olho[0] - c[0], olho[1] - c[1], olho[2] - c[2]);
       const face = (para[0] * b.n[0] + para[1] * b.n[1]) / (Math.hypot(para[0], para[1]) || 1);
       if ((dist < perto && face > .2) || b === S.sobre) lista.push({ el, c, dist: b === S.sobre ? 0 : dist }); else el.style.display = 'none';
+    });
+    faces.sort((a, b) => a.dist - b.dist);
+    faces.forEach((f, k) => {
+      let ok = k < 16;
+      if (ok) { const d = sub(f.centro, olho), L = Math.hypot(d[0], d[1], d[2]); ok = !bloqueio(olho, mul(d, 1 / L), L - 2 * e, f.b); }   // atrás de outra gôndola: não mostra
+      if (!ok) { f.el.style.display = 'none'; return; }
+      const m = matrizFace(280, 214, f.pts);
+      if (!m) { f.el.style.display = 'none'; return; }
+      f.el.style.display = ''; f.el.style.transform = m; f.el.style.zIndex = String(60 - k);
+      f.el.classList.toggle('sel', !!f.b.sel);
     });
     lista.sort((a, b) => a.dist - b.dist);
     lista.forEach((x, k) => {
@@ -286,8 +351,10 @@ const Mapa3D = (() => {
   function montaRotulos() {
     const sc = S.cena;
     S.cam.innerHTML = sc.gondolas.map(g => `<div class="m3-g"><b>${ESC(g.id)}</b>${g.nome ? `<span> · ${ESC(g.nome)}</span>` : ''}${g.tag ? `<i>${g.tag}</i>` : ''}${g.sub ? `<small>${ESC(g.sub)}</small>` : ''}</div>`).join('')
-      + sc.caixas.map(b => (b.chave && b.l1 ? `<div class="m3-m" style="--c:${ESC(b.cor || 'var(--heat-empty)')};--t:${ESC(b.tinta || '#111')}"><b>${ESC(b.curto)}</b><span>${ESC(b.l1)}</span><small>${ESC(b.l2 || '')}</small>${b.l3 ? `<small>${ESC(b.l3)}</small>` : ''}${b.l4 ? `<small class="m3-p">${ESC(b.l4)}</small>` : ''}</div>` : '<div class="m3-m" hidden></div>')).join('');
-    const filhos = [...S.cam.children];
+      + sc.caixas.map(b => (b.face ? `<div class="m3-face fr-mod${b.face.vazio ? ' vazia' : ''}" style="--hc:${ESC(b.cor || 'var(--heat-empty)')};--hi:${ESC(b.tinta || '#111')}"><div class="fr-h"><b>${ESC(b.face.num)}</b><span>${ESC(b.face.nome)}</span></div>${b.face.corpo}</div>` : b.chave && b.l1 ? `<div class="m3-m" style="--c:${ESC(b.cor || 'var(--heat-empty)')};--t:${ESC(b.tinta || '#111')}"><b>${ESC(b.curto)}</b><span>${ESC(b.l1)}</span><small>${ESC(b.l2 || '')}</small>${b.l3 ? `<small>${ESC(b.l3)}</small>` : ''}${b.l4 ? `<small class="m3-p">${ESC(b.l4)}</small>` : ''}</div>` : '<div class="m3-m" hidden></div>')).join('');
+    S.cam.insertAdjacentHTML('beforeend', (sc.rota || []).map(p => `<div class="m3-rt" title="${ESC(p.end)}"><b>${p.n}</b><span>${ESC(p.end)}</span></div>`).join(''));
+    S.rr = [...S.cam.querySelectorAll('.m3-rt')];
+    const filhos = [...S.cam.children].filter(el => !el.classList.contains('m3-rt'));
     S.rg = filhos.slice(0, sc.gondolas.length);
     S.rm = filhos.slice(sc.gondolas.length).map(el => (el.hidden ? null : el));
   }
@@ -483,5 +550,17 @@ const Mapa3D = (() => {
     const ext = S.gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext();
     S = null;
   }
-  return { monta, cena, destroi, ativo: () => !!S, modo: () => (S ? S.modo : null), cfg: () => CFG };
+  // estado da câmera (para o link de compartilhar) e volta a ele
+  const r2 = v => Math.round(v * 100) / 100;
+  function estado() {
+    if (!S || !S.o) return null;
+    if (S.modo === 'andar' && S.a) return { m: 'a', x: r2(S.a.x), z: r2(S.a.z), Y: r2(S.a.Y), P: r2(S.a.P) };
+    return { m: 'o', tx: r2(S.o.tx), tz: r2(S.o.tz), th: r2(S.o.th), ph: r2(S.o.ph), d: r2(S.o.d) };
+  }
+  function aplica(e, ms = 0) {
+    if (!S || !e) return;
+    if (e.m === 'a') { S.a = { x: e.x, z: e.z, alt: CFG.olhos * S.cena.e, Y: e.Y, P: e.P || 0, vx: 0, vz: 0 }; S.modo = 'andar'; S.tw = null; interface_(); pede(); return; }
+    S.modo = 'orbita'; interface_(); orbitaPara({ tx: e.tx, tz: e.tz, th: e.th, ph: e.ph, d: e.d }, ms); pede();
+  }
+  return { monta, cena, destroi, ativo: () => !!S, modo: () => (S ? S.modo : null), cfg: () => CFG, estado, aplica, dados: () => (S ? S.cena : null) };
 })();
