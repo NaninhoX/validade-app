@@ -104,6 +104,7 @@ const Scanner = (() => {
       const achou = bruto => {
         const v = aceita(bruto);
         if (!v) return;
+        leuAlgo = true;
         if (continuo && pausado) return;
         if (!confirmado(v)) return;
         if (continuo) {
@@ -116,6 +117,29 @@ const Scanner = (() => {
         beep(); msg.textContent = '✓ ' + v;
         document.removeEventListener('keydown', tecla);
         setTimeout(() => fim(v), 120);
+      };
+
+      const dicasZxing = () => {
+        const Z = window.ZXing, hints = new Map();
+        hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, aceitar === 'ean'
+          ? [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A]
+          : [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.CODE_128, Z.BarcodeFormat.CODE_39, Z.BarcodeFormat.QR_CODE, Z.BarcodeFormat.ITF]);
+        hints.set(Z.DecodeHintType.TRY_HARDER, true);
+        return hints;
+      };
+      // Plano B: o leitor nativo do Android (BarcodeDetector) às vezes fica mudo (depende de um módulo do Google que o aparelho atualiza sozinho).
+      // Se ele não leu nada em alguns segundos, ou dá erro seguido, liga também o ZXing no mesmo vídeo; os dois alimentam a mesma confirmação.
+      let leuAlgo = false, planoB = false, errosNativo = 0;
+      const ligaPlanoB = async () => {
+        if (planoB || parou) return;
+        planoB = true;
+        try {
+          await carregaZxing();
+          if (parou) return;
+          const Z = window.ZXing;
+          reader = new Z.BrowserMultiFormatReader(dicasZxing(), 200);
+          reader.decodeFromConstraints({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }, video, res => { if (parou) return; if (res) achou(res.getText()); }).catch(() => { /* segue só com o nativo */ });
+        } catch { /* sem o ZXing: fica só o nativo */ }
       };
 
       if (continuo && continuo.montar) continuo.montar(ctl);
@@ -133,20 +157,16 @@ const Scanner = (() => {
             if (parou) return;
             if (t - ultimo > 110 && video.readyState >= 2) {
               ultimo = t;
-              try { const r = await det.detect(video); if (r.length) achou(r[0].rawValue); else naoVi(); } catch { /* frame ruim */ }
+              try { const r = await det.detect(video); errosNativo = 0; if (r.length) achou(r[0].rawValue); else naoVi(); } catch { if (++errosNativo >= 4) ligaPlanoB(); /* frame ruim */ }
             }
             raf = requestAnimationFrame(laco);
           };
           raf = requestAnimationFrame(laco);
+          setTimeout(() => { if (!leuAlgo) ligaPlanoB(); }, 3500);
         } else {
           await carregaZxing();
           const Z = window.ZXing;
-          const hints = new Map();
-          hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, aceitar === 'ean'
-            ? [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A]
-            : [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.CODE_128, Z.BarcodeFormat.CODE_39, Z.BarcodeFormat.QR_CODE, Z.BarcodeFormat.ITF]);
-          hints.set(Z.DecodeHintType.TRY_HARDER, true);
-          reader = new Z.BrowserMultiFormatReader(hints, 150);
+          reader = new Z.BrowserMultiFormatReader(dicasZxing(), 150);
           msg.textContent = 'Centralize o código dentro da moldura';
           reader.decodeFromConstraints(restricoes, video, (res) => { if (parou) return; if (res) achou(res.getText()); else naoVi(); }).catch(e => falha(e));
           // aguarda o stream do ZXing para habilitar a lanterna
