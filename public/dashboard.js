@@ -71,14 +71,16 @@ async function rota() {
   };
   // troca de tela com transição: a página desliza no sentido do menu e o marcador do menu corre até o item novo
   const chave = r + '/' + (param || '');
-  const mudou = rota.atual !== undefined && rota.atual !== chave;
+  const anterior = rota.atual, mudou = anterior !== undefined && anterior !== chave;
   const ordem = Object.keys(ROTAS);
   document.documentElement.style.setProperty('--vt-dir', ordem.indexOf(r) < ordem.indexOf((rota.atual || '').split('/')[0]) ? -1 : 1);
   rota.atual = chave;
   // a troca roda uma vez só e SEMPRE antes de a tela nova ser desenhada (senão o esqueleto cairia por cima do conteúdo)
   let trocou = false;
   const umaVez = () => { if (trocou || meu !== token) return; trocou = true; troca(); };
-  if (mudou && document.startViewTransition && !document.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  // telas de leitura (coletor e conferências) abrem direto, sem transição: durante ela a tela não recebe toque nem foco, e o leitor já começa a bipar
+  const telaDeLeitura = ['coletor', 'conferencia', 'conferencias'].includes(r) || ['coletor', 'conferencia', 'conferencias'].includes((anterior || '').split('/')[0]);
+  if (mudou && !telaDeLeitura && document.startViewTransition && !document.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     try {
       const vt = document.startViewTransition(umaVez);
       vt.finished.catch(() => {}); vt.ready.catch(() => {});
