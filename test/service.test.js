@@ -220,6 +220,23 @@ test('resumo e fila usam as faixas; exportação gera um xlsx válido', async ()
   db.apagar();
 });
 
+test('a planilha exportada pelo celular volta inteira no StockFlow do PC (lotes e cadastro dos produtos)', async () => {
+  const db = await novoDb();
+  await S.leitura(db, { ...base, tipo: 'RECEBIMENTO', qtd: 4, lote: 'A', validade: mais(10), endereco: '2-A-1' });
+  await S.leitura(db, { ...base, tipo: 'RECEBIMENTO', qtd: 2, lote: 'B', validade: mais(90), endereco: '2-A-1' });
+  await db.run("UPDATE produtos SET tipo='Cão', idade='Adulto', porte='Médio', categoria='Ração' WHERE ean=?", [base.ean]);
+  const buf = Buffer.from(await X.exportar(db));
+  const pc = await require('../lib/db').open({ dir: 'memory://' });
+  try {
+    const rel = await X.importar(pc, buf, { substituir: false });
+    assert.equal(rel.lotes, 2);
+    assert.equal((await pc.get('SELECT SUM(qtd) n FROM lotes')).n, 6);
+    const p = await pc.get('SELECT tipo, idade, porte, categoria FROM produtos WHERE ean=?', [base.ean]);
+    assert.deepEqual({ ...p }, { tipo: 'Cão', idade: 'Adulto', porte: 'Médio', categoria: 'Ração' });
+  } finally { await pc.close(); }
+  db.apagar();
+});
+
 test('ronda do dia: ranqueia por risco × tempo sem conferir, ordena para caminhar e exclui o já conferido hoje', async () => {
   const db = await novoDb();
   const l = (o) => S.leitura(db, { tipo: 'RECEBIMENTO', qtd: 5, ...base, ...o });
